@@ -1,0 +1,215 @@
+export type DateRangePreset = "7d" | "30d" | "90d";
+export type Severity = "low" | "medium" | "high";
+export type KpiFormat = "currency" | "percent" | "number";
+export type SyncMode = "initial" | "incremental";
+export type SyncStatus = "idle" | "running" | "success" | "error";
+
+export interface Store {
+  id: string;
+  name: string;
+  domain: string;
+  currency: string;
+  connected: boolean;
+  timezone: string;
+  planName?: string;
+  dateRangePreset: DateRangePreset;
+  estimatedCostMode: "margin_profile" | "fixed_cost_map";
+  defaultCostRatio?: number;
+}
+
+export interface ShopifyConnectionSummary {
+  shopDomain: string;
+  connected: boolean;
+  apiVersion?: string;
+  tokenLastFour?: string;
+  syncStatus?: SyncStatus;
+  lastSyncAt?: string | null;
+  lastSyncError?: string | null;
+}
+
+export interface SyncRunSummary {
+  id: string;
+  mode: SyncMode;
+  status: SyncStatus;
+  startedAt: string;
+  completedAt?: string | null;
+  recordsCreated: number;
+  recordsUpdated: number;
+  recordsFailed: number;
+  errorMessage?: string | null;
+}
+
+export interface Product {
+  id: string;
+  title: string;
+  handle: string;
+  collection: string;
+  vendor?: string;
+  productType?: string;
+  price: number;
+  estimatedCost: number;
+  costOverrideAmount?: number | null;
+  marginProfile: "premium" | "core" | "promo" | string;
+}
+
+export interface Customer {
+  id: string;
+  name: string;
+  email?: string | null;
+  firstOrderDate?: string | null;
+  totalOrders: number;
+  lifetimeValue: number;
+  isReturning: boolean;
+}
+
+export interface OrderLineItem {
+  id?: string;
+  productId?: string | null;
+  variantId?: string | null;
+  quantity: number;
+  unitPrice: number;
+  discountAmount: number;
+  estimatedCost: number;
+}
+
+export interface Order {
+  id: string;
+  customerId?: string | null;
+  createdAt: string;
+  orderNumber: string;
+  isRefunded: boolean;
+  refundAmount: number;
+  discountCode?: string;
+  totalPrice?: number;
+  totalDiscounts?: number;
+  lineItems: OrderLineItem[];
+}
+
+export interface DiscountUsage {
+  code: string;
+  orderCount: number;
+  revenueInfluenced: number;
+  discountAmount: number;
+}
+
+export interface DailyMetric {
+  date: string;
+  revenue: number;
+  estimatedProfit: number;
+  returningCustomerRate: number;
+  averageOrderValue: number;
+  discountRate: number;
+  refundRate: number;
+  orders: number;
+}
+
+export interface KPI {
+  label: string;
+  value: number;
+  change: number;
+  format: KpiFormat;
+}
+
+export interface InsightItem {
+  title: string;
+  detail: string;
+  emphasis?: string;
+}
+
+export interface Alert {
+  id: string;
+  severity: Severity;
+  title: string;
+  explanation: string;
+  suggestedAction: string;
+  periodLabel: string;
+  timestamp: string;
+}
+
+export interface SummarySection {
+  title: string;
+  items: string[];
+}
+
+export interface Summary {
+  id: string;
+  headline: string;
+  generatedAt: string;
+  sections: SummarySection[];
+}
+
+export interface ProductPerformanceRow {
+  productId: string;
+  productTitle: string;
+  collection: string;
+  unitsSold: number;
+  revenue: number;
+  estimatedProfit: number;
+  discountImpact: number;
+  refundImpact: number;
+}
+
+export interface CollectionPerformanceRow {
+  collection: string;
+  revenue: number;
+  estimatedProfit: number;
+}
+
+export interface RetentionSnapshot {
+  newCustomers: number;
+  returningCustomers: number;
+  repeatPurchaseRate: number;
+  secondOrderRate: number;
+  averageDaysToSecondOrder: number;
+}
+
+export interface ComparisonMetric {
+  label: string;
+  current: number;
+  previous: number;
+  change: number;
+}
+
+export interface OverviewPayload {
+  store: Store;
+  kpis: KPI[];
+  dailyMetrics: DailyMetric[];
+  insights: InsightItem[];
+  actionPanel: SummarySection[];
+  productPerformance: ProductPerformanceRow[];
+  collectionPerformance: CollectionPerformanceRow[];
+  discounts: DiscountUsage[];
+  alerts: Alert[];
+  comparisonMetrics: ComparisonMetric[];
+}
+
+export interface ProfitAnalyticsPayload {
+  productPerformance: ProductPerformanceRow[];
+  collectionPerformance: CollectionPerformanceRow[];
+  discountUsage: DiscountUsage[];
+  topProducts: ProductPerformanceRow[];
+  lowProducts: ProductPerformanceRow[];
+}
+
+export interface ProductOrderMix {
+  title: string;
+  orders: number;
+}
+
+export interface RetentionPayload {
+  snapshot: RetentionSnapshot;
+  dailyMetrics: DailyMetric[];
+  firstOrderProducts: ProductOrderMix[];
+  secondOrderProducts: ProductOrderMix[];
+  cohortPlaceholder: string;
+}
+
+export interface FounderSummaryInputs {
+  biggestRevenueMovers: string[];
+  biggestProfitMovers: string[];
+  discountSpikes: string[];
+  repeatRateChanges: string[];
+  refundSpikes: string[];
+  bestProducts: string[];
+  worstProducts: string[];
+}

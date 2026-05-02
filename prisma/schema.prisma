@@ -1,0 +1,638 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Store {
+  id                   String              @id @default(cuid())
+  name                 String
+  domain               String              @unique
+  shopifyShopId        String?             @unique
+  currency             String
+  timezone             String
+  planName             String?
+  connected            Boolean             @default(false)
+  dateRangePreset      String              @default("30d")
+  estimatedCostMode    String              @default("margin_profile")
+  defaultCostRatio     Decimal             @default(0.35) @db.Decimal(5, 4)
+  connection           ShopifyConnection?
+  bixgrowConnection    BixGrowConnection?
+  instagramConnection  InstagramConnection?
+  products             Product[]
+  variants             ProductVariant[]
+  customers            Customer[]
+  orders               Order[]
+  lineItems            OrderLineItem[]
+  discountUsages       DiscountUsage[]
+  refunds              Refund[]
+  dailyMetrics         DailyMetric[]
+  summaries            Summary[]
+  alerts               Alert[]
+  syncRuns             SyncRun[]
+  creatorProfiles      CreatorProfile[]
+  creatorPosts         CreatorPost[]
+  creatorAttributions  CreatorAttribution[]
+  affiliatePrograms    AffiliateProgram[]
+  affiliateMembers     AffiliateMember[]
+  affiliateCoupons     AffiliateCoupon[]
+  affiliateAttributions AffiliateAttribution[]
+  agentSettings        AgentSettings?
+  agentFindings        AgentFinding[]
+  agentActions         AgentAction[]
+  platformConnections  PlatformConnection[]
+  metricSnapshots      MetricSnapshot[]
+  attributionSessions  AttributionSession[]
+  webhookEvents        WebhookEvent[]
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+
+  @@index([connected])
+}
+
+model ShopifyConnection {
+  id                   String    @id @default(cuid())
+  storeId              String    @unique
+  shopDomain           String
+  adminAccessTokenEnc  String
+  tokenLastFour        String
+  apiVersion           String    @default("2025-01")
+  lastSyncAt           DateTime?
+  lastProductsSyncAt   DateTime?
+  lastCustomersSyncAt  DateTime?
+  lastOrdersSyncAt     DateTime?
+  lastSuccessfulSyncAt DateTime?
+  syncStatus           String    @default("idle")
+  lastSyncError        String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+  store                Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@index([shopDomain])
+  @@index([syncStatus])
+}
+
+model BixGrowConnection {
+  id                 String   @id @default(cuid())
+  storeId            String   @unique
+  portalDomain       String
+  apiKeyEnc          String?
+  tokenLastFour      String?
+  syncStatus         String   @default("idle")
+  exportMode         String   @default("manual_export")
+  lastSyncAt         DateTime?
+  lastSyncError      String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  store              Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@index([portalDomain])
+}
+
+model InstagramConnection {
+  id                 String   @id @default(cuid())
+  storeId            String   @unique
+  instagramUserId    String
+  username           String?
+  accessTokenEnc     String
+  tokenLastFour      String
+  syncStatus         String   @default("idle")
+  lastSyncAt         DateTime?
+  lastSyncError      String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  store              Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  posts              CreatorPost[]
+
+  @@index([instagramUserId])
+}
+
+model SyncRun {
+  id              String   @id @default(cuid())
+  storeId         String
+  mode            String
+  status          String
+  startedAt       DateTime @default(now())
+  completedAt     DateTime?
+  syncFrom        DateTime?
+  recordsCreated  Int      @default(0)
+  recordsUpdated  Int      @default(0)
+  recordsFailed   Int      @default(0)
+  errorMessage    String?
+  detailsJson     Json?
+  store           Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@index([storeId, startedAt(sort: Desc)])
+  @@index([status])
+}
+
+model Product {
+  id                 String           @id @default(cuid())
+  storeId            String
+  shopifyProductId   String
+  title              String
+  handle             String
+  vendor             String?
+  productType        String?
+  status             String?
+  collection         String
+  price              Decimal          @default(0) @db.Decimal(10, 2)
+  estimatedCost      Decimal          @default(0) @db.Decimal(10, 2)
+  costOverrideAmount Decimal?         @db.Decimal(10, 2)
+  marginProfile      String           @default("core")
+  createdAt          DateTime
+  updatedAt          DateTime
+  store              Store            @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  variants           ProductVariant[]
+  lineItems          OrderLineItem[]
+
+  @@unique([storeId, shopifyProductId])
+  @@index([storeId, updatedAt])
+  @@index([storeId, productType])
+}
+
+model ProductVariant {
+  id                String          @id @default(cuid())
+  storeId           String
+  productId         String
+  shopifyVariantId  String
+  sku               String?
+  title             String
+  price             Decimal?        @db.Decimal(10, 2)
+  compareAtPrice    Decimal?        @db.Decimal(10, 2)
+  inventoryQuantity Int?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  store             Store           @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  product           Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  lineItems         OrderLineItem[]
+
+  @@unique([storeId, shopifyVariantId])
+  @@index([storeId, sku])
+  @@index([productId])
+}
+
+model Customer {
+  id                String    @id @default(cuid())
+  storeId           String
+  shopifyCustomerId String
+  email             String?
+  firstName         String?
+  lastName          String?
+  name              String
+  createdAt         DateTime
+  updatedAt         DateTime
+  firstOrderDate    DateTime?
+  totalOrders       Int       @default(0)
+  lifetimeValue     Decimal   @default(0) @db.Decimal(12, 2)
+  isReturning       Boolean   @default(false)
+  store             Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  orders            Order[]
+
+  @@unique([storeId, shopifyCustomerId])
+  @@index([storeId, email])
+  @@index([storeId, updatedAt])
+}
+
+model Order {
+  id                String          @id @default(cuid())
+  storeId           String
+  customerId        String?
+  shopifyOrderId    String
+  orderNumber       String
+  displayName       String?
+  createdAt         DateTime
+  processedAt       DateTime?
+  currency          String
+  subtotalPrice     Decimal         @default(0) @db.Decimal(12, 2)
+  totalDiscounts    Decimal         @default(0) @db.Decimal(12, 2)
+  totalTax          Decimal         @default(0) @db.Decimal(12, 2)
+  totalShipping     Decimal         @default(0) @db.Decimal(12, 2)
+  totalRefunds      Decimal         @default(0) @db.Decimal(12, 2)
+  totalPrice        Decimal         @default(0) @db.Decimal(12, 2)
+  financialStatus   String?
+  fulfillmentStatus String?
+  sourceName        String?
+  updatedAt         DateTime
+  store             Store           @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  customer          Customer?       @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  lineItems         OrderLineItem[]
+  discountUsages    DiscountUsage[]
+  refunds           Refund[]
+  creatorAttributions CreatorAttribution[]
+  affiliateAttributions AffiliateAttribution[]
+
+  @@unique([storeId, shopifyOrderId])
+  @@index([storeId, createdAt])
+  @@index([storeId, updatedAt])
+  @@index([customerId])
+}
+
+model OrderLineItem {
+  id                  String          @id @default(cuid())
+  storeId             String
+  orderId             String
+  productId           String?
+  variantId           String?
+  shopifyLineItemId   String?
+  title               String
+  quantity            Int
+  originalUnitPrice   Decimal         @default(0) @db.Decimal(10, 2)
+  discountedUnitPrice Decimal         @default(0) @db.Decimal(10, 2)
+  lineSubtotal        Decimal         @default(0) @db.Decimal(12, 2)
+  lineDiscountAmount  Decimal         @default(0) @db.Decimal(12, 2)
+  estimatedCostAmount Decimal         @default(0) @db.Decimal(12, 2)
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+  store               Store           @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  order               Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product             Product?        @relation(fields: [productId], references: [id], onDelete: SetNull)
+  variant             ProductVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
+
+  @@unique([storeId, orderId, shopifyLineItemId])
+  @@index([storeId, productId])
+  @@index([storeId, variantId])
+  @@index([orderId])
+}
+
+model DiscountUsage {
+  id        String   @id @default(cuid())
+  storeId   String
+  orderId   String
+  code      String
+  amount    Decimal  @default(0) @db.Decimal(12, 2)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  store     Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@unique([storeId, orderId, code])
+  @@index([storeId, code])
+}
+
+model Refund {
+  id                      String   @id @default(cuid())
+  storeId                 String
+  orderId                 String
+  shopifyRefundId         String?
+  refundedAmount          Decimal  @default(0) @db.Decimal(12, 2)
+  refundedLineItemsAmount Decimal  @default(0) @db.Decimal(12, 2)
+  createdAt               DateTime
+  store                   Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  order                   Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@unique([storeId, shopifyRefundId])
+  @@index([storeId, createdAt])
+  @@index([orderId])
+}
+
+model DailyMetric {
+  id                    String   @id @default(cuid())
+  storeId               String
+  date                  DateTime
+  revenue               Decimal  @default(0) @db.Decimal(12, 2)
+  estimatedProfit       Decimal  @default(0) @db.Decimal(12, 2)
+  returningCustomerRate Decimal  @default(0) @db.Decimal(7, 4)
+  averageOrderValue     Decimal  @default(0) @db.Decimal(12, 2)
+  discountRate          Decimal  @default(0) @db.Decimal(7, 4)
+  refundRate            Decimal  @default(0) @db.Decimal(7, 4)
+  ordersCount           Int      @default(0)
+  newCustomers          Int      @default(0)
+  returningCustomers    Int      @default(0)
+  store                 Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@unique([storeId, date])
+  @@index([storeId, date])
+}
+
+model Summary {
+  id          String   @id @default(cuid())
+  storeId     String
+  headline    String
+  contentJson Json
+  generatedAt DateTime
+  store       Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@index([storeId, generatedAt(sort: Desc)])
+}
+
+model Alert {
+  id              String   @id @default(cuid())
+  storeId         String
+  severity        String
+  title           String
+  explanation     String
+  suggestedAction String
+  periodLabel     String
+  timestamp       DateTime
+  store           Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@index([storeId, timestamp(sort: Desc)])
+}
+
+model CreatorProfile {
+  id               String   @id @default(cuid())
+  storeId          String
+  platform         String
+  externalId       String
+  username         String
+  displayName      String?
+  profileUrl       String?
+  affiliateCode    String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  store            Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  posts            CreatorPost[]
+  attributions     CreatorAttribution[]
+
+  @@unique([storeId, platform, externalId])
+  @@index([storeId, platform])
+}
+
+model CreatorPost {
+  id                    String               @id @default(cuid())
+  storeId               String
+  instagramConnectionId String?
+  creatorProfileId      String?
+  externalPostId        String
+  caption               String?
+  mediaType             String?
+  mediaUrl              String?
+  permalink             String?
+  postedAt              DateTime
+  likeCount             Int                  @default(0)
+  commentsCount         Int                  @default(0)
+  viewCount             Int                  @default(0)
+  attributedSales       Decimal              @default(0) @db.Decimal(12, 2)
+  attributedOrders      Int                  @default(0)
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+  store                 Store                @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  instagramConnection   InstagramConnection? @relation(fields: [instagramConnectionId], references: [id], onDelete: SetNull)
+  creatorProfile        CreatorProfile?      @relation(fields: [creatorProfileId], references: [id], onDelete: SetNull)
+  attributions          CreatorAttribution[]
+
+  @@unique([storeId, externalPostId])
+  @@index([storeId, postedAt])
+}
+
+model CreatorAttribution {
+  id                String          @id @default(cuid())
+  storeId           String
+  creatorProfileId  String?
+  creatorPostId     String?
+  orderId           String?
+  sourcePlatform    String
+  affiliateCode     String?
+  salesAmount       Decimal         @default(0) @db.Decimal(12, 2)
+  ordersCount       Int             @default(0)
+  clicks            Int             @default(0)
+  commissionAmount  Decimal         @default(0) @db.Decimal(12, 2)
+  periodLabel       String?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  store             Store           @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  creatorProfile    CreatorProfile? @relation(fields: [creatorProfileId], references: [id], onDelete: SetNull)
+  creatorPost       CreatorPost?    @relation(fields: [creatorPostId], references: [id], onDelete: SetNull)
+  order             Order?          @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  @@index([storeId, sourcePlatform])
+  @@index([creatorProfileId])
+  @@index([creatorPostId])
+}
+
+model AffiliateProgram {
+  id                String            @id @default(cuid())
+  storeId           String
+  name              String
+  status            String            @default("active")
+  commissionRate    Decimal           @default(0.10) @db.Decimal(5, 4)
+  signUpLink        String?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  store             Store             @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  members           AffiliateMember[]
+
+  @@index([storeId, status])
+}
+
+model AffiliateMember {
+  id                String                 @id @default(cuid())
+  storeId           String
+  programId         String?
+  firstName         String
+  lastName          String
+  email             String
+  status            String                 @default("pending")
+  source            String?
+  country           String?
+  affiliateCode     String                 @unique
+  couponCode        String?
+  referralLink      String?
+  shortLink         String?
+  clicksTotal       Int                    @default(0)
+  ordersTotal       Int                    @default(0)
+  salesTotal        Decimal                @default(0) @db.Decimal(12, 2)
+  commissionTotal   Decimal                @default(0) @db.Decimal(12, 2)
+  approvedBalance   Decimal                @default(0) @db.Decimal(12, 2)
+  joinedAt          DateTime               @default(now())
+  lastLoginAt       DateTime?
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+  store             Store                  @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  program           AffiliateProgram?      @relation(fields: [programId], references: [id], onDelete: SetNull)
+  coupons           AffiliateCoupon[]
+  attributions      AffiliateAttribution[]
+  attributionSessions AttributionSession[]
+
+  @@unique([storeId, email])
+  @@index([storeId, status])
+}
+
+model AffiliateCoupon {
+  id                    String            @id @default(cuid())
+  storeId               String
+  affiliateMemberId     String?
+  shopifyDiscountId     String?
+  title                 String
+  code                  String
+  discountType          String
+  discountValue         Decimal           @db.Decimal(12, 2)
+  appliesOncePerCustomer Boolean          @default(true)
+  applyLink             String?
+  status                String            @default("active")
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+  store                 Store             @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  affiliateMember       AffiliateMember?  @relation(fields: [affiliateMemberId], references: [id], onDelete: SetNull)
+
+  @@unique([storeId, code])
+  @@index([storeId, affiliateMemberId])
+}
+
+model AffiliateAttribution {
+  id                String           @id @default(cuid())
+  storeId           String
+  affiliateMemberId String
+  orderId           String?
+  sourceType        String           @default("coupon")
+  trackingMethod    String?
+  sourceUrl         String?
+  contentTitle      String?
+  salesAmount       Decimal          @default(0) @db.Decimal(12, 2)
+  commissionAmount  Decimal          @default(0) @db.Decimal(12, 2)
+  clicks            Int              @default(0)
+  ordersCount       Int              @default(1)
+  occurredAt        DateTime         @default(now())
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  store             Store            @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  affiliateMember   AffiliateMember  @relation(fields: [affiliateMemberId], references: [id], onDelete: Cascade)
+  order             Order?           @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  @@unique([affiliateMemberId, orderId])
+  @@index([storeId, occurredAt])
+}
+
+
+model AgentSettings {
+  id                    String   @id @default(cuid())
+  storeId               String   @unique
+  enabled               Boolean  @default(true)
+  mode                  String   @default("recommendation_only")
+  checkFrequencyMinutes Int      @default(60)
+  thresholds            Json
+  comparisonWindows     Json
+  channels              Json
+  notifications         Json
+  guardrails            Json
+  allowedActions        Json
+  approvalRules         Json
+  productResearch       Json
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  store                 Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+}
+
+model AgentFinding {
+  id                 String   @id @default(cuid())
+  storeId            String
+  findingType        String
+  severity           String
+  metricName         String
+  summary            String
+  possibleCauses     Json
+  recommendedActions Json
+  confidenceScore    Decimal  @default(0.65) @db.Decimal(4, 2)
+  sourceData         Json?
+  createdAt          DateTime @default(now())
+  store              Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@index([storeId, createdAt(sort: Desc)])
+  @@index([storeId, severity])
+}
+
+model AgentAction {
+  id               String   @id @default(cuid())
+  storeId          String
+  actionType       String
+  status           String
+  title            String
+  reason           String
+  payload          Json
+  estimatedImpact  Json?
+  riskLevel        String
+  confidenceScore  Decimal  @default(0.65) @db.Decimal(4, 2)
+  approvalRequired Boolean  @default(false)
+  approvedBy       String?
+  dryRun           Boolean  @default(false)
+  executedAt       DateTime?
+  failureReason    String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  store            Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@index([storeId, createdAt(sort: Desc)])
+  @@index([storeId, status])
+  @@index([storeId, actionType])
+}
+
+model PlatformConnection {
+  id            String   @id @default(cuid())
+  storeId       String
+  platform      String
+  status        String   @default("not_connected")
+  config        Json?
+  tokenLastFour String?
+  healthMessage String?
+  lastSyncAt    DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  store         Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@unique([storeId, platform])
+  @@index([storeId, status])
+}
+
+model MetricSnapshot {
+  id              String   @id @default(cuid())
+  storeId         String
+  source          String
+  bucketedAt      DateTime
+  metrics         Json
+  confidenceScore Decimal? @db.Decimal(4, 2)
+  createdAt       DateTime @default(now())
+  store           Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@index([storeId, bucketedAt(sort: Desc)])
+  @@index([storeId, source])
+}
+model AttributionSession {
+  id                String                @id @default(cuid())
+  storeId           String
+  affiliateMemberId String?
+  clickId           String                @unique
+  visitorToken      String?
+  sourcePlatform    String?
+  sourceUrl         String?
+  destinationUrl    String
+  landingPath       String?
+  couponCode        String?
+  affiliateCode     String?
+  utmSource         String?
+  utmMedium         String?
+  utmCampaign       String?
+  ipHash            String?
+  userAgent         String?
+  convertedAt       DateTime?
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+  store             Store                 @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  affiliateMember   AffiliateMember?      @relation(fields: [affiliateMemberId], references: [id], onDelete: SetNull)
+
+  @@index([storeId, createdAt(sort: Desc)])
+  @@index([storeId, affiliateCode])
+  @@index([storeId, couponCode])
+}
+
+model WebhookEvent {
+  id             String   @id @default(cuid())
+  storeId        String
+  platform       String
+  topic          String
+  externalId     String?
+  status         String   @default("received")
+  payload        Json
+  errorMessage   String?
+  processedAt    DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  store          Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@index([storeId, topic, createdAt(sort: Desc)])
+  @@index([storeId, status])
+}
+

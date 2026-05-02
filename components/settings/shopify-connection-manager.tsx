@@ -1,0 +1,270 @@
+﻿"use client";
+
+import { useMemo, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import type { ShopifyConnectionSummary, SyncRunSummary } from "@/lib/domain/types";
+
+interface SyncStatusPayload {
+  connection: {
+    storeId: string;
+    shopDomain: string;
+    connected: boolean;
+    syncStatus: string;
+    lastSyncAt?: string | null;
+    lastSyncError?: string | null;
+  } | null;
+  recentRuns: SyncRunSummary[];
+}
+
+interface ShopifyLabels {
+  title: string;
+  description: string;
+  shopDomain: string;
+  shopDomainPlaceholder: string;
+  token: string;
+  tokenHelp?: string;
+  tokenPlaceholder: string;
+  testConnection: string;
+  testing: string;
+  saveCredentials: string;
+  saving: string;
+  testSuccess: string;
+  saveSuccess: string;
+  connectionFailed: string;
+  saveFailed: string;
+  unexpectedError: string;
+  notConnected: string;
+  syncRunning: string;
+  connected: string;
+  connectionState: string;
+  lastSync: string;
+  noSyncYet: string;
+  syncControlsTitle: string;
+  syncControlsDescription: string;
+  runInitialSync: string;
+  runningInitialSync: string;
+  runIncrementalSync: string;
+  runningIncrementalSync: string;
+  initialSyncDone: string;
+  incrementalSyncDone: string;
+  initialSyncFailed: string;
+  incrementalSyncFailed: string;
+  noSyncRuns: string;
+  created: string;
+  updated: string;
+  failed: string;
+  syncModes: { initial: string; incremental: string };
+  syncStatuses: { idle: string; running: string; success: string; error: string };
+}
+
+export function ShopifyConnectionManager({
+  initialConnection,
+  initialSyncStatus,
+  labels
+}: {
+  initialConnection: ShopifyConnectionSummary | null;
+  initialSyncStatus: SyncStatusPayload;
+  labels: ShopifyLabels;
+}) {
+  const [shopDomain, setShopDomain] = useState(initialConnection?.shopDomain ?? "");
+  const [adminAccessToken, setAdminAccessToken] = useState("");
+  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loadingAction, setLoadingAction] = useState<string | null>(null);
+  const [syncStatus, setSyncStatus] = useState(initialSyncStatus);
+
+  const storeId = syncStatus.connection?.storeId;
+
+  async function refreshStatus() {
+    const response = await fetch(`/api/shopify/sync/status${storeId ? `?storeId=${storeId}` : ""}`, {
+      method: "GET"
+    });
+    const payload = await response.json();
+    if (response.ok) {
+      setSyncStatus({
+        connection: payload.connection,
+        recentRuns: payload.recentRuns ?? []
+      });
+    }
+  }
+
+  async function runAction<T>(action: string, handler: () => Promise<T>) {
+    setLoadingAction(action);
+    setError(null);
+    setMessage(null);
+
+    try {
+      await handler();
+      await refreshStatus();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : labels.unexpectedError);
+    } finally {
+      setLoadingAction(null);
+    }
+  }
+
+  const connectionStateLabel = useMemo(() => {
+    if (!syncStatus.connection) return labels.notConnected;
+    if (syncStatus.connection.syncStatus === "running") return labels.syncRunning;
+    if (syncStatus.connection.connected) return labels.connected;
+    return labels.notConnected;
+  }, [labels.connected, labels.notConnected, labels.syncRunning, syncStatus.connection]);
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader>
+          <CardTitle>{labels.title}</CardTitle>
+          <CardDescription>{labels.description}</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-2">
+            <label className="space-y-2 text-sm">
+              <span className="text-muted-foreground">{labels.shopDomain}</span>
+              <input
+                className="w-full rounded-xl border border-border bg-background px-4 py-3 outline-none ring-0"
+                value={shopDomain}
+                onChange={(event) => setShopDomain(event.target.value)}
+                placeholder={labels.shopDomainPlaceholder}
+              />
+            </label>
+            <label className="space-y-2 text-sm">
+              <span className="text-muted-foreground">{labels.token}</span>
+              <input
+                type="password"
+                className="w-full rounded-xl border border-border bg-background px-4 py-3 outline-none ring-0"
+                value={adminAccessToken}
+                onChange={(event) => setAdminAccessToken(event.target.value)}
+                placeholder={labels.tokenPlaceholder}
+              />
+            </label>
+          </div>
+
+          {labels.tokenHelp ? <p className="text-sm text-muted-foreground">{labels.tokenHelp}</p> : null}
+
+          <div className="flex flex-wrap gap-3">
+            <Button
+              variant="secondary"
+              disabled={loadingAction !== null}
+              onClick={() =>
+                runAction("test", async () => {
+                  const response = await fetch("/api/shopify/connection/test", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ shopDomain, adminAccessToken })
+                  });
+                  const payload = await response.json();
+                  if (!response.ok) throw new Error(payload.error ?? labels.connectionFailed);
+                  setMessage(`${labels.testSuccess} ${payload.storePreview.name}.`);
+                })
+              }
+            >
+              {loadingAction === "test" ? labels.testing : labels.testConnection}
+            </Button>
+            <Button
+              disabled={loadingAction !== null}
+              onClick={() =>
+                runAction("save", async () => {
+                  const response = await fetch("/api/shopify/connection/save", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ shopDomain, adminAccessToken })
+                  });
+                  const payload = await response.json();
+                  if (!response.ok) throw new Error(payload.error ?? labels.saveFailed);
+                  setMessage(labels.saveSuccess);
+                  setAdminAccessToken("");
+                })
+              }
+            >
+              {loadingAction === "save" ? labels.saving : labels.saveCredentials}
+            </Button>
+          </div>
+
+          <div className="rounded-2xl border border-border/70 bg-background/70 p-4 text-sm">
+            <p className="font-semibold">{labels.connectionState}: {connectionStateLabel}</p>
+            <p className="mt-2 text-muted-foreground">
+              {syncStatus.connection?.lastSyncAt
+                ? `${labels.lastSync}: ${new Date(syncStatus.connection.lastSyncAt).toLocaleString()}`
+                : labels.noSyncYet}
+            </p>
+            {syncStatus.connection?.lastSyncError ? (
+              <p className="mt-2 text-danger">{syncStatus.connection.lastSyncError}</p>
+            ) : null}
+          </div>
+
+          {message ? <p className="text-sm text-success">{message}</p> : null}
+          {error ? <p className="text-sm text-danger">{error}</p> : null}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>{labels.syncControlsTitle}</CardTitle>
+          <CardDescription>{labels.syncControlsDescription}</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex flex-wrap gap-3">
+            <Button
+              variant="secondary"
+              disabled={!storeId || loadingAction !== null}
+              onClick={() =>
+                runAction("initial", async () => {
+                  const response = await fetch("/api/shopify/sync/initial", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ storeId })
+                  });
+                  const payload = await response.json();
+                  if (!response.ok) throw new Error(payload.error ?? labels.initialSyncFailed);
+                  setMessage(labels.initialSyncDone);
+                })
+              }
+            >
+              {loadingAction === "initial" ? labels.runningInitialSync : labels.runInitialSync}
+            </Button>
+            <Button
+              disabled={!storeId || loadingAction !== null}
+              onClick={() =>
+                runAction("incremental", async () => {
+                  const response = await fetch("/api/shopify/sync/incremental", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ storeId })
+                  });
+                  const payload = await response.json();
+                  if (!response.ok) throw new Error(payload.error ?? labels.incrementalSyncFailed);
+                  setMessage(labels.incrementalSyncDone);
+                })
+              }
+            >
+              {loadingAction === "incremental" ? labels.runningIncrementalSync : labels.runIncrementalSync}
+            </Button>
+          </div>
+
+          <div className="space-y-3">
+            {syncStatus.recentRuns.length ? (
+              syncStatus.recentRuns.map((run) => (
+                <div key={run.id} className="rounded-2xl border border-border/70 bg-background/70 p-4 text-sm">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="font-semibold">
+                      {labels.syncModes[run.mode]} · {labels.syncStatuses[run.status]}
+                    </p>
+                    <p className="text-muted-foreground">{new Date(run.startedAt).toLocaleString()}</p>
+                  </div>
+                  <p className="mt-2 text-muted-foreground">
+                    {labels.created}: {run.recordsCreated} · {labels.updated}: {run.recordsUpdated} · {labels.failed}: {run.recordsFailed}
+                  </p>
+                  {run.errorMessage ? <p className="mt-2 text-danger">{run.errorMessage}</p> : null}
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-muted-foreground">{labels.noSyncRuns}</p>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
