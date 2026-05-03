@@ -3,12 +3,13 @@ import { SectionHeading } from "@/components/ui/section-heading";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataTable } from "@/components/shared/data-table";
 import { getAppChromeData } from "@/lib/services/analytics-service";
-import { getGrowthAgentSettings } from "@/lib/services/growth-agent-service";
+import { getGrowthAgentSettings, getGrowthAgentStoreContext } from "@/lib/services/growth-agent-service";
 import { GrowthAgentNav } from "@/components/growth-agent/agent-nav";
 import { GrowthAgentManualControls } from "@/components/growth-agent/manual-controls";
 
 export default async function GrowthAgentRulesPage() {
-  const [chrome, settings] = await Promise.all([getAppChromeData(), getGrowthAgentSettings()]);
+  const { store } = await getGrowthAgentStoreContext();
+  const [chrome, settings] = await Promise.all([getAppChromeData(store.id), getGrowthAgentSettings(store.id)]);
 
   const thresholdRows = Object.entries(settings.thresholds).map(([metric, value]) => ({ metric, value: `${value}%` }));
   const allowedRows = Object.entries(settings.allowedActions).map(([action, enabled]) => ({ action, enabled: enabled ? "Enabled" : "Disabled" }));
@@ -25,7 +26,7 @@ export default async function GrowthAgentRulesPage() {
         <GrowthAgentNav />
       </section>
 
-      <GrowthAgentManualControls />
+      <GrowthAgentManualControls storeId={store.id} />
 
       <section className="grid gap-4 xl:grid-cols-3">
         <Card>

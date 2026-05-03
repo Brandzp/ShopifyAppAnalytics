@@ -1,14 +1,19 @@
-﻿import { AppShell } from "@/components/layout/app-shell";
-import { SectionHeading } from "@/components/ui/section-heading";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { getAppChromeData } from "@/lib/services/analytics-service";
+import { AmazonSupplierOrderManager } from "@/components/growth-agent/amazon-supplier-order-manager";
 import { GrowthAgentNav } from "@/components/growth-agent/agent-nav";
 import { GrowthAgentManualControls } from "@/components/growth-agent/manual-controls";
-import { AmazonSupplierOrderManager } from "@/components/growth-agent/amazon-supplier-order-manager";
+import { AppShell } from "@/components/layout/app-shell";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { SectionHeading } from "@/components/ui/section-heading";
+import { getAppChromeData } from "@/lib/services/analytics-service";
 import { getAmazonSupplierOrdersWorkspace } from "@/lib/services/amazon-supplier-order-service";
+import { getGrowthAgentStoreContext } from "@/lib/services/growth-agent-service";
 
 export default async function GrowthAgentSupplierOrdersPage() {
-  const [chrome, workspace] = await Promise.all([getAppChromeData(), getAmazonSupplierOrdersWorkspace()]);
+  const { store } = await getGrowthAgentStoreContext();
+  const [chrome, workspace] = await Promise.all([
+    getAppChromeData(store.id),
+    getAmazonSupplierOrdersWorkspace(store.id)
+  ]);
 
   return (
     <AppShell store={chrome.store} controls={chrome.controls}>
@@ -21,7 +26,7 @@ export default async function GrowthAgentSupplierOrdersPage() {
         <GrowthAgentNav />
       </section>
 
-      <GrowthAgentManualControls />
+      <GrowthAgentManualControls storeId={store.id} />
 
       <Card>
         <CardHeader>

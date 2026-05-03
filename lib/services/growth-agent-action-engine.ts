@@ -156,23 +156,23 @@ export async function buildGrowthActionsFromFindings(findings: GrowthFinding[], 
   return actions;
 }
 
-export async function approveGrowthAction(actionId: string, approvedBy = "merchant") {
+export async function approveGrowthAction(actionId: string, approvedBy = "merchant", storeId?: string) {
   await updateGrowthActionStatus({
     actionId,
     status: "executed",
     approvedBy,
     executedAt: new Date().toISOString()
-  });
+  }, storeId);
   return { ok: true };
 }
 
-export async function rejectGrowthAction(actionId: string, approvedBy = "merchant") {
+export async function rejectGrowthAction(actionId: string, approvedBy = "merchant", storeId?: string) {
   await updateGrowthActionStatus({
     actionId,
     status: "rejected",
     approvedBy,
     failureReason: "Rejected by merchant approval flow."
-  });
+  }, storeId);
   return { ok: true };
 }
 

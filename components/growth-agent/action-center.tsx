@@ -7,7 +7,15 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { GrowthStatusBadge } from "@/components/growth-agent/status-badge";
 
-export function GrowthActionCenter({ actions, title = "Action Center" }: { actions: GrowthAction[]; title?: string }) {
+export function GrowthActionCenter({
+  actions,
+  storeId,
+  title = "Action Center"
+}: {
+  actions: GrowthAction[];
+  storeId: string;
+  title?: string;
+}) {
   const router = useRouter();
   const [message, setMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -19,7 +27,7 @@ export function GrowthActionCenter({ actions, title = "Action Center" }: { actio
         const response = await fetch(`/api/growth-agent/actions/${actionId}/${type}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ approvedBy: "merchant" })
+          body: JSON.stringify({ approvedBy: "merchant", storeId })
         });
         const payload = await response.json();
         if (!response.ok || !payload.ok) throw new Error(payload.error ?? "Action update failed");

@@ -7,6 +7,60 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function toFiniteNumber(value: unknown) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : null;
+}
+
+function isThrottleGraphQLError(payload: ShopifyGraphQLResponse<unknown>) {
+  return Boolean(
+    payload.errors?.some((error) => {
+      const message = error.message.toLowerCase();
+      const code = String(error.extensions?.code ?? "").toLowerCase();
+      return message.includes("throttled") || code === "throttled";
+    })
+  );
+}
+
+function getRetryAfterDelayMs(response: Response) {
+  const retryAfter = response.headers.get("Retry-After");
+  if (!retryAfter) return null;
+
+  const seconds = Number(retryAfter);
+  if (Number.isFinite(seconds) && seconds > 0) {
+    return Math.ceil(seconds * 1000);
+  }
+
+  const parsed = Date.parse(retryAfter);
+  if (Number.isFinite(parsed)) {
+    return Math.max(0, parsed - Date.now());
+  }
+
+  return null;
+}
+
+function getThrottleDelayMs(payload: ShopifyGraphQLResponse<unknown> | undefined, attempt: number, response?: Response) {
+  const retryAfterDelay = response ? getRetryAfterDelayMs(response) : null;
+  if (retryAfterDelay !== null) {
+    return Math.max(retryAfterDelay, 1000);
+  }
+
+  const requestedCost =
+    toFiniteNumber(payload?.extensions?.cost?.requestedQueryCost) ??
+    toFiniteNumber(payload?.extensions?.cost?.actualQueryCost) ??
+    100;
+  const currentlyAvailable =
+    toFiniteNumber(payload?.extensions?.cost?.throttleStatus?.currentlyAvailable) ??
+    0;
+  const restoreRate =
+    toFiniteNumber(payload?.extensions?.cost?.throttleStatus?.restoreRate) ??
+    50;
+  const missingCapacity = Math.max(0, requestedCost - currentlyAvailable);
+  const estimatedRecoveryMs = restoreRate > 0 ? Math.ceil((missingCapacity / restoreRate) * 1000) : 0;
+
+  return Math.max(1000, estimatedRecoveryMs + 500 + attempt * 750);
+}
+
 export class ShopifyGraphQLClient {
   private shopDomain: string;
   private adminAccessToken: string;
@@ -29,8 +83,8 @@ export class ShopifyGraphQLClient {
       cache: "no-store"
     });
 
-    if ((response.status === 429 || response.status >= 500) && attempt < 2) {
-      await sleep(600 * (attempt + 1));
+    if ((response.status === 429 || response.status >= 500) && attempt < 5) {
+      await sleep(getThrottleDelayMs(undefined, attempt, response));
       return this.request<T>(query, variables, attempt + 1);
     }
 
@@ -41,6 +95,10 @@ export class ShopifyGraphQLClient {
 
     const payload = (await response.json()) as ShopifyGraphQLResponse<T>;
     if (payload.errors?.length) {
+      if (isThrottleGraphQLError(payload) && attempt < 5) {
+        await sleep(getThrottleDelayMs(payload, attempt, response));
+        return this.request<T>(query, variables, attempt + 1);
+      }
       throw new AppError(payload.errors.map((error) => error.message).join("; "), 400, payload.errors);
     }
 
@@ -65,6 +123,9 @@ export class ShopifyGraphQLClient {
       if (!connection) break;
       results.push(...connection.edges.map((edge: ShopifyNodeEdge<TNode>) => edge.node));
       cursor = connection.pageInfo.hasNextPage ? connection.pageInfo.endCursor ?? null : null;
+      if (cursor) {
+        await sleep(250);
+      }
     } while (cursor);
 
     return results;

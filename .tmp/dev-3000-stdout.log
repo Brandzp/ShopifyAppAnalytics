@@ -1,0 +1,129 @@
+   ▲ Next.js 15.5.14
+   - Local:        http://127.0.0.1:3000
+   - Network:      http://127.0.0.1:3000
+   - Environments: .env
+
+ ✓ Starting...
+ ✓ Ready in 8.9s
+ ○ Compiling /affiliate-portal/affiliates ...
+ ✓ Compiled /affiliate-portal/affiliates in 7s (725 modules)
+ GET /affiliate-portal/affiliates 200 in 8416ms
+ GET /affiliate-portal/affiliates 200 in 580ms
+ ○ Compiling /api/affiliate-portal/affiliates/[affiliateId]/instagram ...
+ ✓ Compiled /api/affiliate-portal/affiliates/[affiliateId]/instagram in 2.2s (748 modules)
+ PATCH /api/affiliate-portal/affiliates/not-real/instagram 404 in 2777ms
+ POST /api/creator/instagram/public-crawl 200 in 3649ms
+ PATCH /api/affiliate-portal/affiliates/cmojm7mr0i8dlnb1wpn6doy7y/instagram 200 in 1533ms
+ PATCH /api/affiliate-portal/affiliates/cmojm7mr0i8dlnb1wpn6doy7y/instagram 200 in 28ms
+ PATCH /api/affiliate-portal/affiliates/cmojm7mr0i8dlnb1wpn6doy7y/instagram 200 in 34ms
+ POST /api/creator/instagram/public-crawl 200 in 11644ms
+ PATCH /api/affiliate-portal/affiliates/cmojm7mr0i8dlnb1wpn6doy7y/instagram 200 in 34ms
+ GET /affiliate-portal/affiliates 200 in 969ms
+ ○ Compiling /settings ...
+ ✓ Compiled /settings in 529ms (777 modules)
+ GET /settings 200 in 1147ms
+ GET /affiliate-portal/affiliates 200 in 441ms
+ PATCH /api/affiliate-portal/affiliates/cmojm7mxsi8fpnb1wmvh9xa0b/instagram 200 in 92ms
+ GET /affiliate-portal/affiliates 200 in 148ms
+ ○ Compiling /marketing-planner ...
+ ✓ Compiled /marketing-planner in 678ms (759 modules)
+ GET /marketing-planner 200 in 816ms
+ ○ Compiling /api/marketing-planner/generate ...
+ ✓ Compiled /api/marketing-planner/generate in 769ms (1557 modules)
+ POST /api/marketing-planner/generate 200 in 7559ms
+ ○ Compiling /affiliate-portal ...
+ ✓ Compiled /affiliate-portal in 2.8s (1807 modules)
+ GET /affiliate-portal 200 in 3243ms
+ GET /affiliate-portal 200 in 187ms
+ GET /affiliate-portal/affiliates 200 in 145ms
+ ✓ Compiled /affiliate-portal/content in 186ms (1798 modules)
+ GET /affiliate-portal/content 200 in 306ms
+ ✓ Compiled in 295ms (806 modules)
+ GET /affiliate-portal/content 200 in 64ms
+ ✓ Compiled in 175ms (806 modules)
+ GET /affiliate-portal/content 200 in 50ms
+ ✓ Compiled in 160ms (806 modules)
+ GET /affiliate-portal/content 200 in 64ms
+ ✓ Compiled in 182ms (806 modules)
+ GET /affiliate-portal/content 200 in 59ms
+ ✓ Compiled in 190ms (806 modules)
+ GET /affiliate-portal/content 200 in 123ms
+ ✓ Compiled in 184ms (806 modules)
+ GET /affiliate-portal/content 200 in 74ms
+ ✓ Compiled in 162ms (806 modules)
+ GET /affiliate-portal/content 200 in 53ms
+ ✓ Compiled in 1903ms (1812 modules)
+ GET /affiliate-portal/content 200 in 124ms
+ ✓ Compiled in 459ms (1812 modules)
+ GET /affiliate-portal/content 200 in 111ms
+ ✓ Compiled in 332ms (1812 modules)
+ GET /affiliate-portal/content 200 in 125ms
+ GET /marketing-planner 200 in 231ms
+ ○ Compiling /api/creator/instagram/public-crawl ...
+ ✓ Compiled /api/creator/instagram/public-crawl in 511ms (1026 modules)
+ GET /affiliate-portal/content 200 in 182ms
+ POST /api/creator/instagram/public-crawl 200 in 4791ms
+ ○ Compiling /api/marketing-planner/generate ...
+ ✓ Compiled /api/marketing-planner/generate in 730ms (1832 modules)
+ GET /affiliate-portal/content 200 in 440ms
+ POST /api/marketing-planner/generate 200 in 5914ms
+ GET /marketing-planner 200 in 205ms
+ GET /marketing-planner 200 in 35ms
+ GET /marketing-planner 200 in 103ms
+ POST /api/marketing-planner/generate 200 in 11713ms
+ ○ Compiling /growth-agent ...
+ ✓ Compiled /growth-agent in 930ms (1843 modules)
+ GET /growth-agent 200 in 1553ms
+ ✓ Compiled /growth-agent/configuration in 496ms (1851 modules)
+ GET /growth-agent/configuration 200 in 642ms
+ ○ Compiling / ...
+ ✓ Compiled / in 765ms (1875 modules)
+ GET / 200 in 1862ms
+ ✓ Compiled in 631ms (820 modules)
+ GET / 200 in 1749ms
+ ✓ Compiled in 360ms (820 modules)
+ GET / 200 in 2048ms
+ ✓ Compiled in 542ms (820 modules)
+ ✓ Compiled in 464ms (820 modules)
+ GET / 200 in 2733ms
+ GET / 200 in 2500ms
+ ✓ Compiled in 2.2s (1883 modules)
+ GET / 200 in 2441ms
+ GET / 200 in 1853ms
+ ✓ Compiled in 646ms (820 modules)
+ GET / 200 in 2180ms
+ ✓ Compiled in 601ms (820 modules)
+ GET / 200 in 1536ms
+ ✓ Compiled in 379ms (820 modules)
+ GET / 200 in 1674ms
+ ✓ Compiled in 383ms (820 modules)
+ GET / 200 in 2019ms
+ ✓ Compiled in 424ms (820 modules)
+ GET / 200 in 1506ms
+ ○ Compiling /api/marketing-planner/data-readiness ...
+ ✓ Compiled /api/marketing-planner/data-readiness in 685ms (1069 modules)
+ ✓ Compiled in 731ms (806 modules)
+ GET /marketing-planner 200 in 4096ms
+ POST /api/marketing-planner/data-readiness 200 in 6899ms
+ POST /api/marketing-planner/data-readiness 200 in 34485ms
+ ✓ Compiled /api/marketing-planner/generate in 320ms (1894 modules)
+ ✓ Compiled in 1ms (1894 modules)
+ ✓ Compiled in 0ms (1894 modules)
+ ✓ Compiled in 0ms (1894 modules)
+ GET /marketing-planner 200 in 1405ms
+ GET / 200 in 2557ms
+ POST /api/marketing-planner/generate 200 in 6253ms
+ ✓ Compiled in 1324ms (1883 modules)
+ GET / 200 in 1910ms
+ ✓ Compiled in 399ms (820 modules)
+ GET / 200 in 1674ms
+ ✓ Compiled in 357ms (820 modules)
+ GET / 200 in 1790ms
+ ○ Compiling /api/marketing-planner/generate ...
+ ✓ Compiled /api/marketing-planner/generate in 928ms (1879 modules)
+ GET / 200 in 1423ms
+ POST /api/marketing-planner/generate 200 in 6588ms
+ ✓ Compiled /marketing-planner in 403ms (1885 modules)
+ GET /marketing-planner 200 in 738ms
+ GET / 200 in 4764ms
+[?25h

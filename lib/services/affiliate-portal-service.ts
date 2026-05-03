@@ -2,97 +2,129 @@ import type {
   AffiliateContentPerformance,
   AffiliateConversion,
   AffiliateCoupon,
+  AffiliateCouponHistoryItem,
   AffiliatePayout,
   AffiliatePortalDashboardPayload,
   AffiliatePortalSettings,
   AffiliateProfile,
-  AffiliateProgram
+  AffiliateProgram,
+  PortalTrendPoint
 } from "@/lib/domain/affiliate-portal-types";
 import { getDb } from "@/lib/server/db";
+import { getReportingDateRangeSelection } from "@/lib/server/reporting-date-range";
+import {
+  humanizeAffiliateSourcePlatform,
+  isBixGrowAttributedRecord,
+  resolveAffiliateSourcePlatform
+} from "@/lib/services/affiliate-attribution-source";
 import { resolveOrCreateBaseStore } from "@/lib/services/creator-admin-service";
 
-const program: AffiliateProgram = {
-  id: "program-1",
-  name: "משפיענים",
-  status: "active",
-  defaultCommissionRate: 10,
-  affiliates: 29,
-  orders: 5628,
-  sales: 1018852.99,
-  signUpLink: "https://portal.example.com/register",
-  checklist: [
-    { id: "embedded", title: "Enable app embed", done: false, group: "launch" },
-    { id: "program", title: "Create a program", done: true, group: "launch" },
-    { id: "brand", title: "Add brand identity", done: true, group: "launch" },
-    { id: "payments", title: "Add payment method", done: false, group: "launch" },
-    { id: "portal", title: "Design portal pages", done: false, group: "launch" },
-    { id: "emails", title: "Review email automation", done: false, group: "launch" },
-    { id: "first-affiliate", title: "Add the first affiliate", done: true, group: "test" },
-    { id: "first-conversion", title: "Get the first conversion", done: true, group: "test" },
-    { id: "landing", title: "Showcase landing page on your store", done: false, group: "promote" },
-    { id: "reachout", title: "Reach out to potential affiliates", done: false, group: "promote" }
-  ]
-};
-
-const affiliates: AffiliateProfile[] = [
-  { id: "aff-adel", firstName: "Adel", lastName: "Bespalov", email: "adelbespalov9@gmail.com", programName: "משפיענים", status: "approved", dateJoined: "2026-03-18T15:15:00.000Z", lastLogin: "2026-03-24T09:18:00.000Z", source: "Signup", country: "Israel", clicks: 2482, orders: 88, sales: 74298.01, commission: 7429.8, approvedBalance: 1800, affiliateCode: "ADEL", couponCode: "ADEL40", referralLink: "https://northstargoods.com/?ref=adel&coupon=ADEL40&utm_source=affiliate", shortLink: "https://portal.nsg.co/a/adel" },
-  { id: "aff-talia", firstName: "Talia", lastName: "Sol", email: "talia@example.com", programName: "משפיענים", status: "approved", dateJoined: "2026-02-24T14:41:00.000Z", lastLogin: "2026-03-24T08:46:00.000Z", source: "Signup", country: "Israel", clicks: 2132, orders: 72, sales: 52372.89, commission: 5237.29, approvedBalance: 920, affiliateCode: "TALIA", couponCode: "TALIA40", referralLink: "https://northstargoods.com/?ref=talia&coupon=TALIA40&utm_source=affiliate", shortLink: "https://portal.nsg.co/a/talia" },
-  { id: "aff-lihi", firstName: "Lihi", lastName: "Grossman", email: "lihi@example.com", programName: "משפיענים", status: "approved", dateJoined: "2025-08-21T07:56:00.000Z", lastLogin: "2026-03-23T22:59:00.000Z", source: "Signup", country: "Israel", clicks: 9223, orders: 1508, sales: 117650.56, commission: 11765.05, approvedBalance: 0, affiliateCode: "LIHI", couponCode: "LIHI40", referralLink: "https://northstargoods.com/?ref=lihi&coupon=LIHI40&utm_source=affiliate", shortLink: "https://portal.nsg.co/a/lihi" },
-  { id: "aff-sapir", firstName: "Sapir", lastName: "Glick", email: "sapir@example.com", programName: "משפיענים", status: "approved", dateJoined: "2025-02-11T18:01:00.000Z", lastLogin: "2026-03-21T22:04:00.000Z", source: "Signup", country: "Israel", clicks: 1644, orders: 44, sales: 21060, commission: 2106, approvedBalance: 0, affiliateCode: "SAPIR", couponCode: "SAPIR40", referralLink: "https://northstargoods.com/?ref=sapir&coupon=SAPIR40&utm_source=affiliate", shortLink: "https://portal.nsg.co/a/sapir" },
-  { id: "aff-anat", firstName: "Anat", lastName: "Azulay", email: "anat@example.com", programName: "משפיענים", status: "approved", dateJoined: "2025-10-21T11:47:00.000Z", lastLogin: "2026-03-23T01:02:00.000Z", source: "Add manual", country: "Israel", clicks: 1390, orders: 31, sales: 16203.13, commission: 1620.31, approvedBalance: 0, affiliateCode: "ANAT", couponCode: "ANAT40", referralLink: "https://northstargoods.com/?ref=anat&coupon=ANAT40&utm_source=affiliate", shortLink: "https://portal.nsg.co/a/anat" },
-  { id: "aff-noa", firstName: "Noa", lastName: "Zvulun", email: "noa@example.com", programName: "משפיענים", status: "pending", dateJoined: "2026-03-18T15:15:00.000Z", lastLogin: null, source: "Signup", country: "Israel", clicks: 0, orders: 0, sales: 0, commission: 0, approvedBalance: 0, affiliateCode: "NOA", couponCode: null, referralLink: "https://northstargoods.com/?ref=noa&utm_source=affiliate", shortLink: "https://portal.nsg.co/a/noa" }
+const DEFAULT_PROGRAM_CHECKLIST: AffiliateProgram["checklist"] = [
+  { id: "embedded", title: "Enable app embed", done: false, group: "launch" },
+  { id: "program", title: "Create a program", done: false, group: "launch" },
+  { id: "brand", title: "Add brand identity", done: false, group: "launch" },
+  { id: "payments", title: "Add payment method", done: false, group: "launch" },
+  { id: "portal", title: "Design portal pages", done: false, group: "launch" },
+  { id: "emails", title: "Review email automation", done: false, group: "launch" },
+  { id: "first-affiliate", title: "Add the first affiliate", done: false, group: "test" },
+  { id: "first-conversion", title: "Get the first conversion", done: false, group: "test" },
+  { id: "landing", title: "Showcase landing page on your store", done: false, group: "promote" },
+  { id: "reachout", title: "Reach out to potential affiliates", done: false, group: "promote" }
 ];
 
-const coupons: AffiliateCoupon[] = affiliates.filter((affiliate) => affiliate.couponCode).map((affiliate, index) => ({ id: `coupon-${affiliate.id}`, code: affiliate.couponCode as string, affiliateId: affiliate.id, affiliateName: `${affiliate.firstName} ${affiliate.lastName}`, status: "active", template: "ALMOND & MACADAMIA", note: index % 2 === 0 ? "Push creator landing page" : null, createdAt: new Date(Date.now() - 86400000 * (index + 2)).toISOString(), discountLabel: "₪70.40 off ALMOND & MACADAMIA", applyLink: affiliate.referralLink }));
+const DEFAULT_PORTAL_SETTINGS = {
+  portalLanguage: "English",
+  inviteAutomationEnabled: false,
+  referralOrderEmailEnabled: false,
+  couponAssignmentEnabled: false,
+  advanced: {
+    collectTaxForms: false,
+    trackPendingOrders: true,
+    webhookReady: true
+  }
+} as const;
 
-const conversions: AffiliateConversion[] = [
-  { id: "conv-10103", orderNumber: "#10103", date: "2026-03-24T09:18:00.000Z", affiliateId: "aff-sara", affiliateName: "Sara Basan", total: 154.1, commission: 15.41, status: "approved", trackingBy: "Link", sourceUrl: "https://instagram.com", contentTitle: "Morning routine reel" },
-  { id: "conv-10102", orderNumber: "#10102", date: "2026-03-24T08:46:00.000Z", affiliateId: "aff-talia", affiliateName: "Talia Sol", total: 219.49, commission: 21.95, status: "approved", trackingBy: "Link & coupon", sourceUrl: "https://instagram.com", contentTitle: "Bundle story set" },
-  { id: "conv-10100", orderNumber: "#10100", date: "2026-03-24T08:27:00.000Z", affiliateId: "aff-talia", affiliateName: "Talia Sol", total: 219.49, commission: 21.95, status: "approved", trackingBy: "Link & coupon", sourceUrl: "https://instagram.com", contentTitle: "Offer close friends story" },
-  { id: "conv-10098", orderNumber: "#10098", date: "2026-03-24T05:48:00.000Z", affiliateId: "aff-adel", affiliateName: "Adel Bespalov", total: 219.49, commission: 21.95, status: "approved", trackingBy: "Link & coupon", sourceUrl: "https://www.adel.com", contentTitle: "Recovery hoodie styling reel" },
-  { id: "conv-10094", orderNumber: "#10094", date: "2026-03-23T23:34:00.000Z", affiliateId: "aff-talia", affiliateName: "Talia Sol", total: 219.49, commission: 21.95, status: "approved", trackingBy: "Link & coupon", sourceUrl: "https://facebook.com", contentTitle: "UGC try-on carousel" },
-  { id: "conv-10093", orderNumber: "#10093", date: "2026-03-23T22:59:00.000Z", affiliateId: "aff-lihi", affiliateName: "Lihi Grossman", total: 219.49, commission: 21.95, status: "approved", trackingBy: "Link & coupon", sourceUrl: "https://instagram.com", contentTitle: "Founder capsule try-on" }
+const COUPON_TEMPLATES = [
+  { id: "tpl-percent-10", name: "10% off", discountType: "percent", value: 10 },
+  { id: "tpl-percent-15", name: "15% off", discountType: "percent", value: 15 },
+  { id: "tpl-fixed-25", name: "25 off", discountType: "fixed", value: 25 }
 ];
 
-const payouts: AffiliatePayout[] = [
-  { id: "pay-lihi", affiliateId: "aff-lihi", affiliateName: "Lihi Grossman", paymentMethod: "Missing info", approvedOrders: 1508, approvedBalance: 0 },
-  { id: "pay-star", affiliateId: "aff-star", affiliateName: "Star Rahum", paymentMethod: "Missing info", approvedOrders: 61, approvedBalance: 0 },
-  { id: "pay-sapir", affiliateId: "aff-sapir", affiliateName: "Sapir Glick", paymentMethod: "Missing info", approvedOrders: 104, approvedBalance: 0 },
-  { id: "pay-sara", affiliateId: "aff-sara", affiliateName: "Sara Basan", paymentMethod: "Missing info", approvedOrders: 160, approvedBalance: 0 }
-];
+function toNumber(value: unknown) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : 0;
+}
 
-const contentPerformance: AffiliateContentPerformance[] = [
-  { id: "content-1", affiliateId: "aff-adel", affiliateName: "Adel Bespalov", platform: "Instagram", title: "Recovery hoodie styling reel", contentType: "Reel", postedAt: "2026-03-21T10:00:00.000Z", views: 18400, likes: 1260, comments: 84, clicks: 438, orders: 19, sales: 2140 },
-  { id: "content-2", affiliateId: "aff-talia", affiliateName: "Talia Sol", platform: "Instagram", title: "Bundle story set", contentType: "Story", postedAt: "2026-03-22T18:00:00.000Z", views: 12100, likes: 980, comments: 52, clicks: 372, orders: 14, sales: 1580 },
-  { id: "content-3", affiliateId: "aff-lihi", affiliateName: "Lihi Grossman", platform: "Instagram", title: "Founder capsule try-on", contentType: "Carousel", postedAt: "2026-03-18T12:00:00.000Z", views: 9400, likes: 720, comments: 37, clicks: 210, orders: 9, sales: 970 },
-  { id: "content-4", affiliateId: "aff-sapir", affiliateName: "Sapir Glick", platform: "Instagram", title: "Electrolyte morning routine", contentType: "Reel", postedAt: "2026-03-17T07:30:00.000Z", views: 8700, likes: 605, comments: 28, clicks: 188, orders: 6, sales: 660 },
-  { id: "content-5", affiliateId: "aff-anat", affiliateName: "Anat Azulay", platform: "Instagram", title: "Customer testimonial story", contentType: "Story", postedAt: "2026-03-14T16:10:00.000Z", views: 4300, likes: 120, comments: 9, clicks: 44, orders: 1, sales: 154.1 }
-];
+function buildProgramName(storeName?: string | null) {
+  return storeName ? `${storeName} Affiliate Program` : "Affiliate Program";
+}
 
-const trend = [
-  { date: "20 בפבר'", sales: 4600, clicks: 220, orders: 14 },
-  { date: "24 בפבר'", sales: 5200, clicks: 260, orders: 18 },
-  { date: "28 בפבר'", sales: 4300, clicks: 205, orders: 12 },
-  { date: "4 במרץ", sales: 3900, clicks: 198, orders: 11 },
-  { date: "8 במרץ", sales: 6100, clicks: 310, orders: 20 },
-  { date: "12 במרץ", sales: 15800, clicks: 660, orders: 52 },
-  { date: "16 במרץ", sales: 40120, clicks: 1420, orders: 131 },
-  { date: "18 במרץ", sales: 42800, clicks: 1630, orders: 146 },
-  { date: "22 במרץ", sales: 12640, clicks: 550, orders: 45 },
-  { date: "24 במרץ", sales: 7400, clicks: 312, orders: 24 }
-];
+function buildReferralLink(storeDomain: string, affiliateCode: string, couponCode?: string | null) {
+  const url = new URL(`https://${storeDomain}/`);
+  url.searchParams.set("ref", affiliateCode);
+  if (couponCode) {
+    url.searchParams.set("coupon", couponCode);
+  }
+  url.searchParams.set("utm_source", "affiliate");
+  return url.toString();
+}
 
-const settings: AffiliatePortalSettings = {
-  portalLanguage: "עברית / English",
-  brandingName: "After Shower",
-  storeDomain: "4k7qk0-0j.myshopify.com",
-  senderName: "Northstar Creator Team",
-  senderEmail: "no-reply@northstargoods.com",
-  inviteAutomationEnabled: true,
-  referralOrderEmailEnabled: true,
-  couponAssignmentEnabled: true,
-  advanced: { collectTaxForms: false, trackPendingOrders: true, webhookReady: true }
-};
+function buildCouponDiscountLabel(value: number, discountType: string, currency: string) {
+  return discountType === "percent" ? `${value}% off` : `${currency} ${value} off`;
+}
+
+function normalizeAssignmentMode(value?: string | null): AffiliateCoupon["assignmentMode"] {
+  return value === "bulk" ? "bulk" : "single";
+}
+
+function normalizeConnectionSource(value?: string | null): AffiliateCoupon["connectionSource"] {
+  return value === "existing_coupon" ? "existing_coupon" : "shopify_create";
+}
+
+function formatTrendLabel(value: Date) {
+  return value.toLocaleDateString("en-US", { day: "numeric", month: "short" });
+}
+
+function toDayKey(value: Date) {
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, "0");
+  const day = String(value.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function normalizeSourceLabel(
+  sourceUrl?: string | null,
+  sourcePlatform?: string | null,
+  trackingMethod?: string | null
+) {
+  if (isBixGrowAttributedRecord({ sourceUrl, sourcePlatform, trackingMethod })) {
+    return "BixGrow";
+  }
+
+  if (sourceUrl) {
+    try {
+      return new URL(sourceUrl).hostname.replace(/^www\./, "");
+    } catch {
+      return sourceUrl;
+    }
+  }
+
+  return humanizeAffiliateSourcePlatform(sourcePlatform) ?? "Unknown";
+}
+
+function buildProgramPayload(store: any | null, row: any | null, affiliateRows: AffiliateProfile[]): AffiliateProgram {
+  return {
+    id: row?.id ?? `${store?.id ?? "affiliate"}-program`,
+    name: row?.name ?? buildProgramName(store?.name),
+    status: (row?.status === "active" ? "active" : "draft") as AffiliateProgram["status"],
+    defaultCommissionRate: row ? Math.round(toNumber(row.commissionRate) * 10000) / 100 : 0,
+    affiliates: affiliateRows.length,
+    orders: affiliateRows.reduce((sum, item) => sum + item.orders, 0),
+    sales: affiliateRows.reduce((sum, item) => sum + item.sales, 0),
+    signUpLink: row?.signUpLink ?? "",
+    checklist: DEFAULT_PROGRAM_CHECKLIST
+  };
+}
 
 async function getAffiliateStore() {
   try {
@@ -102,156 +134,611 @@ async function getAffiliateStore() {
   }
 }
 
-async function loadAffiliatesFromDb() {
+function isWithinRange(value: string | Date, start: Date, end: Date) {
+  const date = value instanceof Date ? value : new Date(value);
+  return date >= start && date <= end;
+}
+
+function buildAffiliateProfileFromMember(row: any, store: any): AffiliateProfile {
+  const referralLink = row.referralLink ?? buildReferralLink(store.domain, row.affiliateCode, row.couponCode);
+  return {
+    id: row.id,
+    firstName: row.firstName,
+    lastName: row.lastName,
+    email: row.email,
+    programName: row.program?.name ?? buildProgramName(store.name),
+    status: row.status,
+    dateJoined: row.joinedAt.toISOString(),
+    lastLogin: row.lastLoginAt?.toISOString() ?? null,
+    source: row.source ?? "Manual",
+    country: row.country ?? "",
+    clicks: 0,
+    orders: 0,
+    sales: 0,
+    commission: 0,
+    approvedBalance: toNumber(row.approvedBalance),
+    affiliateCode: row.affiliateCode,
+    couponCode: row.couponCode ?? null,
+    instagramUsername: row.instagramUsername ?? null,
+    instagramProfileUrl: row.instagramProfileUrl ?? null,
+    referralLink,
+    shortLink: row.shortLink ?? referralLink
+  };
+}
+
+async function loadAffiliatesFromDb(): Promise<AffiliateProfile[]> {
   const db = getDb();
   const store = await getAffiliateStore();
-  if (!db || !store || !db.affiliateMember) return null;
+  if (!db || !store || !db.affiliateMember) return [];
+
   try {
-    const rows = await db.affiliateMember.findMany({ include: { program: true }, where: { storeId: store.id }, orderBy: { salesTotal: "desc" } });
-    if (!rows.length) return null;
-    return rows.map((row: any) => ({
-      id: row.id,
-      firstName: row.firstName,
-      lastName: row.lastName,
-      email: row.email,
-      programName: row.program?.name ?? "משפיענים",
-      status: row.status,
-      dateJoined: row.joinedAt.toISOString(),
-      lastLogin: row.lastLoginAt?.toISOString() ?? null,
-      source: row.source ?? "Signup",
-      country: row.country ?? "Israel",
-      clicks: row.clicksTotal ?? 0,
-      orders: row.ordersTotal ?? 0,
-      sales: Number(row.salesTotal ?? 0),
-      commission: Number(row.commissionTotal ?? 0),
-      approvedBalance: Number(row.approvedBalance ?? 0),
-      affiliateCode: row.affiliateCode,
-      couponCode: row.couponCode ?? null,
-      referralLink: row.referralLink ?? `https://${store.domain}/?ref=${row.affiliateCode}`,
-      shortLink: row.shortLink ?? `https://portal.${store.domain}/a/${row.affiliateCode.toLowerCase()}`
-    })) as AffiliateProfile[];
+    const rows = await db.affiliateMember.findMany({
+      include: { program: true },
+      where: { storeId: store.id },
+      orderBy: [{ salesTotal: "desc" }, { joinedAt: "asc" }]
+    });
+
+    return rows.map((row: any) => {
+      const referralLink = row.referralLink ?? buildReferralLink(store.domain, row.affiliateCode, row.couponCode);
+      return {
+        id: row.id,
+        firstName: row.firstName,
+        lastName: row.lastName,
+        email: row.email,
+        programName: row.program?.name ?? buildProgramName(store.name),
+        status: row.status,
+        dateJoined: row.joinedAt.toISOString(),
+        lastLogin: row.lastLoginAt?.toISOString() ?? null,
+        source: row.source ?? "Manual",
+        country: row.country ?? "",
+        clicks: row.clicksTotal ?? 0,
+        orders: row.ordersTotal ?? 0,
+        sales: toNumber(row.salesTotal),
+        commission: toNumber(row.commissionTotal),
+        approvedBalance: toNumber(row.approvedBalance),
+        affiliateCode: row.affiliateCode,
+        couponCode: row.couponCode ?? null,
+        instagramUsername: row.instagramUsername ?? null,
+        instagramProfileUrl: row.instagramProfileUrl ?? null,
+        referralLink,
+        shortLink: row.shortLink ?? referralLink
+      };
+    }) as AffiliateProfile[];
   } catch {
-    return null;
+    return [];
   }
 }
 
-async function loadCouponsFromDb() {
+async function loadCouponsFromDb(): Promise<AffiliateCoupon[]> {
   const db = getDb();
   const store = await getAffiliateStore();
-  if (!db || !store || !db.affiliateCoupon) return null;
+  if (!db || !store || !db.affiliateCoupon) return [];
+
   try {
-    const rows = await db.affiliateCoupon.findMany({ where: { storeId: store.id }, include: { affiliateMember: true }, orderBy: { createdAt: "desc" } });
-    if (!rows.length) return null;
-    return rows.map((row: any) => ({
-      id: row.id,
-      code: row.code,
+    const rows = await db.affiliateCoupon.findMany({
+      where: { storeId: store.id },
+      include: {
+        affiliateMember: true,
+        assignments: {
+          orderBy: { createdAt: "desc" },
+          take: 1
+        }
+      },
+      orderBy: { updatedAt: "desc" }
+    });
+
+    return rows.map((row: any) => {
+      const latestAssignment = row.assignments?.[0] ?? null;
+      return {
+        id: row.id,
+        code: row.code,
+        affiliateId: row.affiliateMemberId ?? "",
+        affiliateName: row.affiliateMember ? `${row.affiliateMember.firstName} ${row.affiliateMember.lastName}` : "-",
+        status: row.status === "inactive" ? "inactive" : "active",
+        template: latestAssignment?.couponTitle ?? row.title,
+        note: null,
+        createdAt: (latestAssignment?.createdAt ?? row.createdAt).toISOString(),
+        discountLabel: buildCouponDiscountLabel(toNumber(row.discountValue), row.discountType, store.currency),
+        applyLink: latestAssignment?.applyLink ?? row.applyLink ?? `https://${store.domain}/discount/${row.code}?redirect=%2F`,
+        assignmentMode: normalizeAssignmentMode(latestAssignment?.assignmentMode),
+        connectionSource: normalizeConnectionSource(latestAssignment?.connectionSource)
+      };
+    }) as AffiliateCoupon[];
+  } catch {
+    return [];
+  }
+}
+
+async function loadCouponHistoryFromDb(affiliateId?: string): Promise<AffiliateCouponHistoryItem[]> {
+  const db = getDb();
+  const store = await getAffiliateStore();
+  if (!db || !store) return [];
+
+  const historyWhere = affiliateId
+    ? { storeId: store.id, affiliateMemberId: affiliateId }
+    : { storeId: store.id };
+
+  if (db.affiliateCouponAssignment) {
+    try {
+      const rows = await db.affiliateCouponAssignment.findMany({
+        where: historyWhere,
+        include: {
+          affiliateMember: true,
+          affiliateCoupon: true
+        },
+        orderBy: { createdAt: "desc" }
+      });
+
+      if (rows.length) {
+        return rows.map((row: any) => ({
+          id: row.id,
+          affiliateId: row.affiliateMemberId,
+          affiliateName: row.affiliateMember ? `${row.affiliateMember.firstName} ${row.affiliateMember.lastName}` : "-",
+          couponId: row.affiliateCouponId ?? row.affiliateCoupon?.id ?? null,
+          code: row.couponCode,
+          couponTitle: row.couponTitle,
+          discountLabel: buildCouponDiscountLabel(toNumber(row.discountValue), row.discountType, store.currency),
+          applyLink: row.applyLink ?? row.affiliateCoupon?.applyLink ?? `https://${store.domain}/discount/${row.couponCode}?redirect=%2F`,
+          assignmentMode: normalizeAssignmentMode(row.assignmentMode),
+          connectionSource: normalizeConnectionSource(row.connectionSource),
+          connectedAt: row.createdAt.toISOString()
+        })) as AffiliateCouponHistoryItem[];
+      }
+    } catch {
+      // Fall back to coupon rows when assignment history is not available yet.
+    }
+  }
+
+  if (!db.affiliateCoupon) return [];
+
+  try {
+    const couponRows = await db.affiliateCoupon.findMany({
+      where: affiliateId
+        ? { storeId: store.id, affiliateMemberId: affiliateId }
+        : { storeId: store.id },
+      include: { affiliateMember: true },
+      orderBy: { createdAt: "desc" }
+    });
+
+    return couponRows.map((row: any) => ({
+      id: `legacy-${row.id}`,
       affiliateId: row.affiliateMemberId ?? "",
       affiliateName: row.affiliateMember ? `${row.affiliateMember.firstName} ${row.affiliateMember.lastName}` : "-",
-      status: row.status,
-      template: row.title,
-      note: null,
-      createdAt: row.createdAt.toISOString(),
-      discountLabel: row.discountType === "percent" ? `${Number(row.discountValue)}% off` : `₪${Number(row.discountValue)} off`,
-      applyLink: row.applyLink ?? `https://${store.domain}/discount/${row.code}?redirect=%2F`
-    })) as AffiliateCoupon[];
+      couponId: row.id,
+      code: row.code,
+      couponTitle: row.title,
+      discountLabel: buildCouponDiscountLabel(toNumber(row.discountValue), row.discountType, store.currency),
+      applyLink: row.applyLink ?? `https://${store.domain}/discount/${row.code}?redirect=%2F`,
+      assignmentMode: "single",
+      connectionSource: "shopify_create",
+      connectedAt: row.createdAt.toISOString()
+    })) as AffiliateCouponHistoryItem[];
   } catch {
-    return null;
+    return [];
   }
 }
 
-async function loadConversionsFromDb() {
+async function loadConversionsFromDb(): Promise<AffiliateConversion[]> {
   const db = getDb();
   const store = await getAffiliateStore();
-  if (!db || !store || !db.affiliateAttribution) return null;
+  if (!db || !store || !db.affiliateAttribution) return [];
+
   try {
-    const rows = await db.affiliateAttribution.findMany({ where: { storeId: store.id }, include: { affiliateMember: true, order: true }, orderBy: { occurredAt: "desc" } });
-    if (!rows.length) return null;
+    const rows = await db.affiliateAttribution.findMany({
+      where: { storeId: store.id },
+      include: { affiliateMember: true, order: true },
+      orderBy: { occurredAt: "desc" }
+    });
+
     return rows.map((row: any) => ({
       id: row.id,
-      orderNumber: row.order?.orderNumber ?? row.orderId ?? "-",
+      orderNumber: row.order?.displayName ?? row.order?.orderNumber ?? row.orderId ?? "-",
       date: row.occurredAt.toISOString(),
       affiliateId: row.affiliateMemberId,
-      affiliateName: `${row.affiliateMember.firstName} ${row.affiliateMember.lastName}`,
-      total: Number(row.salesAmount ?? 0),
-      commission: Number(row.commissionAmount ?? 0),
+      affiliateName: row.affiliateMember ? `${row.affiliateMember.firstName} ${row.affiliateMember.lastName}` : "-",
+      total: toNumber(row.salesAmount),
+      commission: toNumber(row.commissionAmount),
       status: "approved",
-      trackingBy: row.trackingMethod ?? "Link & coupon",
-      sourceUrl: row.sourceUrl ?? "-",
+      trackingBy: row.trackingMethod ? String(row.trackingMethod).replaceAll("_", " ") : row.sourceType ?? "Link",
+      sourceUrl: normalizeSourceLabel(row.sourceUrl, null, row.trackingMethod),
       contentTitle: row.contentTitle ?? null
     })) as AffiliateConversion[];
   } catch {
-    return null;
+    return [];
   }
 }
 
-async function loadContentFromDb() {
+async function loadContentFromDb(): Promise<AffiliateContentPerformance[]> {
   const db = getDb();
   const store = await getAffiliateStore();
-  if (!db || !store || !db.creatorPost) return null;
+  if (!db || !store || !db.creatorPost) return [];
+
   try {
-    const rows = await db.creatorPost.findMany({ where: { storeId: store.id }, include: { creatorProfile: true }, orderBy: { postedAt: "desc" }, take: 20 });
-    if (!rows.length) return null;
-    return rows.map((row: any) => ({
-      id: row.id,
-      affiliateId: row.creatorProfileId ?? row.id,
-      affiliateName: row.creatorProfile?.displayName ?? row.creatorProfile?.username ?? "Affiliate creator",
-      platform: "Instagram",
-      title: row.caption ?? "Untitled content",
-      contentType: row.mediaType ?? "Media",
-      postedAt: row.postedAt.toISOString(),
-      views: row.viewCount ?? 0,
-      likes: row.likeCount ?? 0,
-      comments: row.commentsCount ?? 0,
-      clicks: 0,
-      orders: row.attributedOrders ?? 0,
-      sales: Number(row.attributedSales ?? 0)
-    })) as AffiliateContentPerformance[];
+    const rows = await db.creatorPost.findMany({
+      where: { storeId: store.id },
+      include: { creatorProfile: true, attributions: true },
+      orderBy: { postedAt: "desc" },
+      take: 20
+    });
+
+    return rows.map((row: any) => {
+      const attributedClicks = Array.isArray(row.attributions)
+        ? row.attributions.reduce((sum: number, attribution: any) => sum + Number(attribution.clicks ?? 0), 0)
+        : 0;
+      const attributedOrders = Array.isArray(row.attributions)
+        ? row.attributions.reduce((sum: number, attribution: any) => sum + Number(attribution.ordersCount ?? 0), 0)
+        : 0;
+      const attributedSales = Array.isArray(row.attributions)
+        ? row.attributions.reduce((sum: number, attribution: any) => sum + toNumber(attribution.salesAmount), 0)
+        : 0;
+
+      return {
+        id: row.id,
+        affiliateId: row.creatorProfileId ?? row.id,
+        affiliateName: row.creatorProfile?.displayName ?? row.creatorProfile?.username ?? "Creator",
+        platform: "Instagram",
+        title: row.caption ?? "Untitled content",
+        contentType: row.mediaType ?? "Media",
+        postedAt: row.postedAt.toISOString(),
+        views: row.viewCount ?? 0,
+        likes: row.likeCount ?? 0,
+        comments: row.commentsCount ?? 0,
+        clicks: attributedClicks,
+        orders: Math.max(row.attributedOrders ?? 0, attributedOrders),
+        sales: Math.max(toNumber(row.attributedSales), attributedSales)
+      };
+    }) as AffiliateContentPerformance[];
   } catch {
-    return null;
+    return [];
   }
 }
 
-async function loadProgramFromDb() {
+async function loadProgramFromDb(affiliateRows: AffiliateProfile[]): Promise<AffiliateProgram> {
   const db = getDb();
   const store = await getAffiliateStore();
-  if (!db || !store || !db.affiliateProgram) return null;
+  if (!store) return buildProgramPayload(null, null, affiliateRows);
+  if (!db || !db.affiliateProgram) return buildProgramPayload(store, null, affiliateRows);
+
   try {
-    const row = await db.affiliateProgram.findFirst({ where: { storeId: store.id }, include: { members: true } });
-    if (!row) return null;
-    return {
-      id: row.id,
-      name: row.name,
-      status: row.status,
-      defaultCommissionRate: Number(row.commissionRate ?? 0) * 100,
-      affiliates: row.members.length,
-      orders: row.members.reduce((sum: number, member: any) => sum + Number(member.ordersTotal ?? 0), 0),
-      sales: row.members.reduce((sum: number, member: any) => sum + Number(member.salesTotal ?? 0), 0),
-      signUpLink: row.signUpLink ?? `https://${store.domain}/pages/affiliate-signup`,
-      checklist: program.checklist
-    } as AffiliateProgram;
+    const row = await db.affiliateProgram.findFirst({
+      where: { storeId: store.id },
+      orderBy: { createdAt: "asc" }
+    });
+
+    return buildProgramPayload(store, row, affiliateRows);
   } catch {
+    return buildProgramPayload(store, null, affiliateRows);
+  }
+}
+
+async function loadAffiliateDashboardSnapshot() {
+  const db = getDb();
+  const store = await getAffiliateStore();
+  if (!db || !store) {
     return null;
+  }
+
+  const range = await getReportingDateRangeSelection("en");
+  const [memberRows, programRow, rawAttributionRows, rawSessionRows, rawOrderRows] = await Promise.all([
+    db.affiliateMember
+      ? db.affiliateMember.findMany({
+          include: { program: true },
+          where: { storeId: store.id },
+          orderBy: [{ salesTotal: "desc" }, { joinedAt: "asc" }]
+        })
+      : Promise.resolve([]),
+    db.affiliateProgram
+      ? db.affiliateProgram.findFirst({
+          where: { storeId: store.id },
+          orderBy: { createdAt: "asc" }
+        })
+      : Promise.resolve(null),
+    db.affiliateAttribution
+      ? db.affiliateAttribution.findMany({
+          where: {
+            storeId: store.id,
+            occurredAt: {
+              gte: range.start,
+              lte: range.end
+            }
+          },
+          include: { affiliateMember: { include: { program: true } }, order: true },
+          orderBy: { occurredAt: "desc" }
+        })
+      : Promise.resolve([]),
+    db.attributionSession
+      ? db.attributionSession.findMany({
+          where: {
+            storeId: store.id,
+            createdAt: {
+              gte: range.start,
+              lte: range.end
+            }
+          },
+          include: { affiliateMember: { include: { program: true } } },
+          orderBy: { createdAt: "desc" }
+        })
+      : Promise.resolve([]),
+    db.order
+      ? db.order.findMany({
+          where: {
+            storeId: store.id,
+            affiliateAttributions: {
+              some: {
+                occurredAt: {
+                  gte: range.start,
+                  lte: range.end
+                }
+              }
+            }
+          },
+          include: {
+            lineItems: { include: { product: true } }
+          },
+          orderBy: { createdAt: "desc" }
+        })
+      : Promise.resolve([])
+  ]);
+  const bixgrowAttributionRows = (rawAttributionRows as any[]).filter((row: any) =>
+    isBixGrowAttributedRecord({
+      sourceUrl: row.sourceUrl,
+      trackingMethod: row.trackingMethod
+    })
+  );
+  const bixgrowSessionRows = (rawSessionRows as any[]).filter((row: any) =>
+    isBixGrowAttributedRecord({
+      sourceUrl: row.sourceUrl,
+      sourcePlatform: row.sourcePlatform
+    })
+  );
+  const useBixGrowScope = bixgrowAttributionRows.length > 0 || bixgrowSessionRows.length > 0;
+  const attributionRows = useBixGrowScope ? bixgrowAttributionRows : (rawAttributionRows as any[]);
+  const sessionRows = useBixGrowScope ? bixgrowSessionRows : (rawSessionRows as any[]);
+  const filteredOrderIds = new Set(
+    attributionRows.map((row: any) => row.orderId).filter(Boolean)
+  );
+  const orderRows = filteredOrderIds.size
+    ? (rawOrderRows as any[]).filter((order: any) => filteredOrderIds.has(order.id))
+    : [];
+
+  const profilesById = new Map<string, AffiliateProfile>();
+  const memberIdByAffiliateCode = new Map<string, string>();
+
+  for (const member of memberRows as any[]) {
+    profilesById.set(member.id, buildAffiliateProfileFromMember(member, store));
+    memberIdByAffiliateCode.set(String(member.affiliateCode).toUpperCase(), member.id);
+  }
+
+  const ensureProfile = (input: { member?: any | null; memberId?: string | null; affiliateCode?: string | null; fallbackName?: string | null }) => {
+    const resolvedMemberId = input.member?.id
+      ?? input.memberId
+      ?? (input.affiliateCode ? memberIdByAffiliateCode.get(String(input.affiliateCode).toUpperCase()) : null)
+      ?? null;
+
+    if (resolvedMemberId && profilesById.has(resolvedMemberId)) {
+      return profilesById.get(resolvedMemberId) as AffiliateProfile;
+    }
+
+    if (input.member && resolvedMemberId) {
+      const profile = buildAffiliateProfileFromMember(input.member, store);
+      profilesById.set(resolvedMemberId, profile);
+      memberIdByAffiliateCode.set(String(profile.affiliateCode).toUpperCase(), resolvedMemberId);
+      return profile;
+    }
+
+    if (!resolvedMemberId) {
+      const fallbackCode = input.affiliateCode?.trim() || input.fallbackName?.trim() || "UNKNOWN";
+      const syntheticId = `affiliate-${fallbackCode.toUpperCase()}`;
+      if (profilesById.has(syntheticId)) {
+        return profilesById.get(syntheticId) as AffiliateProfile;
+      }
+
+      const profile: AffiliateProfile = {
+        id: syntheticId,
+        firstName: fallbackCode,
+        lastName: "",
+        email: "",
+        programName: buildProgramName(store.name),
+        status: "approved",
+        dateJoined: new Date(range.start).toISOString(),
+        lastLogin: null,
+        source: "Tracked session",
+        country: "",
+        clicks: 0,
+        orders: 0,
+        sales: 0,
+        commission: 0,
+        approvedBalance: 0,
+        affiliateCode: fallbackCode.toUpperCase(),
+        couponCode: null,
+        referralLink: buildReferralLink(store.domain, fallbackCode.toUpperCase()),
+        shortLink: buildReferralLink(store.domain, fallbackCode.toUpperCase())
+      };
+      profilesById.set(syntheticId, profile);
+      memberIdByAffiliateCode.set(profile.affiliateCode, syntheticId);
+      return profile;
+    }
+
+    return null;
+  };
+
+  for (const row of attributionRows) {
+    const profile = ensureProfile({
+      member: row.affiliateMember ?? null,
+      memberId: row.affiliateMemberId,
+      fallbackName: row.affiliateMember ? `${row.affiliateMember.firstName} ${row.affiliateMember.lastName}` : row.affiliateMemberId
+    });
+    if (!profile) continue;
+    profile.sales += toNumber(row.salesAmount);
+    profile.commission += toNumber(row.commissionAmount);
+    profile.orders += Number(row.ordersCount ?? 0);
+  }
+
+  for (const row of sessionRows) {
+    const profile = ensureProfile({
+      member: row.affiliateMember ?? null,
+      memberId: row.affiliateMemberId,
+      affiliateCode: row.affiliateCode,
+      fallbackName: row.affiliateMember ? `${row.affiliateMember.firstName} ${row.affiliateMember.lastName}` : row.affiliateCode
+    });
+    if (!profile) continue;
+    profile.clicks += 1;
+  }
+
+  const affiliateRows = Array.from(profilesById.values())
+    .filter((profile) => profile.sales > 0 || profile.orders > 0 || profile.clicks > 0 || profile.commission > 0)
+    .sort((left, right) => right.sales - left.sales || right.clicks - left.clicks);
+  const scope = useBixGrowScope
+    ? {
+        id: "bixgrow" as const,
+        label: "BixGrow tracked",
+        description: "Showing only clicks and orders marked by BixGrow tracking (`bg_ref`) in the selected window."
+      }
+    : {
+        id: "all_affiliates" as const,
+        label: "All affiliate sources",
+        description: "Showing all affiliate-attributed clicks and orders in the selected window."
+      };
+
+  return {
+    scope,
+    store,
+    range,
+    memberRows,
+    programRow,
+    attributionRows,
+    sessionRows,
+    orderRows,
+    affiliateRows
+  };
+}
+
+async function loadTrendFromDb(
+  snapshot?: Awaited<ReturnType<typeof loadAffiliateDashboardSnapshot>>
+): Promise<PortalTrendPoint[]> {
+  const context = snapshot ?? await loadAffiliateDashboardSnapshot();
+  if (!context) return [];
+
+  try {
+    const buckets = new Map<string, PortalTrendPoint>();
+    const cursor = new Date(context.range.start);
+    cursor.setHours(0, 0, 0, 0);
+
+    while (cursor <= context.range.end) {
+      buckets.set(toDayKey(cursor), {
+        date: formatTrendLabel(cursor),
+        sales: 0,
+        clicks: 0,
+        orders: 0
+      });
+      cursor.setDate(cursor.getDate() + 1);
+    }
+
+    context.attributionRows.forEach((row: any) => {
+      const bucket = buckets.get(toDayKey(row.occurredAt));
+      if (!bucket) return;
+      bucket.sales += toNumber(row.salesAmount);
+      bucket.orders += Number(row.ordersCount ?? 0);
+      bucket.clicks += Number(row.clicks ?? 0);
+    });
+
+    context.sessionRows.forEach((row: any) => {
+      const bucket = buckets.get(toDayKey(row.createdAt));
+      if (!bucket) return;
+      bucket.clicks += 1;
+    });
+
+    return Array.from(buckets.values());
+  } catch {
+    return [];
+  }
+}
+
+async function loadTopProductsFromDb(
+  snapshot?: Awaited<ReturnType<typeof loadAffiliateDashboardSnapshot>>
+): Promise<{ name: string; sales: number }[]> {
+  const context = snapshot ?? await loadAffiliateDashboardSnapshot();
+  if (!context) return [];
+
+  try {
+    const grouped = new Map<string, number>();
+    context.orderRows.forEach((order: any) => {
+      order.lineItems.forEach((item: any) => {
+        const name = item.product?.title ?? item.title;
+        grouped.set(name, (grouped.get(name) ?? 0) + toNumber(item.lineSubtotal));
+      });
+    });
+
+    return Array.from(grouped.entries())
+      .map(([name, sales]) => ({ name, sales }))
+      .sort((left, right) => right.sales - left.sales)
+      .slice(0, 5);
+  } catch {
+    return [];
+  }
+}
+
+async function loadTopReferralSourcesFromDb(
+  snapshot?: Awaited<ReturnType<typeof loadAffiliateDashboardSnapshot>>
+): Promise<{ label: string; clicks: number }[]> {
+  const context = snapshot ?? await loadAffiliateDashboardSnapshot();
+  if (!context) return [];
+
+  try {
+    const grouped = new Map<string, number>();
+
+    if (context.sessionRows.length) {
+      context.sessionRows.forEach((row: any) => {
+        const label = normalizeSourceLabel(row.sourceUrl, row.sourcePlatform);
+        grouped.set(label, (grouped.get(label) ?? 0) + 1);
+      });
+    } else {
+      context.attributionRows
+        .forEach((row: any) => {
+          const label = normalizeSourceLabel(
+            row.sourceUrl,
+            resolveAffiliateSourcePlatform({
+              sourceUrl: row.sourceUrl,
+              trackingMethod: row.trackingMethod
+            }),
+            row.trackingMethod
+          );
+          grouped.set(label, (grouped.get(label) ?? 0) + Math.max(Number(row.clicks ?? 0), 1));
+        });
+    }
+
+    return Array.from(grouped.entries())
+      .map(([label, clicks]) => ({ label, clicks }))
+      .sort((left, right) => right.clicks - left.clicks)
+      .slice(0, 5);
+  } catch {
+    return [];
   }
 }
 
 export async function getAffiliatePortalDashboard(): Promise<AffiliatePortalDashboardPayload> {
-  const [programFromDb, affiliatesFromDb, conversionsFromDb, contentFromDb] = await Promise.all([
-    loadProgramFromDb(),
-    loadAffiliatesFromDb(),
-    loadConversionsFromDb(),
-    loadContentFromDb()
+  const snapshot = await loadAffiliateDashboardSnapshot();
+  const affiliateRows = snapshot?.affiliateRows ?? [];
+  const [contentRows, trend, topProducts, topReferralSources] = await Promise.all([
+    loadContentFromDb(),
+    loadTrendFromDb(snapshot),
+    loadTopProductsFromDb(snapshot),
+    loadTopReferralSourcesFromDb(snapshot)
   ]);
-  const affiliateRows = affiliatesFromDb ?? affiliates;
-  const conversionRows = conversionsFromDb ?? conversions;
-  const contentRows = contentFromDb ?? contentPerformance;
-  const store = await getAffiliateStore();
-  const activeProgram = {
-    ...(programFromDb ?? program),
-    signUpLink: (programFromDb ?? program).signUpLink.includes("example.com") && store ? `https://${store.domain}/pages/affiliate-signup` : (programFromDb ?? program).signUpLink
-  };
+  const program = snapshot?.store
+    ? buildProgramPayload(snapshot.store, snapshot.programRow, affiliateRows)
+    : await loadProgramFromDb(affiliateRows);
+  const contentHighlights = snapshot
+    ? contentRows.filter((item) => isWithinRange(item.postedAt, snapshot.range.start, snapshot.range.end))
+    : contentRows;
 
   return {
-    program: activeProgram,
+    scope: snapshot?.scope ?? {
+      id: "all_affiliates",
+      label: "All affiliate sources",
+      description: "Showing all affiliate-attributed clicks and orders in the selected window."
+    },
+    program,
     totals: {
       totalSales: affiliateRows.reduce((sum, item) => sum + item.sales, 0),
       totalOrders: affiliateRows.reduce((sum, item) => sum + item.orders, 0),
@@ -260,37 +747,28 @@ export async function getAffiliatePortalDashboard(): Promise<AffiliatePortalDash
       totalCommission: affiliateRows.reduce((sum, item) => sum + item.commission, 0)
     },
     trend,
-    topAffiliatesBySales: [...affiliateRows].sort((a, b) => b.sales - a.sales).slice(0, 5),
-    topAffiliatesByClicks: [...affiliateRows].sort((a, b) => b.clicks - a.clicks).slice(0, 5),
-    topProducts: [
-      { name: "ALMOND & MACADAMIA", sales: 135615 },
-      { name: "PURE SILK", sales: 34312 },
-      { name: "RECOVERY HOODIE", sales: 29780 },
-      { name: "NIGHT ROUTINE KIT", sales: 24860 }
-    ],
-    topReferralSources: [
-      { label: "instagram.com", clicks: 12108 },
-      { label: "www.adel.com", clicks: 920 },
-      { label: "facebook.com", clicks: 727 },
-      { label: "after-shower.com", clicks: 429 },
-      { label: "tiktok.com", clicks: 381 }
-    ],
-    contentHighlights: [...contentRows].sort((a, b) => b.sales - a.sales).slice(0, 4)
+    topAffiliatesBySales: [...affiliateRows].sort((left, right) => right.sales - left.sales).slice(0, 5),
+    topAffiliatesByClicks: [...affiliateRows].sort((left, right) => right.clicks - left.clicks).slice(0, 5),
+    topProducts,
+    topReferralSources,
+    contentHighlights: [...contentHighlights].sort((left, right) => right.sales - left.sales).slice(0, 4)
   };
 }
 
 export async function getAffiliatePrograms() {
-  return [await loadProgramFromDb() ?? program];
+  const affiliates = await getAffiliates();
+  return [await loadProgramFromDb(affiliates)];
 }
 
 export async function getAffiliates() {
-  return (await loadAffiliatesFromDb()) ?? affiliates;
+  return loadAffiliatesFromDb();
 }
 
 export async function getAffiliateById(affiliateId: string) {
-  const [affiliateRows, couponRows, conversionRows, contentRows] = await Promise.all([
+  const [affiliateRows, couponRows, couponHistory, conversionRows, contentRows] = await Promise.all([
     getAffiliates(),
     getAffiliateCoupons(),
+    getAffiliateCouponHistory(affiliateId),
     getAffiliateConversions(),
     getAffiliateContentPerformance()
   ]);
@@ -300,50 +778,56 @@ export async function getAffiliateById(affiliateId: string) {
   return {
     affiliate,
     coupons: couponRows.filter((item) => item.affiliateId === affiliateId),
+    couponHistory,
     conversions: conversionRows.filter((item) => item.affiliateId === affiliateId),
     content: contentRows.filter((item) => item.affiliateId === affiliateId)
   };
 }
 
 export async function getAffiliateCoupons() {
-  return (await loadCouponsFromDb()) ?? coupons;
+  return loadCouponsFromDb();
+}
+
+export async function getAffiliateCouponHistory(affiliateId?: string) {
+  return loadCouponHistoryFromDb(affiliateId);
 }
 
 export async function getAffiliateConversions() {
-  return (await loadConversionsFromDb()) ?? conversions;
+  return loadConversionsFromDb();
 }
 
-export async function getAffiliatePayouts() {
+export async function getAffiliatePayouts(): Promise<AffiliatePayout[]> {
   const affiliateRows = await getAffiliates();
-  const realRows = affiliateRows.filter((item) => item.approvedBalance >= 0).map((item) => ({
+  return affiliateRows.map((item) => ({
     id: `pay-${item.id}`,
     affiliateId: item.id,
     affiliateName: `${item.firstName} ${item.lastName}`,
-    paymentMethod: item.approvedBalance > 0 ? "Ready for payout" : "Missing info",
+    paymentMethod: item.approvedBalance > 0 ? "Ready for payout" : "Not configured",
     approvedOrders: item.orders,
     approvedBalance: item.approvedBalance
   }));
-  return realRows.length ? realRows : payouts;
 }
 
 export async function getAffiliateContentPerformance() {
-  return (await loadContentFromDb()) ?? contentPerformance;
+  return loadContentFromDb();
 }
 
-export async function getAffiliatePortalSettings() {
+export async function getAffiliatePortalSettings(): Promise<AffiliatePortalSettings> {
   const store = await getAffiliateStore();
-  if (!store) return settings;
+
   return {
-    ...settings,
-    storeDomain: store.domain,
-    brandingName: store.name
+    portalLanguage: DEFAULT_PORTAL_SETTINGS.portalLanguage,
+    brandingName: store?.name ?? "",
+    storeDomain: store?.domain ?? "",
+    senderName: store?.name ?? "",
+    senderEmail: "",
+    inviteAutomationEnabled: DEFAULT_PORTAL_SETTINGS.inviteAutomationEnabled,
+    referralOrderEmailEnabled: DEFAULT_PORTAL_SETTINGS.referralOrderEmailEnabled,
+    couponAssignmentEnabled: DEFAULT_PORTAL_SETTINGS.couponAssignmentEnabled,
+    advanced: { ...DEFAULT_PORTAL_SETTINGS.advanced }
   };
 }
 
 export async function getCouponTemplates() {
-  return [
-    { id: "tpl-almond", name: "ALMOND & MACADAMIA", discountType: "fixed", value: 70.4 },
-    { id: "tpl-welcome", name: "WELCOME15", discountType: "percent", value: 15 },
-    { id: "tpl-founder", name: "FOUNDER20", discountType: "percent", value: 20 }
-  ];
+  return COUPON_TEMPLATES;
 }

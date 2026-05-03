@@ -2,18 +2,19 @@ import { AppShell } from "@/components/layout/app-shell";
 import { SectionHeading } from "@/components/ui/section-heading";
 import { DataTable } from "@/components/shared/data-table";
 import { getAppChromeData } from "@/lib/services/analytics-service";
-import { getGrowthAttributionSessions, getGrowthFindings, getGrowthMetricSnapshots, getGrowthWebhookEvents } from "@/lib/services/growth-agent-service";
+import { getGrowthAgentStoreContext, getGrowthAttributionSessions, getGrowthFindings, getGrowthMetricSnapshots, getGrowthWebhookEvents } from "@/lib/services/growth-agent-service";
 import { GrowthAgentNav } from "@/components/growth-agent/agent-nav";
 import { GrowthFindingsList } from "@/components/growth-agent/findings-list";
 import { GrowthAgentManualControls } from "@/components/growth-agent/manual-controls";
 
 export default async function GrowthAgentHistoryPage() {
+  const { store } = await getGrowthAgentStoreContext();
   const [chrome, findings, snapshots, webhooks, sessions] = await Promise.all([
-    getAppChromeData(),
-    getGrowthFindings(),
-    getGrowthMetricSnapshots(),
-    getGrowthWebhookEvents(),
-    getGrowthAttributionSessions()
+    getAppChromeData(store.id),
+    getGrowthFindings(store.id),
+    getGrowthMetricSnapshots(store.id),
+    getGrowthWebhookEvents(store.id),
+    getGrowthAttributionSessions(store.id)
   ]);
 
   const snapshotRows = snapshots.map((snapshot: any) => ({
@@ -53,7 +54,7 @@ export default async function GrowthAgentHistoryPage() {
         <GrowthAgentNav />
       </section>
 
-      <GrowthAgentManualControls />
+      <GrowthAgentManualControls storeId={store.id} />
       <GrowthFindingsList findings={findings} title="Findings history" />
       <section className="grid gap-4 xl:grid-cols-2">
         <DataTable title="Webhook history" columns={[{ key: "platform", label: "Platform" }, { key: "topic", label: "Topic" }, { key: "status", label: "Status" }, { key: "processedAt", label: "Processed" }, { key: "createdAt", label: "Received" }]} rows={webhookRows} />

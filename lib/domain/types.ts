@@ -141,12 +141,31 @@ export interface Summary {
 export interface ProductPerformanceRow {
   productId: string;
   productTitle: string;
+  /** Single canonical collection used for sorting/grouping (kept for backward compat). */
   collection: string;
+  /** Every Shopify collection (smart + manual) the product belongs to. */
+  collections: string[];
   unitsSold: number;
   revenue: number;
   estimatedProfit: number;
   discountImpact: number;
   refundImpact: number;
+  /** Sum of inventoryQuantity across all variants. null = unknown / not tracked. */
+  inventoryQuantity: number | null;
+}
+
+export type StockFlag = "red" | "yellow" | "green" | "unknown";
+
+export interface ProductStockRow {
+  productId: string;
+  productTitle: string;
+  collection: string;
+  /** Every Shopify collection the product belongs to. */
+  collections: string[];
+  vendor: string | null;
+  inventoryQuantity: number | null;
+  variantCount: number;
+  flag: StockFlag;
 }
 
 export interface CollectionPerformanceRow {

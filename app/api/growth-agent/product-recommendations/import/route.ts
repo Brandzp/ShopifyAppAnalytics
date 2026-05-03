@@ -7,6 +7,9 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     const recommendation = body?.recommendation as GrowthProductRecommendation | undefined;
+    if (typeof body?.storeId !== "string" || !body.storeId) {
+      throw new AppError("Store id is required to import a Growth Agent recommendation.", 400);
+    }
 
     if (!recommendation?.title || !recommendation?.sourceUrl || !recommendation?.sourceDomain) {
       throw new AppError("Recommendation payload is incomplete.", 400);

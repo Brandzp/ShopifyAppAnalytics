@@ -1,182 +1,713 @@
 import { getDb } from "@/lib/server/db";
 import { AppError } from "@/lib/server/errors";
+import {
+  buildAffiliateTrackingMethod,
+  extractTrackingNoteAttribute,
+  extractTrackingQueryValue,
+  resolveAffiliateSourcePlatform,
+  safeTrackingString
+} from "@/lib/services/affiliate-attribution-source";
+import { resolveOrCreateBaseStore } from "@/lib/services/creator-admin-service";
 import { getStoredShopifyCredentials } from "@/lib/services/shopify-connection-service";
 import { createShopifyClient } from "@/lib/shopify/client";
 import { DISCOUNT_CODE_BASIC_CREATE_MUTATION } from "@/lib/shopify/queries/discounts";
-import { resolveOrCreateBaseStore } from "@/lib/services/creator-admin-service";
 
-const defaultAffiliates = [
-  { affiliateCode: "ADEL", firstName: "Adel", lastName: "Bespalov", email: "adelbespalov9@gmail.com", status: "approved", source: "Signup", country: "Israel", couponCode: "ADEL40", referralLink: "https://northstargoods.com/?ref=adel&coupon=ADEL40&utm_source=affiliate", shortLink: "https://portal.nsg.co/a/adel" },
-  { affiliateCode: "TALIA", firstName: "Talia", lastName: "Sol", email: "talia@example.com", status: "approved", source: "Signup", country: "Israel", couponCode: "TALIA40", referralLink: "https://northstargoods.com/?ref=talia&coupon=TALIA40&utm_source=affiliate", shortLink: "https://portal.nsg.co/a/talia" },
-  { affiliateCode: "LIHI", firstName: "Lihi", lastName: "Grossman", email: "lihi@example.com", status: "approved", source: "Signup", country: "Israel", couponCode: "LIHI40", referralLink: "https://northstargoods.com/?ref=lihi&coupon=LIHI40&utm_source=affiliate", shortLink: "https://portal.nsg.co/a/lihi" }
-];
+const DEFAULT_PROGRAM_NAME = "Affiliate Program";
+const DEFAULT_COMMISSION_RATE = 0.1;
+const MAX_DUPLICATE_RETRIES = 5;
+const MAX_COUPON_CODE_LENGTH = 200;
+const DISCOUNT_API_VERSION = process.env.SHOPIFY_ADMIN_API_VERSION ?? "2026-01";
+
+type DiscountType = "percent" | "fixed";
+type AssignmentMode = "single" | "bulk";
+type DiscountCreationMode = "create" | "existing";
+type PurchaseType = "both" | "one_time" | "subscription";
+type AppliesToType = "all" | "products" | "collections";
+type MinimumRequirementType = "none" | "subtotal" | "quantity";
+type CustomerEligibilityType = "all" | "segments";
+
+type CombinationRules = {
+  productDiscounts?: boolean;
+  orderDiscounts?: boolean;
+  shippingDiscounts?: boolean;
+};
+
+type CouponInput = {
+  storeId?: string;
+  affiliateId: string;
+  code: string;
+  title: string;
+  discountType: DiscountType;
+  value: number;
+  appliesOncePerCustomer?: boolean;
+  redirectPath?: string;
+  assignmentMode?: AssignmentMode;
+  creationMode?: DiscountCreationMode;
+  purchaseType?: PurchaseType;
+  appliesToType?: AppliesToType;
+  appliesToProductIds?: string[];
+  appliesToCollectionIds?: string[];
+  minimumRequirementType?: MinimumRequirementType;
+  minimumSubtotal?: number | null;
+  minimumQuantity?: number | null;
+  customerEligibilityType?: CustomerEligibilityType;
+  customerSegmentIds?: string[];
+  usageLimit?: number | null;
+  combinesWith?: CombinationRules;
+};
+
+type BulkCouponInput = {
+  storeId?: string;
+  affiliateIds: string[];
+  title: string;
+  codePrefix?: string;
+  codeSuffix?: string;
+  discountType: DiscountType;
+  value: number;
+  appliesOncePerCustomer?: boolean;
+  redirectPath?: string;
+  purchaseType?: PurchaseType;
+  appliesToType?: AppliesToType;
+  appliesToProductIds?: string[];
+  appliesToCollectionIds?: string[];
+  minimumRequirementType?: MinimumRequirementType;
+  minimumSubtotal?: number | null;
+  minimumQuantity?: number | null;
+  customerEligibilityType?: CustomerEligibilityType;
+  customerSegmentIds?: string[];
+  usageLimit?: number | null;
+  combinesWith?: CombinationRules;
+};
+
+type CouponAdminContext = Awaited<ReturnType<typeof getCouponAdminContext>>;
+
+const COUPON_ASSIGNMENT_OPTIONS_QUERY = /* GraphQL */ `
+  query CouponAssignmentOptions {
+    collections(first: 50) {
+      nodes {
+        id
+        title
+      }
+    }
+    segments(first: 50, query: "") {
+      nodes {
+        id
+        name
+      }
+    }
+  }
+`;
 
 async function getStoreOrThrow(storeId?: string) {
   const db = getDb();
   if (!db) throw new AppError("Database client is not available.", 500);
+
   const store = storeId
     ? await db.store.findUnique({ where: { id: storeId } })
     : await resolveOrCreateBaseStore();
+
   if (!store) throw new AppError("Store was not found.", 404);
   return { db, store };
+}
+
+function sanitizeCouponCodeSegment(value: string) {
+  return value
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
+function normalizeCouponCode(value: string) {
+  const normalized = sanitizeCouponCodeSegment(value);
+  if (!normalized) throw new AppError("Coupon code is required.", 400);
+  return normalized.slice(0, MAX_COUPON_CODE_LENGTH);
+}
+
+function buildRetryCouponCode(baseCode: string) {
+  const suffix = `${Math.floor(1000 + Math.random() * 9000)}`;
+  const budget = Math.max(1, MAX_COUPON_CODE_LENGTH - suffix.length - 1);
+  return `${baseCode.slice(0, budget)}-${suffix}`;
+}
+
+function buildBulkCouponCode(
+  affiliate: { affiliateCode: string; firstName: string; lastName: string },
+  input: BulkCouponInput
+) {
+  const prefix = sanitizeCouponCodeSegment(input.codePrefix ?? "");
+  const suffix = sanitizeCouponCodeSegment(input.codeSuffix ?? "");
+  const core = sanitizeCouponCodeSegment(
+    affiliate.affiliateCode || `${affiliate.firstName}${affiliate.lastName}`
+  );
+
+  return normalizeCouponCode(
+    [prefix, core, suffix].filter(Boolean).join("-") || `${core}-${Math.round(input.value)}`
+  );
+}
+
+function isDuplicateCouponError(messages: string[]) {
+  return messages.some((message) => /code/i.test(message) && /(already|exists|taken|duplicate)/i.test(message));
+}
+
+function normalizeDiscountValue(value: number) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric <= 0) {
+    throw new AppError("Discount value must be greater than zero.", 400);
+  }
+  return numeric;
+}
+
+function normalizeOptionalPositiveInt(value: number | null | undefined) {
+  if (value == null) return undefined;
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric <= 0) {
+    throw new AppError("Usage limits and minimum quantities must be greater than zero.", 400);
+  }
+  return Math.floor(numeric);
+}
+
+function normalizeOptionalPositiveNumber(value: number | null | undefined, label: string) {
+  if (value == null) return undefined;
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric <= 0) {
+    throw new AppError(`${label} must be greater than zero.`, 400);
+  }
+  return numeric;
+}
+
+function normalizeTitle(value: string, fallbackCode: string) {
+  const trimmed = value.trim();
+  return trimmed || fallbackCode;
+}
+
+function normalizeIdList(values: string[] | undefined) {
+  return Array.from(
+    new Set(
+      (values ?? [])
+        .map((value) => String(value ?? "").trim())
+        .filter(Boolean)
+    )
+  );
+}
+
+function normalizeRedirectTarget(redirectPath?: string) {
+  const trimmed = redirectPath?.trim() ?? "";
+  if (!trimmed) return "/";
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  return trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
+}
+
+function buildApplyLink(storeDomain: string, code: string, affiliateCode: string, redirectPath?: string) {
+  const redirect = normalizeRedirectTarget(redirectPath);
+  return `https://${storeDomain}/discount/${encodeURIComponent(code)}?redirect=${encodeURIComponent(
+    redirect
+  )}&ref=${encodeURIComponent(affiliateCode)}`;
+}
+
+async function getCouponAdminContext(storeId?: string) {
+  const { db, store } = await getStoreOrThrow(storeId);
+  await ensureAffiliateProgramSeed(store.id);
+
+  if (!db.affiliateMember || !db.affiliateCoupon) {
+    throw new AppError("Affiliate tables are not ready. Run Prisma generate and db push first.", 500);
+  }
+
+  const credentials = await getStoredShopifyCredentials(store.id);
+  const client = createShopifyClient({
+    ...credentials,
+    apiVersion: DISCOUNT_API_VERSION
+  });
+
+  return { db, store, client };
+}
+
+async function resolveAffiliateOrThrow(context: CouponAdminContext, affiliateId: string) {
+  const affiliate = await context.db.affiliateMember.findUnique({ where: { id: affiliateId } });
+  if (!affiliate) throw new AppError("Affiliate was not found.", 404);
+  return affiliate;
+}
+
+function buildDiscountValuePayload(input: Pick<CouponInput, "discountType" | "value">) {
+  return input.discountType === "percent"
+    ? { percentage: Math.max(0.0001, Math.min(1, input.value / 100)) }
+    : { discountAmount: { amount: input.value, appliesOnEachItem: false } };
+}
+
+function buildDiscountItemsPayload(input: Pick<CouponInput, "appliesToType" | "appliesToProductIds" | "appliesToCollectionIds">) {
+  const appliesToType = input.appliesToType ?? "all";
+  const productIds = normalizeIdList(input.appliesToProductIds);
+  const collectionIds = normalizeIdList(input.appliesToCollectionIds);
+
+  if (appliesToType === "products") {
+    if (!productIds.length) {
+      throw new AppError("Choose at least one product when the discount applies to specific products.", 400);
+    }
+    return {
+      products: {
+        productsToAdd: productIds
+      }
+    };
+  }
+
+  if (appliesToType === "collections") {
+    if (!collectionIds.length) {
+      throw new AppError("Choose at least one collection when the discount applies to specific collections.", 400);
+    }
+    return {
+      collections: {
+        add: collectionIds
+      }
+    };
+  }
+
+  return { all: true };
+}
+
+function buildMinimumRequirementPayload(
+  input: Pick<CouponInput, "minimumRequirementType" | "minimumSubtotal" | "minimumQuantity">
+) {
+  const minimumRequirementType = input.minimumRequirementType ?? "none";
+
+  if (minimumRequirementType === "subtotal") {
+    const subtotal = normalizeOptionalPositiveNumber(input.minimumSubtotal, "Minimum subtotal");
+    if (!subtotal) {
+      throw new AppError("Enter a minimum subtotal amount.", 400);
+    }
+    return {
+      subtotal: {
+        greaterThanOrEqualToSubtotal: subtotal
+      }
+    };
+  }
+
+  if (minimumRequirementType === "quantity") {
+    const quantity = normalizeOptionalPositiveInt(input.minimumQuantity);
+    if (!quantity) {
+      throw new AppError("Enter a minimum quantity.", 400);
+    }
+    return {
+      quantity: {
+        greaterThanOrEqualToQuantity: quantity
+      }
+    };
+  }
+
+  return undefined;
+}
+
+function buildContextPayload(input: Pick<CouponInput, "customerEligibilityType" | "customerSegmentIds">) {
+  const customerEligibilityType = input.customerEligibilityType ?? "all";
+
+  if (customerEligibilityType === "segments") {
+    const segmentIds = normalizeIdList(input.customerSegmentIds);
+    if (!segmentIds.length) {
+      throw new AppError("Choose at least one customer segment.", 400);
+    }
+    return {
+      customerSegments: {
+        add: segmentIds
+      }
+    };
+  }
+
+  return {
+    all: "ALL"
+  };
+}
+
+function buildCustomerGetsPayload(input: CouponInput) {
+  const purchaseType = input.purchaseType ?? "both";
+  return {
+    value: buildDiscountValuePayload(input),
+    items: buildDiscountItemsPayload(input),
+    appliesOnOneTimePurchase: purchaseType !== "subscription",
+    appliesOnSubscription: purchaseType !== "one_time"
+  };
+}
+
+function buildCombinesWithPayload(input: CombinationRules | undefined) {
+  return {
+    productDiscounts: Boolean(input?.productDiscounts),
+    orderDiscounts: Boolean(input?.orderDiscounts),
+    shippingDiscounts: Boolean(input?.shippingDiscounts)
+  };
+}
+
+async function createShopifyDiscountWithRetry(
+  context: CouponAdminContext,
+  input: CouponInput
+) {
+  let nextCode = normalizeCouponCode(input.code);
+
+  for (let attempt = 0; attempt < MAX_DUPLICATE_RETRIES; attempt += 1) {
+    const result = await context.client.request<{
+      discountCodeBasicCreate: {
+        codeDiscountNode?: {
+          id: string;
+          codeDiscount?: {
+            title?: string;
+            status?: string;
+            shareableUrls?: { url: string }[];
+            codes?: { nodes?: { code: string }[] };
+          };
+        };
+        userErrors: { message: string }[];
+      };
+    }>(DISCOUNT_CODE_BASIC_CREATE_MUTATION, {
+      basicCodeDiscount: {
+        title: normalizeTitle(input.title, nextCode),
+        code: nextCode,
+        startsAt: new Date().toISOString(),
+        appliesOncePerCustomer: input.appliesOncePerCustomer ?? false,
+        usageLimit: normalizeOptionalPositiveInt(input.usageLimit) ?? null,
+        combinesWith: buildCombinesWithPayload(input.combinesWith),
+        minimumRequirement: buildMinimumRequirementPayload(input) ?? null,
+        context: buildContextPayload(input),
+        customerGets: buildCustomerGetsPayload(input)
+      }
+    });
+
+    const userErrors = result.discountCodeBasicCreate.userErrors ?? [];
+    if (!userErrors.length) {
+      const discountNode = result.discountCodeBasicCreate.codeDiscountNode;
+      const createdCode = discountNode?.codeDiscount?.codes?.nodes?.[0]?.code ?? nextCode;
+      const shareableUrl = discountNode?.codeDiscount?.shareableUrls?.[0]?.url ?? null;
+
+      return { createdCode, discountNode, shareableUrl };
+    }
+
+    const messages = userErrors.map((item) => item.message);
+    if (attempt < MAX_DUPLICATE_RETRIES - 1 && isDuplicateCouponError(messages)) {
+      nextCode = buildRetryCouponCode(normalizeCouponCode(input.code));
+      continue;
+    }
+
+    throw new AppError(messages.join("; "), 400);
+  }
+
+  throw new AppError("Coupon creation failed after multiple retry attempts.", 400);
+}
+
+async function syncAffiliateCurrentCoupon(context: CouponAdminContext, affiliateId: string) {
+  const latestCoupon = await context.db.affiliateCoupon.findFirst({
+    where: { storeId: context.store.id, affiliateMemberId: affiliateId, status: "active" },
+    orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }]
+  });
+
+  await context.db.affiliateMember.update({
+    where: { id: affiliateId },
+    data: { couponCode: latestCoupon?.code ?? null }
+  });
+}
+
+async function persistCouponAssignment(
+  context: CouponAdminContext,
+  affiliate: any,
+  input: CouponInput,
+  createdCode: string,
+  applyLink: string,
+  connectionSource: "shopify_create" | "existing_coupon",
+  shopifyDiscountId?: string | null
+) {
+  const existingCoupon = await context.db.affiliateCoupon.findUnique({
+    where: { storeId_code: { storeId: context.store.id, code: createdCode } }
+  });
+  const previousAffiliateId = existingCoupon?.affiliateMemberId ?? null;
+
+  const title = normalizeTitle(input.title, createdCode);
+  const normalizedValue =
+    connectionSource === "existing_coupon"
+      ? Number.isFinite(Number(input.value)) ? Number(input.value) : 0
+      : normalizeDiscountValue(input.value);
+
+  const coupon = await context.db.affiliateCoupon.upsert({
+    where: { storeId_code: { storeId: context.store.id, code: createdCode } },
+    update: {
+      affiliateMemberId: affiliate.id,
+      shopifyDiscountId: shopifyDiscountId ?? null,
+      title,
+      discountType: input.discountType,
+      discountValue: normalizedValue,
+      appliesOncePerCustomer: input.appliesOncePerCustomer ?? false,
+      applyLink,
+      status: "active"
+    },
+    create: {
+      storeId: context.store.id,
+      affiliateMemberId: affiliate.id,
+      shopifyDiscountId: shopifyDiscountId ?? null,
+      title,
+      code: createdCode,
+      discountType: input.discountType,
+      discountValue: normalizedValue,
+      appliesOncePerCustomer: input.appliesOncePerCustomer ?? false,
+      applyLink,
+      status: "active"
+    }
+  });
+
+  if (context.db.affiliateCouponAssignment) {
+    await context.db.affiliateCouponAssignment.create({
+      data: {
+        storeId: context.store.id,
+        affiliateMemberId: affiliate.id,
+        affiliateCouponId: coupon.id,
+        couponCode: createdCode,
+        couponTitle: title,
+        discountType: input.discountType,
+        discountValue: normalizedValue,
+        applyLink,
+        assignmentMode: input.assignmentMode ?? "single",
+        connectionSource
+      }
+    });
+  }
+
+  if (previousAffiliateId && previousAffiliateId !== affiliate.id) {
+    await syncAffiliateCurrentCoupon(context, previousAffiliateId);
+  }
+  await syncAffiliateCurrentCoupon(context, affiliate.id);
+
+  return coupon;
+}
+
+async function createAffiliateCouponWithContext(
+  context: CouponAdminContext,
+  input: CouponInput,
+  preloadedAffiliate?: any
+) {
+  const affiliate = preloadedAffiliate ?? (await resolveAffiliateOrThrow(context, input.affiliateId));
+  const { createdCode, discountNode } = await createShopifyDiscountWithRetry(context, input);
+  const applyLink = buildApplyLink(context.store.domain, createdCode, affiliate.affiliateCode, input.redirectPath);
+  const coupon = await persistCouponAssignment(
+    context,
+    affiliate,
+    input,
+    createdCode,
+    applyLink,
+    "shopify_create",
+    discountNode?.id ?? null
+  );
+
+  return {
+    ok: true,
+    couponId: coupon.id,
+    affiliateId: affiliate.id,
+    affiliateName: `${affiliate.firstName} ${affiliate.lastName}`,
+    code: createdCode,
+    applyLink,
+    shopifyDiscountId: discountNode?.id ?? null
+  };
+}
+
+async function attachExistingAffiliateCouponWithContext(
+  context: CouponAdminContext,
+  input: CouponInput
+) {
+  const affiliate = await resolveAffiliateOrThrow(context, input.affiliateId);
+  const createdCode = normalizeCouponCode(input.code);
+  const applyLink = buildApplyLink(context.store.domain, createdCode, affiliate.affiliateCode, input.redirectPath);
+  const coupon = await persistCouponAssignment(
+    context,
+    affiliate,
+    {
+      ...input,
+      title: normalizeTitle(input.title, createdCode)
+    },
+    createdCode,
+    applyLink,
+    "existing_coupon",
+    null
+  );
+
+  return {
+    ok: true,
+    couponId: coupon.id,
+    affiliateId: affiliate.id,
+    affiliateName: `${affiliate.firstName} ${affiliate.lastName}`,
+    code: createdCode,
+    applyLink,
+    shopifyDiscountId: null
+  };
+}
+
+function normalizeSingleCouponInput(input: CouponInput): CouponInput {
+  const creationMode = input.creationMode ?? "create";
+  const code = normalizeCouponCode(input.code);
+  const title = normalizeTitle(input.title, code);
+
+  return {
+    ...input,
+    creationMode,
+    code,
+    title,
+    value: creationMode === "existing" ? Number(input.value ?? 0) : normalizeDiscountValue(input.value),
+    discountType: input.discountType === "fixed" ? "fixed" : "percent",
+    purchaseType: input.purchaseType ?? "both",
+    appliesToType: input.appliesToType ?? "all",
+    minimumRequirementType: input.minimumRequirementType ?? "none",
+    customerEligibilityType: input.customerEligibilityType ?? "all"
+  };
+}
+
+function normalizeBulkCouponInput(input: BulkCouponInput) {
+  const title = input.title.trim();
+  if (!title) {
+    throw new AppError("Discount title is required.", 400);
+  }
+
+  const discountType: DiscountType = input.discountType === "fixed" ? "fixed" : "percent";
+
+  return {
+    ...input,
+    title,
+    value: normalizeDiscountValue(input.value),
+    discountType,
+    purchaseType: input.purchaseType ?? "both",
+    appliesToType: input.appliesToType ?? "all",
+    minimumRequirementType: input.minimumRequirementType ?? "none",
+    customerEligibilityType: input.customerEligibilityType ?? "all"
+  };
+}
+
+export async function getAffiliateCouponBuilderOptions(storeId?: string) {
+  const { db, store } = await getStoreOrThrow(storeId);
+
+  const products = db.product
+    ? await db.product.findMany({
+        where: { storeId: store.id },
+        select: { shopifyProductId: true, title: true },
+        orderBy: { title: "asc" },
+        take: 250
+      }).catch(() => [])
+    : [];
+
+  let collections: Array<{ id: string; title: string }> = [];
+  let customerSegments: Array<{ id: string; name: string }> = [];
+
+  try {
+    const credentials = await getStoredShopifyCredentials(store.id);
+    const client = createShopifyClient({
+      ...credentials,
+      apiVersion: DISCOUNT_API_VERSION
+    });
+
+    const result = await client.request<{
+      collections?: { nodes?: Array<{ id: string; title: string }> };
+      segments?: { nodes?: Array<{ id: string; name: string }> };
+    }>(COUPON_ASSIGNMENT_OPTIONS_QUERY);
+
+    collections = result.collections?.nodes ?? [];
+    customerSegments = result.segments?.nodes ?? [];
+  } catch {
+    // Keep the page usable even if optional Shopify lookups fail.
+  }
+
+  return {
+    products: products.map((product: any) => ({
+      id: `gid://shopify/Product/${product.shopifyProductId}`,
+      title: product.title
+    })),
+    collections,
+    customerSegments
+  };
 }
 
 export async function ensureAffiliateProgramSeed(storeId?: string) {
   const { db, store } = await getStoreOrThrow(storeId);
 
   if (db.affiliateProgram) {
-    const program = await db.affiliateProgram.upsert({
+    await db.affiliateProgram.upsert({
       where: { id: `${store.id}-default-program` },
-      update: { name: "ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬ÂÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¾ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬ÂÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â©ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬ÂÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¤ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬ÂÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬ÂÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬ÂÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â", status: "active", commissionRate: 0.1 },
+      update: {
+        name: DEFAULT_PROGRAM_NAME,
+        status: "active",
+        commissionRate: DEFAULT_COMMISSION_RATE,
+        signUpLink: `https://${store.domain}/pages/affiliate-signup`
+      },
       create: {
         id: `${store.id}-default-program`,
         storeId: store.id,
-        name: "ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬ÂÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¾ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬ÂÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â©ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬ÂÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¤ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬ÂÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬ÂÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬ÂÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬ÂÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â",
+        name: DEFAULT_PROGRAM_NAME,
         status: "active",
-        commissionRate: 0.1,
+        commissionRate: DEFAULT_COMMISSION_RATE,
         signUpLink: `https://${store.domain}/pages/affiliate-signup`
       }
     });
-
-    for (const affiliate of defaultAffiliates) {
-      await db.affiliateMember.upsert({
-        where: { storeId_email: { storeId: store.id, email: affiliate.email } },
-        update: {
-          firstName: affiliate.firstName,
-          lastName: affiliate.lastName,
-          status: affiliate.status,
-          source: affiliate.source,
-          country: affiliate.country,
-          affiliateCode: affiliate.affiliateCode,
-          couponCode: affiliate.couponCode,
-          referralLink: affiliate.referralLink,
-          shortLink: affiliate.shortLink,
-          programId: program.id
-        },
-        create: {
-          storeId: store.id,
-          programId: program.id,
-          firstName: affiliate.firstName,
-          lastName: affiliate.lastName,
-          email: affiliate.email,
-          status: affiliate.status,
-          source: affiliate.source,
-          country: affiliate.country,
-          affiliateCode: affiliate.affiliateCode,
-          couponCode: affiliate.couponCode,
-          referralLink: affiliate.referralLink,
-          shortLink: affiliate.shortLink
-        }
-      });
-    }
   }
 
   return { ok: true, storeId: store.id };
 }
 
-export async function createAffiliateCouponInShopify(input: {
-  storeId?: string;
-  affiliateId: string;
-  code: string;
-  title: string;
-  discountType: "percent" | "fixed";
-  value: number;
-  appliesOncePerCustomer?: boolean;
-  redirectPath?: string;
-}) {
-  const { db, store } = await getStoreOrThrow(input.storeId);
-  await ensureAffiliateProgramSeed(store.id);
+export async function createAffiliateCouponInShopify(input: CouponInput) {
+  const context = await getCouponAdminContext(input.storeId);
+  const normalized = normalizeSingleCouponInput(input);
 
-  if (!db.affiliateMember) {
-    throw new AppError("Affiliate tables are not ready. Run Prisma generate and db push first.", 500);
+  if (normalized.creationMode === "existing") {
+    return attachExistingAffiliateCouponWithContext(context, normalized);
   }
 
-  const affiliate = await db.affiliateMember.findUnique({ where: { id: input.affiliateId } });
-  if (!affiliate) throw new AppError("Affiliate was not found.", 404);
+  return createAffiliateCouponWithContext(context, {
+    ...normalized,
+    assignmentMode: normalized.assignmentMode ?? "single"
+  });
+}
 
-  const credentials = await getStoredShopifyCredentials(store.id);
-  const client = createShopifyClient(credentials);
+export async function createAffiliateCouponsInBulk(input: BulkCouponInput) {
+  const affiliateIds = Array.from(new Set(input.affiliateIds.filter(Boolean)));
+  if (!affiliateIds.length) {
+    throw new AppError("Select at least one affiliate for bulk assignment.", 400);
+  }
 
-  const valuePayload = input.discountType === "percent"
-    ? { percentage: Math.max(0.01, Math.min(1, input.value / 100)) }
-    : { discountAmount: { amount: input.value, appliesOnEachItem: false } };
-
-  const result = await client.request<{
-    discountCodeBasicCreate: {
-      codeDiscountNode?: {
-        id: string;
-        codeDiscount?: {
-          title?: string;
-          status?: string;
-          shareableUrls?: { url: string }[];
-          codes?: { nodes?: { code: string }[] };
-        };
-      };
-      userErrors: { message: string }[];
-    };
-  }>(DISCOUNT_CODE_BASIC_CREATE_MUTATION, {
-    basicCodeDiscount: {
-      title: input.title,
-      code: input.code,
-      startsAt: new Date().toISOString(),
-      appliesOncePerCustomer: input.appliesOncePerCustomer ?? true,
-      customerGets: {
-        items: { all: true },
-        value: valuePayload
-      },
-      context: { all: true }
-    }
+  const normalized = normalizeBulkCouponInput(input);
+  const context = await getCouponAdminContext(input.storeId);
+  const affiliates = await context.db.affiliateMember.findMany({
+    where: { storeId: context.store.id, id: { in: affiliateIds } },
+    orderBy: [{ firstName: "asc" }, { lastName: "asc" }]
   });
 
-  const userErrors = result.discountCodeBasicCreate.userErrors ?? [];
-  if (userErrors.length) {
-    throw new AppError(userErrors.map((item) => item.message).join("; "), 400);
+  if (!affiliates.length) {
+    throw new AppError("No matching affiliates were found for bulk assignment.", 404);
   }
 
-  const discountNode = result.discountCodeBasicCreate.codeDiscountNode;
-  const createdCode = discountNode?.codeDiscount?.codes?.nodes?.[0]?.code ?? input.code;
-  const shareableUrl = discountNode?.codeDiscount?.shareableUrls?.[0]?.url ?? `https://${store.domain}/discount/${createdCode}?redirect=${encodeURIComponent(input.redirectPath ?? "/")}`;
-  const applyLink = `${shareableUrl}${shareableUrl.includes("?") ? "&" : "?"}ref=${affiliate.affiliateCode}`;
-
-  if (db.affiliateCoupon) {
-    await db.affiliateCoupon.upsert({
-      where: { storeId_code: { storeId: store.id, code: createdCode } },
-      update: {
-        affiliateMemberId: affiliate.id,
-        shopifyDiscountId: discountNode?.id ?? null,
-        title: input.title,
-        discountType: input.discountType,
-        discountValue: input.value,
-        appliesOncePerCustomer: input.appliesOncePerCustomer ?? true,
-        applyLink,
-        status: "active"
+  const coupons = [];
+  for (const affiliate of affiliates) {
+    const code = buildBulkCouponCode(affiliate, normalized);
+    const result = await createAffiliateCouponWithContext(
+      context,
+      {
+        storeId: context.store.id,
+        affiliateId: affiliate.id,
+        code,
+        title: normalized.title,
+        discountType: normalized.discountType,
+        value: normalized.value,
+        appliesOncePerCustomer: normalized.appliesOncePerCustomer,
+        redirectPath: normalized.redirectPath,
+        assignmentMode: "bulk",
+        creationMode: "create",
+        purchaseType: normalized.purchaseType,
+        appliesToType: normalized.appliesToType,
+        appliesToProductIds: normalized.appliesToProductIds,
+        appliesToCollectionIds: normalized.appliesToCollectionIds,
+        minimumRequirementType: normalized.minimumRequirementType,
+        minimumSubtotal: normalized.minimumSubtotal,
+        minimumQuantity: normalized.minimumQuantity,
+        customerEligibilityType: normalized.customerEligibilityType,
+        customerSegmentIds: normalized.customerSegmentIds,
+        usageLimit: normalized.usageLimit,
+        combinesWith: normalized.combinesWith
       },
-      create: {
-        storeId: store.id,
-        affiliateMemberId: affiliate.id,
-        shopifyDiscountId: discountNode?.id ?? null,
-        title: input.title,
-        code: createdCode,
-        discountType: input.discountType,
-        discountValue: input.value,
-        appliesOncePerCustomer: input.appliesOncePerCustomer ?? true,
-        applyLink,
-        status: "active"
-      }
-    });
-
-    await db.affiliateMember.update({
-      where: { id: affiliate.id },
-      data: { couponCode: createdCode }
-    });
+      affiliate
+    );
+    coupons.push(result);
   }
 
   return {
     ok: true,
-    affiliateId: affiliate.id,
-    code: createdCode,
-    applyLink,
-    shopifyDiscountId: discountNode?.id ?? null
+    assignedCount: coupons.length,
+    coupons
   };
 }
 
@@ -191,31 +722,83 @@ export async function syncAffiliateAttributionFromOrders(storeId?: string) {
   const [members, coupons, orders] = await Promise.all([
     db.affiliateMember.findMany({ where: { storeId: store.id } }),
     db.affiliateCoupon.findMany({ where: { storeId: store.id } }).catch(() => []),
-    db.order.findMany({ where: { storeId: store.id }, include: { discountUsages: true }, orderBy: { createdAt: "desc" } })
+    db.order.findMany({
+      where: { storeId: store.id },
+      include: { discountUsages: true },
+      orderBy: { createdAt: "desc" }
+    })
   ]);
+  const webhookRows = db.webhookEvent
+    ? await db.webhookEvent.findMany({
+        where: {
+          storeId: store.id,
+          platform: "shopify",
+          externalId: { in: orders.map((order: any) => order.shopifyOrderId) }
+        },
+        orderBy: { createdAt: "desc" }
+      }).catch(() => [])
+    : [];
+  const webhookByOrderId = new Map<string, any>();
+  for (const webhook of webhookRows as any[]) {
+    if (webhook.externalId && !webhookByOrderId.has(webhook.externalId)) {
+      webhookByOrderId.set(webhook.externalId, webhook);
+    }
+  }
 
   let synced = 0;
 
   for (const order of orders) {
-    const orderCodes = (order.discountUsages ?? []).map((item: any) => item.code?.toUpperCase()).filter(Boolean);
+    const orderCodes = (order.discountUsages ?? [])
+      .map((item: any) => item.code?.toUpperCase())
+      .filter(Boolean);
+    const webhookPayload = webhookByOrderId.get(order.shopifyOrderId)?.payload ?? null;
+    const landingSite = safeTrackingString(webhookPayload?.landing_site);
+    const referringSite = safeTrackingString(webhookPayload?.referring_site);
+    const bgRefCode = extractTrackingNoteAttribute(webhookPayload, "bg_ref")
+      ?? extractTrackingQueryValue(landingSite, "bg_ref")
+      ?? extractTrackingQueryValue(referringSite, "bg_ref");
+    const refCode = extractTrackingNoteAttribute(webhookPayload, "ref")
+      ?? bgRefCode
+      ?? extractTrackingQueryValue(landingSite, "ref")
+      ?? extractTrackingQueryValue(referringSite, "ref");
+    const sourcePlatform = resolveAffiliateSourcePlatform({
+      landingSite,
+      referringSite,
+      bgRefCode
+    });
+
     const matchedMember = members.find((member: any) => {
       const memberCode = member.couponCode?.toUpperCase();
       const affiliateCode = member.affiliateCode?.toUpperCase();
       const couponMatch = memberCode && orderCodes.includes(memberCode);
-      const couponTableMatch = coupons.some((coupon: any) => coupon.affiliateMemberId === member.id && orderCodes.includes(String(coupon.code).toUpperCase()));
+      const couponTableMatch = coupons.some(
+        (coupon: any) =>
+          coupon.affiliateMemberId === member.id &&
+          orderCodes.includes(String(coupon.code).toUpperCase())
+      );
       const affiliateCodeMatch = affiliateCode && orderCodes.some((code: string) => code.includes(affiliateCode));
-      return couponMatch || couponTableMatch || affiliateCodeMatch;
+      const refCodeMatch = affiliateCode && refCode && affiliateCode === String(refCode).toUpperCase();
+      return couponMatch || couponTableMatch || affiliateCodeMatch || refCodeMatch;
     });
 
     if (!matchedMember) continue;
 
-    const commissionAmount = Number(order.totalPrice) * 0.1;
+    const commissionAmount = Number(order.totalPrice) * DEFAULT_COMMISSION_RATE;
+    const hasLinkSignal = Boolean(refCode || sourcePlatform === "bixgrow");
+    const trackingMethod = buildAffiliateTrackingMethod({
+      hasClickSignal: hasLinkSignal,
+      hasCouponSignal: orderCodes.length > 0,
+      sourcePlatform
+    });
+    const sourceType = hasLinkSignal ? "link" : "coupon";
+    const sourceUrl = landingSite ?? referringSite ?? null;
 
     await db.affiliateAttribution.upsert({
       where: { affiliateMemberId_orderId: { affiliateMemberId: matchedMember.id, orderId: order.id } },
       update: {
-        sourceType: orderCodes.length ? "coupon" : "link",
-        trackingMethod: orderCodes.length ? "link_and_coupon" : "link",
+        sourceType,
+        trackingMethod,
+        sourceUrl,
         salesAmount: order.totalPrice,
         commissionAmount,
         ordersCount: 1,
@@ -225,8 +808,9 @@ export async function syncAffiliateAttributionFromOrders(storeId?: string) {
         storeId: store.id,
         affiliateMemberId: matchedMember.id,
         orderId: order.id,
-        sourceType: orderCodes.length ? "coupon" : "link",
-        trackingMethod: orderCodes.length ? "link_and_coupon" : "link",
+        sourceType,
+        trackingMethod,
+        sourceUrl,
         salesAmount: order.totalPrice,
         commissionAmount,
         ordersCount: 1,

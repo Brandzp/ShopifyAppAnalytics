@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
-import { getDb } from "@/lib/server/db";
+import { getDb, isDatabaseConnectionError } from "@/lib/server/db";
 import { AppError } from "@/lib/server/errors";
+import { isBixGrowSourcePlatform, normalizeAffiliateSourcePlatform } from "@/lib/services/affiliate-attribution-source";
 import { resolveOrCreateBaseStore } from "@/lib/services/creator-admin-service";
 
 function hashInput(value: string) {
@@ -10,11 +11,15 @@ function hashInput(value: string) {
 async function getStoreOrThrow(storeId?: string) {
   const db = getDb();
   if (!db) throw new AppError("Database client is not available.", 500);
-  const store = storeId
-    ? await db.store.findUnique({ where: { id: storeId } })
-    : await resolveOrCreateBaseStore();
-  if (!store) throw new AppError("Store was not found.", 404);
-  return { db, store };
+  try {
+    const store = storeId
+      ? await db.store.findUnique({ where: { id: storeId } })
+      : await resolveOrCreateBaseStore();
+    if (!store) throw new AppError("Store was not found.", 404);
+    return { db, store };
+  } catch (error) {
+    throw error;
+  }
 }
 
 export async function createAffiliateRedirectSession(input: {
@@ -46,7 +51,7 @@ export async function createAffiliateRedirectSession(input: {
         affiliateMemberId: affiliate.id,
         clickId,
         visitorToken: input.visitorToken ?? null,
-        sourcePlatform: input.sourcePlatform ?? null,
+        sourcePlatform: normalizeAffiliateSourcePlatform(input.sourcePlatform),
         sourceUrl: input.sourceUrl ?? null,
         destinationUrl,
         landingPath: input.destinationPath ?? "/",
@@ -76,6 +81,7 @@ export function buildTrackedDestinationUrl(input: {
   couponCode?: string | null;
   affiliateCode: string;
   clickId: string;
+  sourcePlatform?: string | null;
   utmSource?: string | null;
   utmMedium?: string | null;
   utmCampaign?: string | null;
@@ -83,6 +89,10 @@ export function buildTrackedDestinationUrl(input: {
   const baseDestination = input.destinationUrl ?? `https://${input.shopDomain}${input.destinationPath ?? "/"}`;
   const url = new URL(baseDestination);
   url.searchParams.set("ref", input.affiliateCode);
+  if (isBixGrowSourcePlatform(input.sourcePlatform)) {
+    // Preserve BixGrow's native marker so downstream orders can be recognized as BixGrow traffic.
+    url.searchParams.set("bg_ref", input.affiliateCode);
+  }
   url.searchParams.set("agent_click_id", input.clickId);
   if (input.couponCode) url.searchParams.set("coupon", input.couponCode);
   if (input.utmSource) url.searchParams.set("utm_source", input.utmSource);
@@ -92,24 +102,48 @@ export function buildTrackedDestinationUrl(input: {
 }
 
 export async function getAttributionCoverageSignals(storeId?: string) {
-  const { db, store } = await getStoreOrThrow(storeId);
-  const sessions = db.attributionSession ? await db.attributionSession.findMany({ where: { storeId: store.id, createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } } }).catch(() => []) : [];
-  const webhooks = db.webhookEvent ? await db.webhookEvent.findMany({ where: { storeId: store.id, platform: "shopify", createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } } }).catch(() => []) : [];
+  try {
+    const { db, store } = await getStoreOrThrow(storeId);
+    const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const sessions = db.attributionSession
+      ? await db.attributionSession.findMany({
+          where: { storeId: store.id, createdAt: { gte: since } }
+        }).catch(() => [])
+      : [];
+    const webhooks = db.webhookEvent
+      ? await db.webhookEvent.findMany({
+          where: { storeId: store.id, platform: "shopify", createdAt: { gte: since } }
+        }).catch(() => [])
+      : [];
 
-  const totalSessions = sessions?.length ?? 0;
-  const convertedSessions = (sessions ?? []).filter((session: any) => session.convertedAt).length;
-  const healthyWebhooks = (webhooks ?? []).filter((event: any) => event.status === "processed").length;
-  const webhookFailures = (webhooks ?? []).filter((event: any) => event.status === "error").length;
+    const totalSessions = sessions.length;
+    const convertedSessions = sessions.filter((session: any) => session.convertedAt).length;
+    const healthyWebhooks = webhooks.filter((event: any) => event.status === "processed").length;
+    const webhookFailures = webhooks.filter((event: any) => event.status === "error").length;
+    const sessionMatchRate = totalSessions ? convertedSessions / totalSessions : 0;
+    const webhookSample = healthyWebhooks + webhookFailures;
+    const webhookHealthRate = webhookSample ? healthyWebhooks / webhookSample : 0;
+    const overallConfidence = totalSessions || webhookSample
+      ? Math.min(1, Math.max(0, sessionMatchRate * 0.55 + webhookHealthRate * 0.45))
+      : 0;
 
-  const sessionMatchRate = totalSessions ? convertedSessions / totalSessions : 0.45;
-  const webhookHealthRate = healthyWebhooks + webhookFailures > 0 ? healthyWebhooks / (healthyWebhooks + webhookFailures) : 0.65;
-  const overallConfidence = Math.min(0.97, Math.max(0.35, sessionMatchRate * 0.55 + webhookHealthRate * 0.45));
-
-  return {
-    totalSessions,
-    convertedSessions,
-    sessionMatchRate,
-    webhookHealthRate,
-    overallConfidence
-  };
+    return {
+      totalSessions,
+      convertedSessions,
+      sessionMatchRate,
+      webhookHealthRate,
+      overallConfidence
+    };
+  } catch (error) {
+    if (error instanceof AppError || isDatabaseConnectionError(error)) {
+      return {
+        totalSessions: 0,
+        convertedSessions: 0,
+        sessionMatchRate: 0,
+        webhookHealthRate: 0,
+        overallConfidence: 0
+      };
+    }
+    throw error;
+  }
 }

@@ -1,12 +1,16 @@
-﻿import { AppShell } from "@/components/layout/app-shell";
+import { GrowthAgentConfigurationManager } from "@/components/growth-agent/configuration-manager";
+import { GrowthAgentNav } from "@/components/growth-agent/agent-nav";
+import { AppShell } from "@/components/layout/app-shell";
 import { SectionHeading } from "@/components/ui/section-heading";
 import { getAppChromeData } from "@/lib/services/analytics-service";
-import { getGrowthAgentSettings } from "@/lib/services/growth-agent-service";
-import { GrowthAgentNav } from "@/components/growth-agent/agent-nav";
-import { GrowthAgentConfigurationManager } from "@/components/growth-agent/configuration-manager";
+import { getGrowthAgentSettings, getGrowthAgentStoreContext } from "@/lib/services/growth-agent-service";
 
 export default async function GrowthAgentConfigurationPage() {
-  const [chrome, settings] = await Promise.all([getAppChromeData(), getGrowthAgentSettings()]);
+  const { store } = await getGrowthAgentStoreContext();
+  const [chrome, settings] = await Promise.all([
+    getAppChromeData(store.id),
+    getGrowthAgentSettings(store.id)
+  ]);
 
   return (
     <AppShell store={chrome.store} controls={chrome.controls}>
@@ -19,8 +23,7 @@ export default async function GrowthAgentConfigurationPage() {
         <GrowthAgentNav />
       </section>
 
-      <GrowthAgentConfigurationManager initialSettings={settings} />
+      <GrowthAgentConfigurationManager initialSettings={settings} storeId={store.id} />
     </AppShell>
   );
 }
-

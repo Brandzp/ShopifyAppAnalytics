@@ -1,4 +1,4 @@
-import { getDb } from "@/lib/server/db";
+import { getDb, withOptionalDb } from "@/lib/server/db";
 import { AppError } from "@/lib/server/errors";
 import { decryptSecret, encryptSecret } from "@/lib/security/encryption";
 import { createShopifyClient, resolveShopifyAdminAccessToken } from "@/lib/shopify/client";
@@ -108,12 +108,13 @@ export async function getStoredShopifyCredentials(storeId: string) {
 }
 
 export async function getShopifyConnectionSummary(storeId?: string): Promise<ShopifyConnectionSummary | null> {
-  const db = getDb();
-  if (!db) return null;
-
-  const store = storeId
-    ? await db.store.findUnique({ where: { id: storeId }, include: { connection: true } })
-    : await db.store.findFirst({ where: { connected: true, connection: { isNot: null } }, include: { connection: true }, orderBy: { updatedAt: "desc" } });
+  const store: any = await withOptionalDb(
+    (db) =>
+      storeId
+        ? db.store.findUnique({ where: { id: storeId }, include: { connection: true } })
+        : db.store.findFirst({ where: { connected: true, connection: { isNot: null } }, include: { connection: true }, orderBy: { updatedAt: "desc" } }),
+    null
+  );
 
   if (!store) return null;
 

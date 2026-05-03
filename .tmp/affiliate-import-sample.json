@@ -1,0 +1,15 @@
+{
+  "affiliates": [
+    {
+      "email": "qa-affiliate-store1@example.com",
+      "First Name": "QA",
+      "Last Name": "Affiliate",
+      "Country": "US",
+      "Source": "JSON import",
+      "Status": "approved",
+      "Referral code": "QAIMPORT",
+      "Coupons": "QAIMPORT10",
+      "Program": "QA Import Program"
+    }
+  ]
+}

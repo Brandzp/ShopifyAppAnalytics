@@ -1,0 +1,9 @@
+
+> shopify-profit-ops-system@0.1.0 start
+> next start --port 3006
+
+   ▲ Next.js 15.5.14
+   - Local:        http://localhost:3006
+   - Network:      http://192.168.1.164:3006
+
+ ✓ Starting...

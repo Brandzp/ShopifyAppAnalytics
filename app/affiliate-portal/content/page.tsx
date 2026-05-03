@@ -1,4 +1,4 @@
-﻿import { AppShell } from "@/components/layout/app-shell";
+import { AppShell } from "@/components/layout/app-shell";
 import { SectionHeading } from "@/components/ui/section-heading";
 import { AffiliatePortalNav } from "@/components/affiliate-portal/portal-nav";
 import { getAppChromeData } from "@/lib/services/analytics-service";
@@ -10,22 +10,26 @@ export default async function AffiliateContentPage() {
   const [chrome, content] = await Promise.all([getAppChromeData(), getAffiliateContentPerformance()]);
 
   return (
-    <AppShell store={chrome.store} controls={chrome.controls}>
+    <AppShell store={chrome.store} controls={chrome.controls} localeOverride="en">
       <section className="space-y-4">
-        <SectionHeading eyebrow="Affiliate Portal" title="מה עובד בתוכן ומה לא" description="הדף הקריטי למטרה שלך: לקבל דאטה פר אפיליאייט ולראות איזה תוכן באמת מביא קליקים, הזמנות ומכירות." />
+        <SectionHeading
+          eyebrow="Affiliate Portal"
+          title="Affiliate content performance"
+          description="See which posts and creative assets are generating clicks, orders, and revenue for each affiliate."
+        />
         <AffiliatePortalNav />
       </section>
 
       <DataTable
-        title="ביצועי תוכן לפי אפיליאייט"
+        title="Content performance by affiliate"
         columns={[
-          { key: "affiliateName", label: "אפליאייט" },
-          { key: "title", label: "תוכן" },
-          { key: "contentType", label: "סוג" },
-          { key: "views", label: "צפיות", render: (row) => formatNumber(row.views) },
-          { key: "clicks", label: "קליקים", render: (row) => formatNumber(row.clicks) },
-          { key: "orders", label: "הזמנות", render: (row) => formatNumber(row.orders) },
-          { key: "sales", label: "מכירות", render: (row) => formatCurrency(row.sales, chrome.store.currency) }
+          { key: "affiliateName", label: "Affiliate" },
+          { key: "title", label: "Content" },
+          { key: "contentType", label: "Type" },
+          { key: "views", label: "Views", render: (row) => formatNumber(row.views) },
+          { key: "clicks", label: "Clicks", render: (row) => formatNumber(row.clicks) },
+          { key: "orders", label: "Orders", render: (row) => formatNumber(row.orders) },
+          { key: "sales", label: "Sales", render: (row) => formatCurrency(row.sales, chrome.store.currency) }
         ]}
         rows={content}
       />

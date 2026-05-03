@@ -17,6 +17,9 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
+    if (typeof body.storeId !== "string" || !body.storeId) {
+      throw new AppError("Store id is required to save Growth Agent settings.", 400);
+    }
     const result = await saveGrowthAgentSettings(body.settings ?? body, body.storeId);
     return NextResponse.json(result);
   } catch (error) {

@@ -5,6 +5,9 @@ import { runGrowthAgentProductRecommendationScan } from "@/lib/services/growth-a
 export async function POST(request: Request) {
   try {
     const body = await request.json().catch(() => ({}));
+    if (typeof body.storeId !== "string" || !body.storeId) {
+      throw new AppError("Store id is required for Growth Agent product discovery.", 400);
+    }
     const result = await runGrowthAgentProductRecommendationScan(body.storeId);
     return NextResponse.json(result);
   } catch (error) {

@@ -23,9 +23,26 @@ export interface ShopifyGraphQLError {
   extensions?: Record<string, unknown>;
 }
 
+export interface ShopifyGraphQLThrottleStatus {
+  maximumAvailable?: number;
+  currentlyAvailable?: number;
+  restoreRate?: number;
+}
+
+export interface ShopifyGraphQLCostExtension {
+  requestedQueryCost?: number;
+  actualQueryCost?: number;
+  throttleStatus?: ShopifyGraphQLThrottleStatus;
+}
+
+export interface ShopifyGraphQLExtensions {
+  cost?: ShopifyGraphQLCostExtension;
+}
+
 export interface ShopifyGraphQLResponse<T> {
   data?: T;
   errors?: ShopifyGraphQLError[];
+  extensions?: ShopifyGraphQLExtensions;
 }
 
 export interface ShopifyCredentialInput {

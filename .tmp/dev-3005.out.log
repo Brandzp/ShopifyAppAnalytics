@@ -1,0 +1,12 @@
+
+> shopify-profit-ops-system@0.1.0 dev
+> next dev --port 3005
+
+   ▲ Next.js 15.5.14
+   - Local:        http://localhost:3005
+   - Network:      http://192.168.1.164:3005
+   - Environments: .env
+
+ ✓ Starting...
+ ✓ Ready in 4.6s
+ ○ Compiling / ...

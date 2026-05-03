@@ -9,9 +9,10 @@ import type { GrowthProductRecommendation } from "@/lib/domain/growth-agent-type
 interface ProductRecommendationsPanelProps {
   recommendations: GrowthProductRecommendation[];
   currency: string;
+  storeId: string;
 }
 
-export function ProductRecommendationsPanel({ recommendations, currency }: ProductRecommendationsPanelProps) {
+export function ProductRecommendationsPanel({ recommendations, currency, storeId }: ProductRecommendationsPanelProps) {
   const router = useRouter();
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [statusMap, setStatusMap] = useState<Record<string, string>>({});
@@ -24,7 +25,7 @@ export function ProductRecommendationsPanel({ recommendations, currency }: Produ
         const response = await fetch("/api/growth-agent/product-recommendations/import", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ recommendation })
+          body: JSON.stringify({ recommendation, storeId })
         });
         const payload = await response.json();
         if (!response.ok || !payload.ok) {

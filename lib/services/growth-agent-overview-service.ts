@@ -1,7 +1,9 @@
-﻿import type { GrowthOverviewPayload, GrowthProductRecommendation } from "@/lib/domain/growth-agent-types";
+import { getAppLocale } from "@/lib/i18n";
+import { getAnalyticsRepository } from "@/lib/repositories";
+import type { GrowthOverviewPayload, GrowthProductRecommendation } from "@/lib/domain/growth-agent-types";
+import { describeAbsoluteRange, getReportingDateRangeSelection } from "@/lib/server/reporting-date-range";
 import { buildGrowthActionsFromFindings } from "@/lib/services/growth-agent-action-engine";
 import { runGrowthAgentAnomalyDetection } from "@/lib/services/growth-agent-anomaly-service";
-import { fallbackActions, fallbackFindings } from "@/lib/services/growth-agent-defaults";
 import {
   ensureGrowthAgentDefaults,
   getGrowthActions,
@@ -12,8 +14,8 @@ import {
   getGrowthPlatformConnections,
   replaceGrowthFindings
 } from "@/lib/services/growth-agent-service";
-import { runGrowthAgentManualSync } from "@/lib/services/growth-agent-sync-service";
 import { getGrowthAgentProductRecommendations } from "@/lib/services/growth-agent-product-crawler-service";
+import { runGrowthAgentManualSync } from "@/lib/services/growth-agent-sync-service";
 
 function extractProductRecommendations(findings: GrowthOverviewPayload["findings"]): GrowthProductRecommendation[] {
   return findings
@@ -76,19 +78,28 @@ export async function getGrowthAgentOverview(storeId?: string): Promise<GrowthOv
   const { store } = await getGrowthAgentStoreContext(storeId);
   await ensureGrowthAgentDefaults(store.id);
 
-  const [settings, snapshots, connections, findings, actions, anomalyResult] = await Promise.all([
+  const locale = await getAppLocale();
+  const repository = await getAnalyticsRepository();
+  const reportingRange = await getReportingDateRangeSelection(locale);
+
+  const [settings, snapshots, connections, findings, actions, anomalyResult, orders, products] = await Promise.all([
     getGrowthAgentSettings(store.id),
     getGrowthMetricSnapshots(store.id),
     getGrowthPlatformConnections(store.id),
     getGrowthFindings(store.id),
     getGrowthActions(store.id),
-    runGrowthAgentAnomalyDetection(store.id)
+    runGrowthAgentAnomalyDetection(store.id),
+    repository.getOrders(store.id),
+    repository.getProducts(store.id)
   ]);
 
-  const effectiveFindings = findings.length ? findings : anomalyResult.findings.length ? anomalyResult.findings : fallbackFindings;
-  const effectiveActions = actions.length ? actions : fallbackActions;
+  const effectiveFindings = findings.length ? findings : anomalyResult.findings;
+  const effectiveActions = actions;
   const alertsLast7Days = effectiveFindings.filter((finding) => Date.now() - new Date(finding.timestamp).getTime() <= 7 * 24 * 60 * 60 * 1000).length;
   const productRecommendations = extractProductRecommendations(effectiveFindings);
+  const comparisonWindow = reportingRange.comparison.enabled
+    ? describeAbsoluteRange(reportingRange.comparison.start, reportingRange.comparison.end, locale)
+    : null;
 
   return {
     status: settings.agentEnabled ? "active" : "paused",
@@ -103,7 +114,20 @@ export async function getGrowthAgentOverview(storeId?: string): Promise<GrowthOv
     trafficChannels: anomalyResult.trafficChannels,
     findings: effectiveFindings,
     actions: effectiveActions,
-    productRecommendations
+    productRecommendations,
+    provenance: {
+      storeId: store.id,
+      storeName: store.name,
+      storeDomain: store.domain,
+      reportingLabel: reportingRange.label,
+      reportingWindow: describeAbsoluteRange(reportingRange.start, reportingRange.end, locale),
+      comparisonLabel: reportingRange.comparison.label,
+      comparisonWindow,
+      ordersAnalyzed: orders.length,
+      productsAnalyzed: products.length,
+      snapshotCount: snapshots.length,
+      connectionCount: connections.length,
+      lastSnapshotSource: snapshots[0]?.source ?? null
+    }
   };
 }
-

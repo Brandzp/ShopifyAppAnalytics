@@ -5,14 +5,14 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 
 const items = [
-  { href: "/affiliate-portal", label: "דשבורד" },
-  { href: "/affiliate-portal/programs", label: "תוכניות" },
-  { href: "/affiliate-portal/affiliates", label: "אפליאייטים" },
-  { href: "/affiliate-portal/coupons", label: "קופונים" },
-  { href: "/affiliate-portal/conversions", label: "המרות" },
-  { href: "/affiliate-portal/payouts", label: "תשלומים" },
-  { href: "/affiliate-portal/content", label: "ביצועי תוכן" },
-  { href: "/affiliate-portal/settings", label: "הגדרות פורטל" }
+  { href: "/affiliate-portal", label: "Dashboard" },
+  { href: "/affiliate-portal/programs", label: "Programs" },
+  { href: "/affiliate-portal/affiliates", label: "Affiliates" },
+  { href: "/affiliate-portal/coupons", label: "Coupons" },
+  { href: "/affiliate-portal/conversions", label: "Conversions" },
+  { href: "/affiliate-portal/payouts", label: "Payouts" },
+  { href: "/affiliate-portal/content", label: "Content" },
+  { href: "/affiliate-portal/settings", label: "Settings" }
 ];
 
 export function AffiliatePortalNav() {

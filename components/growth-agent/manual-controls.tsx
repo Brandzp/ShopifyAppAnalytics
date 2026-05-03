@@ -4,7 +4,11 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 
-export function GrowthAgentManualControls() {
+interface GrowthAgentManualControlsProps {
+  storeId: string;
+}
+
+export function GrowthAgentManualControls({ storeId }: GrowthAgentManualControlsProps) {
   const router = useRouter();
   const [message, setMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -16,7 +20,7 @@ export function GrowthAgentManualControls() {
         const response = await fetch(endpoint, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({})
+          body: JSON.stringify({ storeId })
         });
         const payload = await response.json();
         if (!response.ok || !payload.ok) throw new Error(payload.error ?? "Request failed");

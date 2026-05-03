@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { AppError, toErrorMessage } from "@/lib/server/errors";
+import { resolveAffiliateSourcePlatform } from "@/lib/services/affiliate-attribution-source";
 import { buildTrackedDestinationUrl, createAffiliateRedirectSession } from "@/lib/services/affiliate-link-tracking-service";
 
 export async function GET(request: Request) {
@@ -12,11 +13,16 @@ export async function GET(request: Request) {
 
     const couponCode = url.searchParams.get("coupon");
     const destinationPath = url.searchParams.get("destination") ?? "/";
+    const sourcePlatform = resolveAffiliateSourcePlatform({
+      sourcePlatform: url.searchParams.get("sourcePlatform"),
+      sourceUrl: url.searchParams.get("sourceUrl"),
+      bgRefCode: url.searchParams.get("bg_ref")
+    });
     const session = await createAffiliateRedirectSession({
       affiliateCode: affiliateCode.toUpperCase(),
       couponCode,
       destinationPath,
-      sourcePlatform: url.searchParams.get("sourcePlatform"),
+      sourcePlatform,
       sourceUrl: url.searchParams.get("sourceUrl"),
       utmSource: url.searchParams.get("utm_source"),
       utmMedium: url.searchParams.get("utm_medium"),
@@ -32,6 +38,7 @@ export async function GET(request: Request) {
       couponCode,
       affiliateCode: session.affiliate.affiliateCode,
       clickId: session.clickId,
+      sourcePlatform,
       utmSource: url.searchParams.get("utm_source"),
       utmMedium: url.searchParams.get("utm_medium"),
       utmCampaign: url.searchParams.get("utm_campaign")

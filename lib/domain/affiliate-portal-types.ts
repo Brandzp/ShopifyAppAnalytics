@@ -1,7 +1,9 @@
-﻿export type AffiliateStatus = "approved" | "pending" | "denied";
+export type AffiliateStatus = "approved" | "pending" | "denied";
 export type ProgramStatus = "active" | "draft";
 export type ConversionStatus = "approved" | "pending" | "denied";
 export type CouponStatus = "active" | "inactive";
+export type CouponAssignmentMode = "single" | "bulk";
+export type CouponConnectionSource = "shopify_create" | "existing_coupon";
 
 export interface AffiliateProgram {
   id: string;
@@ -33,6 +35,8 @@ export interface AffiliateProfile {
   approvedBalance: number;
   affiliateCode: string;
   couponCode?: string | null;
+  instagramUsername?: string | null;
+  instagramProfileUrl?: string | null;
   referralLink: string;
   shortLink: string;
 }
@@ -48,6 +52,22 @@ export interface AffiliateCoupon {
   createdAt: string;
   discountLabel: string;
   applyLink: string;
+  assignmentMode: CouponAssignmentMode;
+  connectionSource: CouponConnectionSource;
+}
+
+export interface AffiliateCouponHistoryItem {
+  id: string;
+  affiliateId: string;
+  affiliateName: string;
+  couponId?: string | null;
+  code: string;
+  couponTitle: string;
+  discountLabel: string;
+  applyLink: string;
+  assignmentMode: CouponAssignmentMode;
+  connectionSource: CouponConnectionSource;
+  connectedAt: string;
 }
 
 export interface AffiliateConversion {
@@ -113,6 +133,11 @@ export interface AffiliatePortalSettings {
 }
 
 export interface AffiliatePortalDashboardPayload {
+  scope: {
+    id: "bixgrow" | "all_affiliates";
+    label: string;
+    description: string;
+  };
   program: AffiliateProgram;
   totals: {
     totalSales: number;

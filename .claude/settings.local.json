@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(gh api *)",
+      "PowerShell(gh api repos/anthropics/skills/contents --jq '.[] | \"\\\\\\(.type\\) \\\\\\(.name\\)\"')",
+      "WebFetch(domain:api.github.com)"
+    ]
+  }
+}

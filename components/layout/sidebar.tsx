@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bell, LayoutDashboard, LineChart, Menu, Settings2, Sparkles, Users2, Megaphone, Bot } from "lucide-react";
+import { Bell, CalendarRange, LayoutDashboard, LineChart, Menu, PackageCheck, Settings2, Sparkles, Users2, Megaphone, Bot } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useMemo, useState } from "react";
@@ -13,9 +13,15 @@ function getNavigation(labels: { nav: Record<string, string> }, locale: AppLocal
     { href: "/", label: labels.nav.overview, icon: LayoutDashboard },
     { href: "/profit", label: labels.nav.profit, icon: LineChart },
     { href: "/retention", label: labels.nav.retention, icon: Users2 },
-    { href: "/affiliate-portal", label: locale === "he" ? "×¤×•×¨×˜×œ ×©×•×ª×¤×™×" : "Affiliate Portal", icon: Megaphone },
+    {
+      href: "/product-follow-ups",
+      label: locale === "he" ? "מעקב מוצרים" : "Product follow-ups",
+      icon: PackageCheck
+    },
+    { href: "/affiliate-portal", label: locale === "he" ? "פורטל שותפים" : "Affiliate Portal", icon: Megaphone },
     { href: "/weekly-summary", label: labels.nav.weeklySummary, icon: Sparkles },
     { href: "/growth-agent", label: "Growth Agent", icon: Bot },
+    { href: "/marketing-planner", label: locale === "he" ? "גאנט שיווקי" : "Marketing Planner", icon: CalendarRange },
     { href: "/alerts", label: labels.nav.alerts, icon: Bell },
     { href: "/settings", label: labels.nav.settings, icon: Settings2 }
   ] as const;
@@ -50,7 +56,7 @@ function NavContent({
           </p>
         </div>
       </div>
-      <nav className="flex-1 space-y-1 px-3">
+      <nav className="flex-1 space-y-1 px-3" aria-label="Primary">
         {navigation.map((item) => {
           const Icon = item.icon;
           const isActive = pathname === item.href || (item.href !== "/" && pathname.startsWith(`${item.href}/`));
@@ -58,15 +64,23 @@ function NavContent({
             <Link
               key={item.href}
               href={item.href}
+              aria-current={isActive ? "page" : undefined}
               className={cn(
-                "flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-colors",
+                "group/nav relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
                 isActive
                   ? "bg-card text-foreground shadow-soft"
-                  : "text-muted-foreground hover:bg-card/80 hover:text-foreground"
+                  : "text-muted-foreground hover:bg-card/70 hover:text-foreground"
               )}
             >
-              <Icon className="h-4 w-4" />
-              {item.label}
+              <span
+                aria-hidden
+                className={cn(
+                  "absolute inset-y-2 start-0 w-1 rounded-full transition-colors",
+                  isActive ? "bg-foreground" : "bg-transparent group-hover/nav:bg-border"
+                )}
+              />
+              <Icon className={cn("h-4 w-4 shrink-0", isActive ? "text-foreground" : "text-muted-foreground group-hover/nav:text-foreground")} />
+              <span className="truncate">{item.label}</span>
             </Link>
           );
         })}

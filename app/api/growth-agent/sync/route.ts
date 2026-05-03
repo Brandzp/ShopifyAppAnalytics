@@ -5,6 +5,9 @@ import { runGrowthAgentManualSync } from "@/lib/services/growth-agent-sync-servi
 export async function POST(request: Request) {
   try {
     const body = await request.json().catch(() => ({}));
+    if (typeof body.storeId !== "string" || !body.storeId) {
+      throw new AppError("Store id is required for Growth Agent sync.", 400);
+    }
     const result = await runGrowthAgentManualSync(body.storeId);
     return NextResponse.json(result);
   } catch (error) {

@@ -1,23 +1,20 @@
 import { Sidebar } from "@/components/layout/sidebar";
-import { Topbar } from "@/components/layout/topbar";
+import { Topbar, type TopbarControls } from "@/components/layout/topbar";
 import type { Store } from "@/lib/domain/types";
-import { getAppLocale, getDictionary } from "@/lib/i18n";
+import { getAppLocale, getDictionary, type AppLocale } from "@/lib/i18n";
 
 export async function AppShell({
   children,
   store,
-  controls
+  controls,
+  localeOverride
 }: {
   children: React.ReactNode;
   store: Store;
-  controls?: {
-    dateRangeLabel?: string;
-    comparisonLabel?: string;
-    startDate?: string;
-    endDate?: string;
-  };
+  controls?: TopbarControls;
+  localeOverride?: AppLocale;
 }) {
-  const locale = await getAppLocale();
+  const locale = localeOverride ?? (await getAppLocale());
   const dictionary = getDictionary(locale);
 
   return (

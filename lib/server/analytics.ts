@@ -136,7 +136,15 @@ export function buildDiscountUsage(orders: Order[]): DiscountUsage[] {
 
 export function buildProductPerformance(
   orders: Order[],
-  productLookup: Map<string, { title: string; collection: string }>
+  productLookup: Map<
+    string,
+    {
+      title: string;
+      collection: string;
+      inventoryQuantity?: number | null;
+      collections?: string[];
+    }
+  >
 ): ProductPerformanceRow[] {
   const grouped = new Map<string, ProductPerformanceRow>();
 
@@ -155,11 +163,13 @@ export function buildProductPerformance(
         productId,
         productTitle: product.title,
         collection: product.collection,
+        collections: product.collections ?? [],
         unitsSold: 0,
         revenue: 0,
         estimatedProfit: 0,
         discountImpact: 0,
-        refundImpact: 0
+        refundImpact: 0,
+        inventoryQuantity: product.inventoryQuantity ?? null
       };
 
       current.unitsSold += lineItem.quantity;

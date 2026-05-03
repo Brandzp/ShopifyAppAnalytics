@@ -1,7 +1,22 @@
-﻿import { Badge } from "@/components/ui/badge";
+import { Badge } from "@/components/ui/badge";
 import type { Store } from "@/lib/domain/types";
 import type { AppLocale } from "@/lib/i18n";
-import { DateRangeControls } from "@/components/layout/date-range-controls";
+import { ReportingPicker } from "@/components/layout/reporting-picker";
+
+export interface TopbarControls {
+  dateRangeLabel?: string;
+  comparisonLabel?: string;
+  startDate?: string;
+  endDate?: string;
+  preset?: string;
+  comparison?: {
+    mode: string;
+    enabled: boolean;
+    startDate: string;
+    endDate: string;
+    label: string;
+  };
+}
 
 export function Topbar({
   store,
@@ -9,12 +24,7 @@ export function Topbar({
   labels
 }: {
   store: Store;
-  controls?: {
-    dateRangeLabel?: string;
-    comparisonLabel?: string;
-    startDate?: string;
-    endDate?: string;
-  };
+  controls?: TopbarControls;
   locale: AppLocale;
   labels: {
     common: Record<string, string>;
@@ -34,10 +44,15 @@ export function Topbar({
           </p>
         </div>
       </div>
-      <DateRangeControls
+      <ReportingPicker
+        initialPreset={(controls?.preset as never) ?? "last_30"}
         initialStart={controls?.startDate ?? new Date(Date.now() - 29 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)}
         initialEnd={controls?.endDate ?? new Date().toISOString().slice(0, 10)}
-        comparisonLabel={controls?.comparisonLabel ?? labels.common.compareToPriorPeriod}
+        initialComparisonMode={(controls?.comparison?.mode as never) ?? "prev_period"}
+        initialComparisonStart={controls?.comparison?.startDate ?? ""}
+        initialComparisonEnd={controls?.comparison?.endDate ?? ""}
+        initialRangeLabel={controls?.dateRangeLabel ?? "Last 30 days"}
+        initialComparisonLabel={controls?.comparisonLabel ?? "Previous period"}
         exportLabel={labels.common.exportSummary}
       />
     </div>

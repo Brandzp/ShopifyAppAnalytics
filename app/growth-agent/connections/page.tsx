@@ -1,14 +1,18 @@
-﻿import { AppShell } from "@/components/layout/app-shell";
-import { SectionHeading } from "@/components/ui/section-heading";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { getAppChromeData } from "@/lib/services/analytics-service";
-import { getGrowthPlatformConnections } from "@/lib/services/growth-agent-service";
+import { AppShell } from "@/components/layout/app-shell";
 import { GrowthAgentNav } from "@/components/growth-agent/agent-nav";
 import { GrowthConnectionsPanel } from "@/components/growth-agent/connections-panel";
 import { GrowthAgentManualControls } from "@/components/growth-agent/manual-controls";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { SectionHeading } from "@/components/ui/section-heading";
+import { getAppChromeData } from "@/lib/services/analytics-service";
+import { getGrowthAgentStoreContext, getGrowthPlatformConnections } from "@/lib/services/growth-agent-service";
 
 export default async function GrowthAgentConnectionsPage() {
-  const [chrome, connections] = await Promise.all([getAppChromeData(), getGrowthPlatformConnections()]);
+  const { store } = await getGrowthAgentStoreContext();
+  const [chrome, connections] = await Promise.all([
+    getAppChromeData(store.id),
+    getGrowthPlatformConnections(store.id)
+  ]);
 
   return (
     <AppShell store={chrome.store} controls={chrome.controls}>
@@ -16,12 +20,12 @@ export default async function GrowthAgentConnectionsPage() {
         <SectionHeading
           eyebrow="Growth Agent"
           title="Connections"
-          description="Connector health for Shopify, traffic sources, social/ad platforms, and the product crawler used for Zendrop-style sourcing ideas."
+          description="Connector health for Shopify, traffic sources, social and ad platforms, and the product crawler used for sourcing ideas."
         />
         <GrowthAgentNav />
       </section>
 
-      <GrowthAgentManualControls />
+      <GrowthAgentManualControls storeId={store.id} />
       <GrowthConnectionsPanel connections={connections} />
 
       <Card>
@@ -39,4 +43,3 @@ export default async function GrowthAgentConnectionsPage() {
     </AppShell>
   );
 }
-

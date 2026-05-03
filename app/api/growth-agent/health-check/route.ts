@@ -5,6 +5,9 @@ import { runGrowthAgentManualHealthCheck } from "@/lib/services/growth-agent-syn
 export async function POST(request: Request) {
   try {
     const body = await request.json().catch(() => ({}));
+    if (typeof body.storeId !== "string" || !body.storeId) {
+      throw new AppError("Store id is required for Growth Agent health checks.", 400);
+    }
     const result = await runGrowthAgentManualHealthCheck(body.storeId);
     return NextResponse.json(result);
   } catch (error) {

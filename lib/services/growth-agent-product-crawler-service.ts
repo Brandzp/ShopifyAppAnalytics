@@ -277,7 +277,7 @@ export async function getGrowthAgentProductRecommendations(storeId?: string): Pr
   if (!sourceUrls.length) return [];
 
   const repository = await getAnalyticsRepository();
-  const storeProducts = await repository.getProducts();
+  const storeProducts = await repository.getProducts(store.id);
   const storeTitleTokens = new Set(storeProducts.flatMap((product) => titleTokens(product.title)));
   const averageStorePrice = storeProducts.length
     ? storeProducts.reduce((sum, product) => sum + Number(product.price ?? 0), 0) / storeProducts.length

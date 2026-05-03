@@ -2,14 +2,15 @@ import { AppShell } from "@/components/layout/app-shell";
 import { SectionHeading } from "@/components/ui/section-heading";
 import { StatCard } from "@/components/shared/stat-card";
 import { getAppChromeData } from "@/lib/services/analytics-service";
-import { getGrowthActions } from "@/lib/services/growth-agent-service";
+import { getGrowthActions, getGrowthAgentStoreContext } from "@/lib/services/growth-agent-service";
 import { GrowthAgentNav } from "@/components/growth-agent/agent-nav";
 import { GrowthActionCenter } from "@/components/growth-agent/action-center";
 import { GrowthAgentManualControls } from "@/components/growth-agent/manual-controls";
 import { formatNumber } from "@/lib/utils";
 
 export default async function GrowthAgentActionCenterPage() {
-  const [chrome, actions] = await Promise.all([getAppChromeData(), getGrowthActions()]);
+  const { store } = await getGrowthAgentStoreContext();
+  const [chrome, actions] = await Promise.all([getAppChromeData(store.id), getGrowthActions(store.id)]);
   const pending = actions.filter((action) => action.status === "pending_approval");
   const recommended = actions.filter((action) => action.status === "recommended");
   const executed = actions.filter((action) => action.status === "executed");
@@ -26,7 +27,7 @@ export default async function GrowthAgentActionCenterPage() {
         <GrowthAgentNav />
       </section>
 
-      <GrowthAgentManualControls />
+      <GrowthAgentManualControls storeId={store.id} />
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Recommended" value={formatNumber(recommended.length)} />
@@ -35,7 +36,7 @@ export default async function GrowthAgentActionCenterPage() {
         <StatCard label="Rejected" value={formatNumber(rejected.length)} />
       </section>
 
-      <GrowthActionCenter actions={actions} />
+      <GrowthActionCenter actions={actions} storeId={store.id} />
     </AppShell>
   );
 }

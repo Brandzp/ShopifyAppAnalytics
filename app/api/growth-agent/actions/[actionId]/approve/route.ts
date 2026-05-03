@@ -5,8 +5,11 @@ import { approveGrowthAction } from "@/lib/services/growth-agent-action-engine";
 export async function POST(request: Request, context: { params: Promise<{ actionId: string }> }) {
   try {
     const body = await request.json().catch(() => ({}));
+    if (typeof body.storeId !== "string" || !body.storeId) {
+      throw new AppError("Store id is required to approve a Growth Agent action.", 400);
+    }
     const { actionId } = await context.params;
-    const result = await approveGrowthAction(actionId, body.approvedBy ?? "merchant");
+    const result = await approveGrowthAction(actionId, body.approvedBy ?? "merchant", body.storeId);
     return NextResponse.json(result);
   } catch (error) {
     const statusCode = error instanceof AppError ? error.statusCode : 500;

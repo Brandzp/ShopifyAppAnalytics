@@ -5,9 +5,9 @@
   AmazonSupplierProductMapping,
   GrowthProductRecommendation
 } from "@/lib/domain/growth-agent-types";
-import { getDb } from "@/lib/server/db";
+import { getDb, isDatabaseConnectionError } from "@/lib/server/db";
 import { AppError } from "@/lib/server/errors";
-import { getGrowthFindings, saveGrowthPlatformConnection } from "@/lib/services/growth-agent-service";
+import { getGrowthAgentStoreContext, getGrowthFindings, saveGrowthPlatformConnection } from "@/lib/services/growth-agent-service";
 
 interface AmazonSupplierConfig {
   mappings?: AmazonSupplierProductMapping[];
@@ -53,30 +53,50 @@ function mapRecentOrders(records: any[]): AmazonSupplierOrderCandidate[] {
   }));
 }
 
-async function getStoreContext(storeId?: string) {
-  const db = getDb();
-  if (!db) throw new AppError("Database client is not available.", 500);
-
-  const store = storeId
-    ? await db.store.findUnique({ where: { id: storeId } })
-    : await db.store.findFirst({ where: { connected: true, connection: { isNot: null } }, orderBy: { updatedAt: "desc" } });
-
-  if (!store) throw new AppError("Store was not found.", 404);
-  return { db, store };
+async function getStoreContext(storeId?: string, options?: { allowFallback?: boolean }) {
+  const context = await getGrowthAgentStoreContext(storeId);
+  if (!context.db && !options?.allowFallback) {
+    throw new AppError("Database client is not available.", 500);
+  }
+  return context;
 }
 
-async function getConfigForStore(storeId?: string) {
-  const { db, store } = await getStoreContext(storeId);
-  const connection = await db.platformConnection.findUnique({
-    where: { storeId_platform: { storeId: store.id, platform: "amazon" } }
-  });
+async function getConfigForStore(storeId?: string, options?: { allowFallback?: boolean }) {
+  const { db, store } = await getStoreContext(storeId, options);
+  if (!db?.platformConnection) {
+    if (options?.allowFallback) {
+      return {
+        db: null,
+        store,
+        connection: null,
+        config: readConfig(null)
+      };
+    }
+    throw new AppError("Database client is not available.", 500);
+  }
 
-  return {
-    db,
-    store,
-    connection,
-    config: readConfig(connection?.config)
-  };
+  try {
+    const connection = await db.platformConnection.findUnique({
+      where: { storeId_platform: { storeId: store.id, platform: "amazon" } }
+    });
+
+    return {
+      db,
+      store,
+      connection,
+      config: readConfig(connection?.config)
+    };
+  } catch (error) {
+    if (options?.allowFallback && isDatabaseConnectionError(error)) {
+      return {
+        db: null,
+        store,
+        connection: null,
+        config: readConfig(null)
+      };
+    }
+    throw error;
+  }
 }
 
 async function persistAmazonConfig(storeId: string, config: AmazonSupplierConfig) {
@@ -118,22 +138,25 @@ async function persistAmazonConfig(storeId: string, config: AmazonSupplierConfig
 }
 
 export async function getAmazonSupplierOrdersWorkspace(storeId?: string): Promise<AmazonSupplierOrdersWorkspace> {
-  const { db, store, config } = await getConfigForStore(storeId);
-  const [findings, orders] = await Promise.all([
-    getGrowthFindings(store.id),
-    db.order.findMany({
-      where: { storeId: store.id },
-      orderBy: { createdAt: "desc" },
-      take: 12,
-      include: {
-        customer: true,
-        lineItems: {
-          include: { product: true },
-          orderBy: { createdAt: "asc" }
+  const { db, store, config } = await getConfigForStore(storeId, { allowFallback: true });
+  const findings = await getGrowthFindings(store.id);
+  const orders = db?.order
+    ? await db.order.findMany({
+        where: { storeId: store.id },
+        orderBy: { createdAt: "desc" },
+        take: 12,
+        include: {
+          customer: true,
+          lineItems: {
+            include: { product: true },
+            orderBy: { createdAt: "asc" }
+          }
         }
-      }
-    })
-  ]);
+      }).catch((error: unknown) => {
+        if (isDatabaseConnectionError(error)) return [];
+        throw error;
+      })
+    : [];
 
   return {
     recommendations: extractRecommendations(findings),

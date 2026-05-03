@@ -6,19 +6,25 @@ import { getAppChromeData } from "@/lib/services/analytics-service";
 import { getAffiliateConversions } from "@/lib/services/affiliate-portal-service";
 import { DataTable } from "@/components/shared/data-table";
 import { formatCurrency } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 
 export default async function ConversionsPage() {
   const [chrome, conversions] = await Promise.all([getAppChromeData(), getAffiliateConversions()]);
 
   return (
-    <AppShell store={chrome.store} controls={chrome.controls}>
+    <AppShell store={chrome.store} controls={chrome.controls} localeOverride="en">
       <section className="space-y-4">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <SectionHeading eyebrow="Affiliate Portal" title="????? ??????? ?????????" description="?? ??????? ?????? ?????, ????? ?? ????? ??????, ???? ???? ????? ???? ?? ??????." />
+          <SectionHeading
+            eyebrow="Affiliate Portal"
+            title="Referral orders and attributions"
+            description="Track which affiliate orders were matched, how they were tracked, and what commission they generated."
+          />
           <div className="flex flex-wrap gap-3">
-            <AffiliateAttributionSyncButton />
-            <Button variant="secondary">Export</Button>
+            <AffiliateAttributionSyncButton storeId={chrome.store.id} />
+            <a href="/api/affiliate-portal/conversions/export" className={buttonVariants({ variant: "secondary" })}>
+              Export CSV
+            </a>
           </div>
         </div>
         <AffiliatePortalNav />
@@ -26,16 +32,16 @@ export default async function ConversionsPage() {
 
       <DataTable
         title="Referral orders"
-        description="????? ????? ?? ???? ????? ??????? Shopify ??? ????? ????????? ????? ?????."
+        description="Orders attributed to affiliates from Shopify discount usage and referral matching."
         columns={[
-          { key: "orderNumber", label: "?????" },
-          { key: "date", label: "?????", render: (row) => new Date(row.date).toLocaleString("he-IL") },
-          { key: "affiliateName", label: "????????" },
-          { key: "total", label: "????", render: (row) => formatCurrency(row.total, chrome.store.currency) },
-          { key: "commission", label: "????", render: (row) => formatCurrency(row.commission, chrome.store.currency) },
-          { key: "status", label: "?????" },
-          { key: "trackingBy", label: "????" },
-          { key: "contentTitle", label: "????" }
+          { key: "orderNumber", label: "Order" },
+          { key: "date", label: "Date", render: (row) => new Date(row.date).toLocaleString("en-US") },
+          { key: "affiliateName", label: "Affiliate" },
+          { key: "total", label: "Total", render: (row) => formatCurrency(row.total, chrome.store.currency) },
+          { key: "commission", label: "Commission", render: (row) => formatCurrency(row.commission, chrome.store.currency) },
+          { key: "status", label: "Status" },
+          { key: "trackingBy", label: "Tracking" },
+          { key: "contentTitle", label: "Content" }
         ]}
         rows={conversions}
       />

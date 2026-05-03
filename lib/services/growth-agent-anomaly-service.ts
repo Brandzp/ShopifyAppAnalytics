@@ -1,6 +1,5 @@
 import type { GrowthFinding, GrowthMonitoringCard, GrowthTrafficChannel } from "@/lib/domain/growth-agent-types";
 import { getGrowthAgentSettings, getGrowthMetricSnapshots } from "@/lib/services/growth-agent-service";
-import { fallbackFindings, fallbackTrafficChannels } from "@/lib/services/growth-agent-defaults";
 
 function percentDelta(current: number, baseline: number) {
   if (!baseline) return 0;
@@ -31,7 +30,7 @@ function readLatestSnapshotMetrics(snapshots: Awaited<ReturnType<typeof getGrowt
     yesterday: metrics.yesterday ?? {},
     last7Days: metrics.last7Days ?? {},
     sameWeekdayLastWeek: metrics.sameWeekdayLastWeek ?? {},
-    trafficByChannel: (metrics.current?.trafficByChannel ?? fallbackTrafficChannels) as GrowthTrafficChannel[],
+    trafficByChannel: (metrics.current?.trafficByChannel ?? []) as GrowthTrafficChannel[],
     topProducts: metrics.current?.topProducts ?? [],
     inventoryHighlights: metrics.current?.inventoryHighlights ?? []
   };
@@ -47,9 +46,9 @@ export async function runGrowthAgentAnomalyDetection(storeId?: string) {
   if (!snapshotData) {
     return {
       monitoringCards: [] as GrowthMonitoringCard[],
-      findings: fallbackFindings,
-      trafficChannels: fallbackTrafficChannels,
-      confidence: 0.62
+      findings: [] as GrowthFinding[],
+      trafficChannels: [] as GrowthTrafficChannel[],
+      confidence: 0
     };
   }
 

@@ -57,7 +57,23 @@ const dictionaries = {
       estimatedProfit: "Estimated Profit",
       alertsPreviewTitle: "Alerts requiring attention",
       changeLabel: "vs prior period",
-      priorLabel: "Prior"
+      priorLabel: "Prior",
+      tips: {
+        page: "All numbers below compare your selected reporting window against the previous window of equal length.",
+        kpis: "Headline KPIs for your store. The pill shows percentage change vs. the prior period — green is up, red is down.",
+        comparison: "Side-by-side metric values for the current vs. prior period so you can sanity-check whether growth is improving margins, not just revenue.",
+        revenueChart: "Daily revenue (gross sales) overlaid with estimated profit (revenue minus discounts, refunds, and configured product cost).",
+        retentionChart: "Daily share of orders that came from returning customers. Higher = healthier repeat behavior.",
+        insights: "AI-style summaries that translate raw numbers into a sentence a founder can act on.",
+        actions: "Operator to-dos grouped by theme — pricing, retention, supply, content. Treat as a working punch list.",
+        topProducts: "Top 5 products this period by revenue. 'Estimated Profit' uses your configured cost model; replace it with real COGS in Settings for accurate margins.",
+        alerts: "The most recent rule-triggered alerts. Click through to the full Alerts page for severity breakdown and suggested actions."
+      },
+      colTips: {
+        units: "Total units sold for this product across all orders in the selected window.",
+        revenue: "Gross revenue from this product before refunds and platform fees.",
+        profit: "Revenue minus discounts, refunds, and configured product cost. Approximation until real COGS is connected."
+      }
     },
     profit: {
       eyebrow: "Profit Analytics",
@@ -101,7 +117,18 @@ const dictionaries = {
       topProductCopy: "revenue and",
       topProductCopyEnd: "estimated profit.",
       watchlistCopy: "estimated profit with",
-      watchlistCopyEnd: "discount drag."
+      watchlistCopyEnd: "discount drag.",
+      tips: {
+        page: "Profit = Revenue − Discounts − Refunds − Estimated COGS. Configure the cost model in Settings if you want exact margins.",
+        salesByProduct: "Revenue contribution per top SKU. Useful for spotting which products are doing the heavy lifting.",
+        profitByCollection: "Estimated profit grouped by collection. Lets you see which catalog buckets are carrying margin.",
+        productTable: "Per-product breakdown of units, revenue, discount drag, refund drag, and estimated profit.",
+        watchlist: "Products with the lowest estimated profit or highest discount drag. Likely candidates for repricing, bundling, or removing promo codes.",
+        bundleImpact: "Will display contribution from bundle/kit SKUs once Shopify line-item metadata is connected.",
+        refundImpact: "Will display refund reasons and net recovered value once return data is wired in.",
+        discountCol: "Total markdown applied to this product across orders in the window — high values eat into margin.",
+        refundsCol: "Refunded amount tied to this product. Spikes here usually point to fit, quality, or fulfilment problems."
+      }
     },
     retention: {
       eyebrow: "Retention Analytics",
@@ -129,7 +156,21 @@ const dictionaries = {
       avgTimeTodo:
         "TODO: Use Shopify order timelines plus AI summary generation to surface lifecycle opportunities and second-order drop-off risk automatically.",
       newLabel: "New",
-      returningLabel: "Returning"
+      returningLabel: "Returning",
+      tips: {
+        page: "Retention is what compounds — second orders, repeat rate, and time-to-second-order tell you whether the store has real lifetime value.",
+        newCustomers: "Customers who placed their very first order in this window.",
+        returningCustomers: "Customers in this window who already had at least one prior order.",
+        repeatRate: "Share of customers who have placed more than one lifetime order. Higher = stickier brand.",
+        secondOrderRate: "Of customers whose first order falls in the window, what % came back for a second one.",
+        avgDaysToSecond: "Average days between a customer's first and second order. Shorter = faster lifecycle.",
+        repeatRateChart: "Daily returning-customer share. Watch for downward trends — they precede LTV problems.",
+        newVsReturning: "Mix of new vs. returning customers in the current window. A healthy DTC mix is usually 30–50% returning.",
+        topFirstOrder: "Products customers buy first — your best acquisition SKUs.",
+        topSecondOrder: "Products customers come back for — your best retention SKUs.",
+        cohort: "Reserved for true cohort retention curves once order history is fully connected.",
+        avgTime: "Reserved for distribution analysis (median, p90) of first → second order lag."
+      }
     },
     weeklySummary: {
       eyebrow: "Founder Weekly Summary",
@@ -142,24 +183,28 @@ const dictionaries = {
       generatedAt: "Generated",
       generationTitle: "Weekly summary generation",
       generationTodo:
-        "TODO: Replace mock summaries with AI summary generation that uses real reporting deltas, profit context, and retention insights.",
+        "TODO: Replace the current summary scaffolding with AI summary generation that uses real reporting deltas, profit context, and retention insights.",
       deliveryTitle: "Delivery orchestration",
       deliveryTodo:
         "TODO: Add email, WhatsApp, and Slack notification adapters for scheduled founder digests and alerts.",
       dependenciesTitle: "Store data dependencies",
       dependenciesTodo:
-        "TODO: Complete Shopify OAuth and Shopify Admin API ingestion so summaries can operate on fresh store-level data instead of mocks."
+        "TODO: Complete Shopify OAuth and Shopify Admin API ingestion so summaries can operate on fresh store-level data."
     },
     alertsPage: {
       eyebrow: "Alerts Center",
       title: "Useful signals, not notification noise",
       description:
-        "Alerts are mock-driven today, but the architecture assumes a future rules engine that evaluates discount spikes, retention drops, refund pressure, and outlier growth.",
+        "Alerts currently come from deterministic rules, and the architecture is ready for a richer engine that evaluates discount spikes, retention drops, refund pressure, and outlier growth.",
       suggestedAction: "Suggested action",
       severity: {
         low: "Low",
         medium: "Medium",
         high: "High"
+      },
+      tips: {
+        page: "Each alert is a rule-triggered signal that something material moved. Severity reflects how urgently a founder should look at it.",
+        severity: "High = act today. Medium = check this week. Low = informational, review during weekly planning."
       }
     },
     settings: {
@@ -194,7 +239,8 @@ const dictionaries = {
         shopDomain: "Shop domain",
         shopDomainPlaceholder: "example.myshopify.com",
         token: "Admin API access token (optional)",
-        tokenHelp: "Leave the token empty to let the app request a temporary Shopify Admin token using SHOPIFY_CLIENTID and SHOPIFY_CLIENT_SECRET from .env.",
+        tokenHelp:
+          "Leave the token empty to use SHOPIFY_CLIENTID and SHOPIFY_CLIENT_SECRET from .env. If you paste a token here, it overrides .env auth and must be a valid Shopify Admin API token.",
         tokenPlaceholder: "Leave blank to use client credentials",
         testConnection: "Test connection",
         testing: "Testing...",
@@ -339,7 +385,23 @@ const dictionaries = {
       estimatedProfit: "רווח משוער",
       alertsPreviewTitle: "התראות שדורשות תשומת לב",
       changeLabel: "לעומת התקופה הקודמת",
-      priorLabel: "קודם"
+      priorLabel: "קודם",
+      tips: {
+        page: "כל המספרים בעמוד הזה משווים את חלון הדיווח שבחרת לחלון זהה לפניו.",
+        kpis: "מדדי המפתח של החנות. הצ'יפ מציג שינוי באחוזים מול התקופה הקודמת — ירוק עלייה, אדום ירידה.",
+        comparison: "ערכי מדד ליד התקופה הקודמת, כדי לוודא שהצמיחה אכן משפרת רווחיות ולא רק הכנסות.",
+        revenueChart: "הכנסות יומיות (ברוטו) על גבי רווח משוער (הכנסות בניכוי הנחות, החזרים ועלות מוצר).",
+        retentionChart: "אחוז ההזמנות היומיות שמגיעות מלקוחות חוזרים. גבוה = ריטנשן בריא.",
+        insights: "תקצירים בסגנון AI שמתרגמים מספרים לאמירה אחת שאפשר לפעול עליה.",
+        actions: "משימות תפעוליות לפי נושא — תמחור, ריטנשן, מלאי, תוכן.",
+        topProducts: "5 המוצרים המובילים בתקופה לפי הכנסות. שדה 'רווח משוער' משתמש במודל העלות שהגדרת בהגדרות.",
+        alerts: "ההתראות העדכניות ביותר. לחיצה תוביל למסך ההתראות המלא."
+      },
+      colTips: {
+        units: "סה\"כ יחידות שנמכרו מהמוצר בתקופה הנבחרת.",
+        revenue: "הכנסה ברוטו מהמוצר לפני החזרים ועמלות.",
+        profit: "הכנסה פחות הנחות, החזרים ועלות מוצר משוערת. קירוב עד שיחובר נתון עלות אמיתי."
+      }
     },
     profit: {
       eyebrow: "אנליטיקת רווחיות",
@@ -383,7 +445,18 @@ const dictionaries = {
       topProductCopy: "הכניס",
       topProductCopyEnd: "ורווח משוער.",
       watchlistCopy: "רווח משוער עם",
-      watchlistCopyEnd: "שחיקת הנחות."
+      watchlistCopyEnd: "שחיקת הנחות.",
+      tips: {
+        page: "רווח = הכנסות − הנחות − החזרים − עלות מוצר משוערת. אפשר לכוון את מודל העלות במסך הגדרות.",
+        salesByProduct: "תרומת ההכנסות לפי SKU. עוזר לזהות אילו מוצרים נושאים את החנות.",
+        profitByCollection: "רווח משוער בקיבוץ לפי קטגוריה. רואים איזו קטגוריה מחזיקה את המרווח.",
+        productTable: "פירוט ברמת מוצר: יחידות, הכנסה, פגיעת הנחה, פגיעת החזר ורווח משוער.",
+        watchlist: "מוצרים עם הרווח הנמוך ביותר או פגיעת הנחה גבוהה. מועמדים לתמחור מחדש או הסרת הנחות.",
+        bundleImpact: "יציג תרומת באנדלים כשתחובר מטא־דאטה של line items מ־Shopify.",
+        refundImpact: "יציג סיבות להחזר וערך נשמר נטו כשנתוני ההחזרות יחוברו.",
+        discountCol: "סכום ההנחה שניתנה למוצר בחלון הזמן — ערכים גבוהים שוחקים את המרווח.",
+        refundsCol: "סכום ההחזר שיוחס למוצר. עלייה כאן בדרך כלל מצביעה על בעיית התאמה, איכות או שילוח."
+      }
     },
     retention: {
       eyebrow: "אנליטיקת ריטנשן",
@@ -411,7 +484,21 @@ const dictionaries = {
       avgTimeTodo:
         "TODO: להשתמש בציר הזמן של הזמנות Shopify ובשכבת הסיכום כדי לזהות אוטומטית הזדמנויות להזמנה שנייה וסיכון לירידה.",
       newLabel: "חדשים",
-      returningLabel: "חוזרים"
+      returningLabel: "חוזרים",
+      tips: {
+        page: "ריטנשן זה מה שמצטבר — הזמנה שנייה, רכישה חוזרת וזמן עד הזמנה שנייה מספרים אם לחנות יש LTV אמיתי.",
+        newCustomers: "לקוחות שביצעו את ההזמנה הראשונה שלהם בחלון הזמן הזה.",
+        returningCustomers: "לקוחות שכבר הייתה להם הזמנה אחת קודמת לפחות.",
+        repeatRate: "אחוז הלקוחות עם יותר מהזמנה אחת אי פעם. גבוה = מותג דביק.",
+        secondOrderRate: "מתוך מי שהזמין לראשונה בחלון, כמה חזר להזמנה שנייה.",
+        avgDaysToSecond: "ממוצע ימים בין הזמנה ראשונה לשנייה. קצר יותר = מחזור חיים מהיר יותר.",
+        repeatRateChart: "אחוז יומי של לקוחות חוזרים. ירידות כאן בדרך כלל מקדימות בעיות LTV.",
+        newVsReturning: "התמהיל בין לקוחות חדשים לחוזרים בחלון הנוכחי. מותג DTC בריא בדרך כלל מציג 30%-50% חוזרים.",
+        topFirstOrder: "המוצרים שלקוחות קונים ראשונים — נקודות הכניסה הטובות ביותר.",
+        topSecondOrder: "המוצרים שלקוחות חוזרים אליהם — מנועי הריטנשן.",
+        cohort: "אזור שמור לעקומות ריטנשן אמיתיות לפי קוהורט כשההיסטוריה תחובר במלואה.",
+        avgTime: "אזור שמור להתפלגות (חציון, p90) של פער הזמן בין הזמנה ראשונה לשנייה."
+      }
     },
     weeklySummary: {
       eyebrow: "סיכום שבועי למייסד",
@@ -442,6 +529,10 @@ const dictionaries = {
         low: "נמוכה",
         medium: "בינונית",
         high: "גבוהה"
+      },
+      tips: {
+        page: "כל התראה היא איתות שמשהו מהותי זז. החומרה משקפת עד כמה דחוף לטפל.",
+        severity: "גבוהה = לטפל היום. בינונית = לבדוק השבוע. נמוכה = לידיעה, לסקירה בתכנון השבועי."
       }
     },
     settings: {

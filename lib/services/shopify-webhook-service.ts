@@ -1,23 +1,13 @@
 import crypto from "node:crypto";
 import { getDb } from "@/lib/server/db";
 import { AppError } from "@/lib/server/errors";
-
-const safeString = (value: unknown) => (typeof value === "string" ? value : null);
-
-const extractQueryValue = (urlLike: string | null | undefined, key: string) => {
-  if (!urlLike) return null;
-  try {
-    const normalized = urlLike.startsWith("http") ? urlLike : `https://placeholder.local${urlLike.startsWith("/") ? urlLike : `/${urlLike}`}`;
-    return new URL(normalized).searchParams.get(key);
-  } catch {
-    return null;
-  }
-};
-
-const extractNoteAttribute = (payload: any, key: string) => {
-  const match = Array.isArray(payload?.note_attributes) ? payload.note_attributes.find((item: any) => item?.name === key || item?.key === key) : null;
-  return match?.value ?? null;
-};
+import {
+  buildAffiliateTrackingMethod,
+  extractTrackingNoteAttribute,
+  extractTrackingQueryValue,
+  resolveAffiliateSourcePlatform,
+  safeTrackingString
+} from "@/lib/services/affiliate-attribution-source";
 
 export function verifyShopifyWebhookSignature(rawBody: string, signature: string | null) {
   const secret = process.env.SHOPIFY_WEBHOOK_SECRET;
@@ -58,15 +48,27 @@ export async function processShopifyOrderWebhook(shopDomain: string, payload: an
     storeId: store.id,
     platform: "shopify",
     topic,
-    externalId: safeString(payload?.id) ?? String(payload?.id ?? ""),
+    externalId: safeTrackingString(payload?.id) ?? String(payload?.id ?? ""),
     payload,
     status: "received"
   });
 
   try {
-    const clickId = extractNoteAttribute(payload, "agent_click_id") ?? extractQueryValue(payload?.landing_site, "agent_click_id") ?? extractQueryValue(payload?.landing_site, "click_id") ?? extractQueryValue(payload?.landing_site, "ref") ?? extractQueryValue(payload?.landing_site, "bg_ref");
-    const refCode = extractNoteAttribute(payload, "ref") ?? extractNoteAttribute(payload, "bg_ref") ?? extractQueryValue(payload?.landing_site, "ref") ?? extractQueryValue(payload?.landing_site, "bg_ref") ?? extractQueryValue(payload?.referring_site, "ref") ?? extractQueryValue(payload?.referring_site, "bg_ref");
-    const couponCode = payload?.discount_codes?.[0]?.code ?? extractQueryValue(payload?.landing_site, "coupon") ?? extractNoteAttribute(payload, "coupon");
+    const landingSite = safeTrackingString(payload?.landing_site);
+    const referringSite = safeTrackingString(payload?.referring_site);
+    const clickId = extractTrackingNoteAttribute(payload, "agent_click_id")
+      ?? extractTrackingQueryValue(landingSite, "agent_click_id")
+      ?? extractTrackingQueryValue(landingSite, "click_id");
+    const bgRefCode = extractTrackingNoteAttribute(payload, "bg_ref")
+      ?? extractTrackingQueryValue(landingSite, "bg_ref")
+      ?? extractTrackingQueryValue(referringSite, "bg_ref");
+    const refCode = extractTrackingNoteAttribute(payload, "ref")
+      ?? bgRefCode
+      ?? extractTrackingQueryValue(landingSite, "ref")
+      ?? extractTrackingQueryValue(referringSite, "ref");
+    const couponCode = payload?.discount_codes?.[0]?.code
+      ?? extractTrackingQueryValue(landingSite, "coupon")
+      ?? extractTrackingNoteAttribute(payload, "coupon");
 
     const session = clickId && db.attributionSession ? await db.attributionSession.findUnique({ where: { clickId } }).catch(() => null) : null;
     let affiliate = session?.affiliateMemberId && db.affiliateMember ? await db.affiliateMember.findUnique({ where: { id: session.affiliateMemberId } }).catch(() => null) : null;
@@ -80,12 +82,26 @@ export async function processShopifyOrderWebhook(shopDomain: string, payload: an
       const internalOrder = db.order ? await db.order.findUnique({ where: { storeId_shopifyOrderId: { storeId: store.id, shopifyOrderId: String(payload?.id) } } }).catch(() => null) : null;
       const salesAmount = Number(payload?.current_total_price ?? payload?.total_price ?? 0);
       const commissionAmount = salesAmount * 0.1;
-      const trackingMethod = clickId && couponCode ? "link_and_coupon" : clickId ? "link_only" : couponCode ? "coupon" : "unknown";
+      const sourcePlatform = resolveAffiliateSourcePlatform({
+        sourcePlatform: session?.sourcePlatform ?? null,
+        sourceUrl: session?.sourceUrl ?? null,
+        landingSite,
+        referringSite,
+        bgRefCode
+      });
+      const hasLinkSignal = Boolean(clickId || refCode);
+      const trackingMethod = buildAffiliateTrackingMethod({
+        hasClickSignal: hasLinkSignal,
+        hasCouponSignal: Boolean(couponCode),
+        sourcePlatform
+      });
+      const sourceType = hasLinkSignal ? "link" : "coupon";
+      const sourceUrl = landingSite ?? referringSite;
 
       await db.affiliateAttribution.upsert({
         where: { affiliateMemberId_orderId: { affiliateMemberId: affiliate.id, orderId: internalOrder?.id ?? null } },
-        update: { attributionSessionId: session?.id ?? null, sourceType: clickId ? "link" : "coupon", trackingMethod, sourceUrl: safeString(payload?.landing_site) ?? safeString(payload?.referring_site), contentTitle: null, salesAmount, commissionAmount, ordersCount: 1, occurredAt: new Date(payload?.created_at ?? Date.now()) },
-        create: { storeId: store.id, affiliateMemberId: affiliate.id, orderId: internalOrder?.id ?? null, attributionSessionId: session?.id ?? null, sourceType: clickId ? "link" : "coupon", trackingMethod, sourceUrl: safeString(payload?.landing_site) ?? safeString(payload?.referring_site), contentTitle: null, salesAmount, commissionAmount, ordersCount: 1, occurredAt: new Date(payload?.created_at ?? Date.now()) }
+        update: { attributionSessionId: session?.id ?? null, sourceType, trackingMethod, sourceUrl, contentTitle: null, salesAmount, commissionAmount, ordersCount: 1, occurredAt: new Date(payload?.created_at ?? Date.now()) },
+        create: { storeId: store.id, affiliateMemberId: affiliate.id, orderId: internalOrder?.id ?? null, attributionSessionId: session?.id ?? null, sourceType, trackingMethod, sourceUrl, contentTitle: null, salesAmount, commissionAmount, ordersCount: 1, occurredAt: new Date(payload?.created_at ?? Date.now()) }
       });
 
       if (session && db.attributionSession) {

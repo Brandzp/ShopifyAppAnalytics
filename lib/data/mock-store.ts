@@ -9,13 +9,18 @@
   Summary
 } from "@/lib/domain/types";
 
+const fallbackStoreName = process.env.SHOPIFY_STORE_NAME?.trim() || "Local Demo Workspace";
+const fallbackStoreDomain = process.env.SHOPIFY_STORE_DOMAIN?.trim() || "demo.local";
+const fallbackStoreCurrency = process.env.SHOPIFY_STORE_CURRENCY?.trim() || "USD";
+const fallbackStoreTimezone = process.env.SHOPIFY_STORE_TIMEZONE?.trim() || "UTC";
+
 export const store: Store = {
-  id: "store-1",
-  name: "Northstar Goods",
-  domain: "northstargoods.myshopify.com",
-  currency: "USD",
-  connected: true,
-  timezone: "America/New_York",
+  id: "local-demo-store",
+  name: fallbackStoreName,
+  domain: fallbackStoreDomain,
+  currency: fallbackStoreCurrency,
+  connected: false,
+  timezone: fallbackStoreTimezone,
   dateRangePreset: "30d",
   estimatedCostMode: "margin_profile"
 };

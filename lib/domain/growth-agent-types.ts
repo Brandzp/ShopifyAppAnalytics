@@ -237,6 +237,21 @@ export interface AmazonSupplierOrdersWorkspace {
   recentOrders: AmazonSupplierOrderCandidate[];
 }
 
+export interface GrowthDataProvenance {
+  storeId: string;
+  storeName: string;
+  storeDomain: string;
+  reportingLabel: string;
+  reportingWindow: string;
+  comparisonLabel: string;
+  comparisonWindow: string | null;
+  ordersAnalyzed: number;
+  productsAnalyzed: number;
+  snapshotCount: number;
+  connectionCount: number;
+  lastSnapshotSource: string | null;
+}
+
 export interface GrowthOverviewPayload {
   status: "active" | "paused";
   lastSyncTime?: string | null;
@@ -251,6 +266,7 @@ export interface GrowthOverviewPayload {
   findings: GrowthFinding[];
   actions: GrowthAction[];
   productRecommendations: GrowthProductRecommendation[];
+  provenance: GrowthDataProvenance;
 }
 
 

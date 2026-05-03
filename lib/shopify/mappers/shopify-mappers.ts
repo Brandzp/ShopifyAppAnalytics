@@ -1,4 +1,5 @@
 ﻿import { roundCurrency } from "@/lib/server/numbers";
+import { isAnalyticsDiscountCode } from "@/lib/server/analytics-order-rules";
 
 function stripGid(gid?: string | null) {
   if (!gid) return null;
@@ -12,6 +13,33 @@ function amount(value?: { amount?: string | null } | null) {
 function integer(value: unknown) {
   const numeric = Number(value ?? 0);
   return Number.isFinite(numeric) ? Math.max(0, Math.trunc(numeric)) : 0;
+}
+
+/**
+ * Title-case a label, preserving non-Latin scripts (e.g. Hebrew) untouched.
+ * "INCENSE PARFUMS" → "Incense Parfums"
+ * "amber" → "Amber"
+ * "מארז זוגי" → "מארז זוגי"
+ */
+export function titleCaseLabel(value: string): string {
+  return value
+    .split(/(\s+)/)
+    .map((part) => {
+      if (/^\s+$/.test(part) || part === "") return part;
+      // Only adjust case for tokens that contain ASCII letters
+      if (!/[A-Za-z]/.test(part)) return part;
+      const lower = part.toLowerCase();
+      return lower.charAt(0).toUpperCase() + lower.slice(1);
+    })
+    .join("");
+}
+
+export function normalizeCollection(productType?: string | null, vendor?: string | null): string {
+  const type = (productType ?? "").trim();
+  const ven = (vendor ?? "").trim();
+  const raw = type || ven || "";
+  if (!raw) return "Uncategorized";
+  return titleCaseLabel(raw);
 }
 
 export function mapShopMetadata(shop: any) {
@@ -38,7 +66,7 @@ export function mapProductNode(product: any, storeId: string) {
       vendor: product.vendor ?? null,
       productType: product.productType ?? null,
       status: product.status ?? null,
-      collection: product.productType ?? "Uncategorized",
+      collection: normalizeCollection(product.productType, product.vendor),
       price: primaryPrice,
       estimatedCost: 0,
       createdAt: new Date(product.createdAt),
@@ -80,6 +108,7 @@ export function mapCustomerNode(customer: any, storeId: string) {
 export function mapOrderNode(order: any, storeId: string, defaultCostRatio: number) {
   const refunds = order.refunds ?? [];
   const lineItems = order.lineItems?.edges?.map((edge: any) => edge.node) ?? [];
+  const seenLineItemIds = new Set<string>();
   const refundAmount = refunds.reduce(
     (total: number, refund: any) => total + amount(refund.totalRefundedSet?.shopMoney),
     0
@@ -106,7 +135,16 @@ export function mapOrderNode(order: any, storeId: string, defaultCostRatio: numb
     shopifyCustomerId: stripGid(order.customer?.id)
   };
 
-  const mappedLineItems = lineItems.map((lineItem: any) => {
+  const mappedLineItems = lineItems.flatMap((lineItem: any) => {
+    const shopifyLineItemId = stripGid(lineItem.id);
+    if (shopifyLineItemId && seenLineItemIds.has(shopifyLineItemId)) {
+      return [];
+    }
+
+    if (shopifyLineItemId) {
+      seenLineItemIds.add(shopifyLineItemId);
+    }
+
     const originalUnitPrice = amount(lineItem.originalUnitPriceSet?.shopMoney);
     const discountedUnitPrice = amount(lineItem.discountedUnitPriceSet?.shopMoney);
     const lineSubtotal = amount(lineItem.originalTotalSet?.shopMoney);
@@ -114,9 +152,9 @@ export function mapOrderNode(order: any, storeId: string, defaultCostRatio: numb
     const lineDiscountAmount = roundCurrency(lineSubtotal - discountedTotal);
     const estimatedCostAmount = roundCurrency(discountedTotal * defaultCostRatio);
 
-    return {
+    return [{
       storeId,
-      shopifyLineItemId: stripGid(lineItem.id),
+      shopifyLineItemId,
       shopifyProductId: stripGid(lineItem.product?.id),
       shopifyVariantId: stripGid(lineItem.variant?.id),
       title: lineItem.title,
@@ -126,14 +164,14 @@ export function mapOrderNode(order: any, storeId: string, defaultCostRatio: numb
       lineSubtotal,
       lineDiscountAmount,
       estimatedCostAmount
-    };
+    }];
   });
 
   const mappedDiscounts = Array.from(new Set(
     order.discountApplications?.edges
       ?.map((edge: any) => edge.node)
       ?.map((discount: any) => String(discount.code ?? discount.title ?? "Untitled discount").trim())
-      ?.filter(Boolean) ?? []
+      ?.filter((code: string) => isAnalyticsDiscountCode(code)) ?? []
   )).map((code) => ({ code }));
 
   const mappedRefunds = refunds.map((refund: any) => ({
@@ -154,4 +192,3 @@ export function mapOrderNode(order: any, storeId: string, defaultCostRatio: numb
     refunds: mappedRefunds
   };
 }
-

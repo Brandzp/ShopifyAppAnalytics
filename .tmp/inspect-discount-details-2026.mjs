@@ -1,0 +1,10 @@
+import { getStoredShopifyCredentials } from '../lib/services/shopify-connection-service.ts';
+import { createShopifyClient } from '../lib/shopify/client.ts';
+
+const storeId = 'cmojkfeyn0020nb1wzpx623q9';
+const query = '{ discountCodeBasicInput: __type(name:"DiscountCodeBasicInput") { inputFields { name type { kind name ofType { kind name ofType { kind name } } } } } discountContextInput: __type(name:"DiscountContextInput") { inputFields { name type { kind name ofType { kind name ofType { kind name ofType { kind name } } } } } } discountCustomerSegmentsInput: __type(name:"DiscountCustomerSegmentsInput") { inputFields { name type { kind name ofType { kind name ofType { kind name } } } } } discountItemsInput: __type(name:"DiscountItemsInput") { inputFields { name type { kind name ofType { kind name ofType { kind name ofType { kind name } } } } } } discountProductsInput: __type(name:"DiscountProductsInput") { inputFields { name type { kind name ofType { kind name ofType { kind name ofType { kind name } } } } } } discountCollectionsInput: __type(name:"DiscountCollectionsInput") { inputFields { name type { kind name ofType { kind name ofType { kind name ofType { kind name } } } } } } discountMinimumRequirementInput: __type(name:"DiscountMinimumRequirementInput") { inputFields { name type { kind name ofType { kind name ofType { kind name ofType { kind name } } } } } } discountMinimumSubtotalInput: __type(name:"DiscountMinimumSubtotalInput") { inputFields { name type { kind name ofType { kind name } } } } discountMinimumQuantityInput: __type(name:"DiscountMinimumQuantityInput") { inputFields { name type { kind name ofType { kind name } } } } discountCombinesWithInput: __type(name:"DiscountCombinesWithInput") { inputFields { name type { kind name ofType { kind name } } } } }';
+
+const credentials = await getStoredShopifyCredentials(storeId);
+const client = createShopifyClient({ ...credentials, apiVersion: '2026-01' });
+const result = await client.request(query, {});
+console.log(JSON.stringify(result, null, 2));

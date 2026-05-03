@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import type { ShopifyConnectionSummary, SyncRunSummary } from "@/lib/domain/types";
@@ -94,12 +94,25 @@ export function ShopifyConnectionManager({
     setError(null);
     setMessage(null);
 
+    if ((action === "initial" || action === "incremental") && syncStatus.connection) {
+      setSyncStatus((current) => ({
+        ...current,
+        connection: current.connection
+          ? {
+              ...current.connection,
+              syncStatus: "running",
+              lastSyncError: null
+            }
+          : current.connection
+      }));
+    }
+
     try {
       await handler();
-      await refreshStatus();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : labels.unexpectedError);
     } finally {
+      await refreshStatus().catch(() => null);
       setLoadingAction(null);
     }
   }
@@ -110,6 +123,20 @@ export function ShopifyConnectionManager({
     if (syncStatus.connection.connected) return labels.connected;
     return labels.notConnected;
   }, [labels.connected, labels.notConnected, labels.syncRunning, syncStatus.connection]);
+
+  useEffect(() => {
+    if (syncStatus.connection?.syncStatus !== "running") {
+      return;
+    }
+
+    const interval = window.setInterval(() => {
+      void refreshStatus();
+    }, 5000);
+
+    return () => window.clearInterval(interval);
+  }, [syncStatus.connection?.storeId, syncStatus.connection?.syncStatus]);
+
+  const syncControlsDisabled = !storeId || loadingAction !== null || syncStatus.connection?.syncStatus === "running";
 
   return (
     <div className="space-y-4">
@@ -208,7 +235,7 @@ export function ShopifyConnectionManager({
           <div className="flex flex-wrap gap-3">
             <Button
               variant="secondary"
-              disabled={!storeId || loadingAction !== null}
+              disabled={syncControlsDisabled}
               onClick={() =>
                 runAction("initial", async () => {
                   const response = await fetch("/api/shopify/sync/initial", {
@@ -225,7 +252,7 @@ export function ShopifyConnectionManager({
               {loadingAction === "initial" ? labels.runningInitialSync : labels.runInitialSync}
             </Button>
             <Button
-              disabled={!storeId || loadingAction !== null}
+              disabled={syncControlsDisabled}
               onClick={() =>
                 runAction("incremental", async () => {
                   const response = await fetch("/api/shopify/sync/incremental", {

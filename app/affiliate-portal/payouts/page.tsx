@@ -1,4 +1,4 @@
-﻿import { AppShell } from "@/components/layout/app-shell";
+import { AppShell } from "@/components/layout/app-shell";
 import { SectionHeading } from "@/components/ui/section-heading";
 import { AffiliatePortalNav } from "@/components/affiliate-portal/portal-nav";
 import { getAppChromeData } from "@/lib/services/analytics-service";
@@ -10,19 +10,23 @@ export default async function PayoutsPage() {
   const [chrome, payouts] = await Promise.all([getAppChromeData(), getAffiliatePayouts()]);
 
   return (
-    <AppShell store={chrome.store} controls={chrome.controls}>
+    <AppShell store={chrome.store} controls={chrome.controls} localeOverride="en">
       <section className="space-y-4">
-        <SectionHeading eyebrow="Affiliate Portal" title="תשלומים ויתרות מאושרות" description="מי זכאי לתשלום, כמה הזמנות מאושרות יש לכל אפיליאייט ואיפה חסר payment method." />
+        <SectionHeading
+          eyebrow="Affiliate Portal"
+          title="Payouts and approved balances"
+          description="See who is ready for payment, how many approved orders each affiliate has, and where payment setup is still missing."
+        />
         <AffiliatePortalNav />
       </section>
 
       <DataTable
         title="Approved balance"
         columns={[
-          { key: "affiliateName", label: "אפליאייט" },
-          { key: "paymentMethod", label: "אמצעי תשלום" },
-          { key: "approvedOrders", label: "הזמנות מאושרות", render: (row) => formatNumber(row.approvedOrders) },
-          { key: "approvedBalance", label: "יתרה מאושרת", render: (row) => formatCurrency(row.approvedBalance, chrome.store.currency) }
+          { key: "affiliateName", label: "Affiliate" },
+          { key: "paymentMethod", label: "Payment method" },
+          { key: "approvedOrders", label: "Approved orders", render: (row) => formatNumber(row.approvedOrders) },
+          { key: "approvedBalance", label: "Approved balance", render: (row) => formatCurrency(row.approvedBalance, chrome.store.currency) }
         ]}
         rows={payouts}
       />

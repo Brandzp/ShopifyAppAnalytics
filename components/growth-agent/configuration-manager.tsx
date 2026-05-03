@@ -33,7 +33,13 @@ function ToggleField({ label, checked, onChange }: { label: string; checked: boo
   );
 }
 
-export function GrowthAgentConfigurationManager({ initialSettings }: { initialSettings: GrowthAgentSettings }) {
+export function GrowthAgentConfigurationManager({
+  initialSettings,
+  storeId
+}: {
+  initialSettings: GrowthAgentSettings;
+  storeId: string;
+}) {
   const router = useRouter();
   const [settings, setSettings] = useState(initialSettings);
   const [message, setMessage] = useState<string | null>(null);
@@ -46,7 +52,7 @@ export function GrowthAgentConfigurationManager({ initialSettings }: { initialSe
         const response = await fetch("/api/growth-agent/configuration", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ settings })
+          body: JSON.stringify({ settings, storeId })
         });
         const payload = await response.json();
         if (!response.ok || !payload.ok) throw new Error(payload.error ?? "Save failed");

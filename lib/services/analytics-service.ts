@@ -204,7 +204,7 @@ export async function getOverviewPayload(): Promise<OverviewPayload> {
         title: locale === "he" ? "×ª×•×‘× ×ª ×¨×›×™×©×” ×—×•×–×¨×ª" : "Repeat purchase highlight",
         detail: locale === "he"
           ? "×× ×œ×™×˜×™×§×ª ×”×¨×™×˜× ×©×Ÿ × ×©×¢× ×ª ×›×¢×ª ×¢×œ ×”×–×ž× ×•×ª ×•×œ×§×•×—×•×ª ×ž× ×•×¨×ž×œ×™× ×•×œ× ×¨×§ ×¢×œ ×”×¢×¨×›×•×ª ×ž×“×•×ž×•×ª."
-          : "Retention analytics is now sourced from normalized orders and customer history rather than mock estimates.",
+          : "Retention analytics is now sourced from normalized orders and customer history rather than placeholder estimates.",
         emphasis: locale === "he" ? `${returningCustomerRate.toFixed(1)}% ×©×™×¢×•×¨ ×—×•×–×¨×™×` : `${returningCustomerRate.toFixed(1)}% returning rate`
       }
     ],
@@ -276,7 +276,9 @@ export async function getProfitAnalyticsPayload(): Promise<ProfitAnalyticsPayloa
         revenue: item.unitPrice * item.quantity,
         estimatedProfit: item.unitPrice * item.quantity - item.discountAmount - item.estimatedCost,
         discountImpact: item.discountAmount,
-        refundImpact: 0
+        refundImpact: 0,
+        inventoryQuantity: null,
+        collections: []
       }))
   );
 
@@ -299,19 +301,19 @@ export async function getRetentionPayload(): Promise<RetentionPayload> {
 
   return {
     snapshot: {
-      newCustomers: 824,
-      returningCustomers: 501,
-      repeatPurchaseRate: 37.8,
-      secondOrderRate: 22.4,
-      averageDaysToSecondOrder: 18
+      newCustomers: 0,
+      returningCustomers: 0,
+      repeatPurchaseRate: average(dailyMetrics.map((metric) => metric.returningCustomerRate)),
+      secondOrderRate: 0,
+      averageDaysToSecondOrder: 0
     },
     dailyMetrics,
     firstOrderProducts: [],
     secondOrderProducts: [],
     cohortPlaceholder:
       locale === "he"
-        ? "×ž×•×“×œ ×”×§×•×”×•×¨×˜×™× ×©×œ ×”×¨×™×˜× ×©×Ÿ ×‘× ×•×™ ×›×©×›×‘×ª ×©×™×¨×•×ª × ×¤×¨×“×ª ×›×“×™ ×©× ×•×›×œ ×œ×—×‘×¨ ×‘×”×ž×©×š ×¦×™×¨×™ ×–×ž×Ÿ ××ž×™×ª×™×™× ×©×œ Shopify ×‘×œ×™ ×œ×©× ×•×ª ××ª ×—×•×–×” ×”Ö¾UI."
-        : "Cohort retention modeling is stubbed as a dedicated service surface so we can plug in real Shopify event timelines and order cohorts later without changing the UI contract."
+        ? "×§×•×”×•×¨×˜×•×ª ×¨×™×˜× ×©×Ÿ ×™×ª××œ×× ×” ×›×©×™×¦×˜×‘×¨ ×™×•×ª×¨ ×”×™×¡×˜×•×¨×™×™×ª ×”×–×ž× ×•×ª ×ž× ×•×¨×ž×œ×ª."
+        : "Cohort retention modeling will populate once enough normalized order history is available."
   };
 }
 
@@ -329,20 +331,26 @@ export async function getFounderSummaryInputs(): Promise<FounderSummaryInputs> {
   };
 }
 
-export async function getAppChromeData() {
+export async function getAppChromeData(storeId?: string) {
   const locale = await getAppLocale();
-  const dictionary = getDictionary(locale);
   const repository = await getAnalyticsRepository();
-  const [store, range] = await Promise.all([repository.getStore(), getReportingDateRangeSelection()]);
+  const [store, range] = await Promise.all([repository.getStore(storeId), getReportingDateRangeSelection(locale)]);
 
   return {
     store,
     controls: {
       dateRangeLabel: range.label,
-      comparisonLabel: range.comparisonLabel,
+      comparisonLabel: range.comparison.label,
       startDate: range.startInput,
-      endDate: range.endInput
+      endDate: range.endInput,
+      preset: range.preset,
+      comparison: {
+        mode: range.comparison.mode,
+        enabled: range.comparison.enabled,
+        startDate: range.comparison.startInput,
+        endDate: range.comparison.endInput,
+        label: range.comparison.label
+      }
     }
   };
 }
-

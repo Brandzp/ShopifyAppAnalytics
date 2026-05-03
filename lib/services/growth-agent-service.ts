@@ -6,10 +6,22 @@
   GrowthPlatform,
   GrowthPlatformConnection
 } from "@/lib/domain/growth-agent-types";
+import type { Store } from "@/lib/domain/types";
 import { AppError } from "@/lib/server/errors";
-import { getDb } from "@/lib/server/db";
-import { resolveOrCreateBaseStore } from "@/lib/services/creator-admin-service";
+import { getDb, isDatabaseConnectionError } from "@/lib/server/db";
 import { defaultGrowthAgentSettings, defaultPlatformConnections } from "@/lib/services/growth-agent-defaults";
+
+const GROWTH_AGENT_PREVIEW_STORE: Store = {
+  id: "local-preview-store",
+  name: "Shopify Profit Ops Preview",
+  domain: "setup-required.local",
+  currency: "USD",
+  connected: false,
+  timezone: "UTC",
+  dateRangePreset: "30d",
+  estimatedCostMode: "margin_profile",
+  defaultCostRatio: 0.35
+};
 
 function deepClone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
@@ -47,20 +59,80 @@ function decimalToNumber(value: unknown, fallback = 0) {
   return Number.isFinite(numeric) ? numeric : fallback;
 }
 
-async function getStoreOrThrow(storeId?: string) {
+async function ensurePreviewStore(db: any) {
+  return db.store.upsert({
+    where: { id: GROWTH_AGENT_PREVIEW_STORE.id },
+    update: {
+      name: GROWTH_AGENT_PREVIEW_STORE.name,
+      domain: GROWTH_AGENT_PREVIEW_STORE.domain,
+      currency: GROWTH_AGENT_PREVIEW_STORE.currency,
+      timezone: GROWTH_AGENT_PREVIEW_STORE.timezone,
+      connected: false
+    },
+    create: {
+      id: GROWTH_AGENT_PREVIEW_STORE.id,
+      name: GROWTH_AGENT_PREVIEW_STORE.name,
+      domain: GROWTH_AGENT_PREVIEW_STORE.domain,
+      currency: GROWTH_AGENT_PREVIEW_STORE.currency,
+      timezone: GROWTH_AGENT_PREVIEW_STORE.timezone,
+      connected: false
+    }
+  });
+}
+
+async function resolveConnectedGrowthStore(db: any, storeId?: string) {
+  if (storeId) {
+    const store = await db.store.findUnique({
+      where: { id: storeId },
+      include: { connection: true }
+    });
+    if (!store) return null;
+    if (!store.connected || !store.connection) {
+      throw new AppError("Growth Agent only works for a connected Shopify store.", 400);
+    }
+    return store;
+  }
+
+  return db.store.findFirst({
+    where: { connected: true, connection: { isNot: null } },
+    orderBy: { updatedAt: "desc" }
+  });
+}
+
+async function getStoreOrThrow(storeId?: string, options?: { allowFallback?: boolean }) {
   const db = getDb();
-  if (!db) throw new AppError("Database client is not available.", 500);
-  const store = storeId
-    ? await db.store.findUnique({ where: { id: storeId } })
-    : await resolveOrCreateBaseStore();
-  if (!store) throw new AppError("Store was not found.", 404);
+  const allowFallback = Boolean(options?.allowFallback);
+  if (!db) {
+    if (allowFallback) {
+      return { db: null, store: GROWTH_AGENT_PREVIEW_STORE };
+    }
+    throw new AppError("Database client is not available.", 500);
+  }
+
+  let store: any = null;
+  try {
+    store = await resolveConnectedGrowthStore(db, storeId);
+  } catch (error) {
+    if (allowFallback && isDatabaseConnectionError(error)) {
+      return { db: null, store: GROWTH_AGENT_PREVIEW_STORE };
+    }
+    throw error;
+  }
+
+  if (!store) {
+    if (storeId) {
+      throw new AppError("Growth Agent could not find that connected store.", 404);
+    }
+    throw new AppError("Connect a Shopify store to use the Growth Agent.", 400);
+  }
+
   return { db, store };
 }
 
 export async function ensureGrowthAgentDefaults(storeId?: string) {
-  const { db, store } = await getStoreOrThrow(storeId);
+  const { db, store } = await getStoreOrThrow(storeId, { allowFallback: true });
 
-  if (db.agentSettings) {
+  if (db?.agentSettings) {
     await db.agentSettings.upsert({
       where: { storeId: store.id },
       update: {},
@@ -81,7 +153,7 @@ export async function ensureGrowthAgentDefaults(storeId?: string) {
     });
   }
 
-  if (db.platformConnection) {
+  if (db?.platformConnection) {
     const shopifyConnected = Boolean(store.connected);
     for (const connection of defaultPlatformConnections) {
       await db.platformConnection.upsert({
@@ -111,9 +183,9 @@ export async function ensureGrowthAgentDefaults(storeId?: string) {
 }
 
 export async function getGrowthAgentSettings(storeId?: string): Promise<GrowthAgentSettings> {
-  const { db, store } = await getStoreOrThrow(storeId);
+  const { db, store } = await getStoreOrThrow(storeId, { allowFallback: true });
   await ensureGrowthAgentDefaults(store.id);
-  if (!db.agentSettings) return deepClone(defaultGrowthAgentSettings);
+  if (!db?.agentSettings) return deepClone(defaultGrowthAgentSettings);
 
   const row = await db.agentSettings.findUnique({ where: { storeId: store.id } });
   if (!row) return deepClone(defaultGrowthAgentSettings);
@@ -176,9 +248,9 @@ export async function saveGrowthAgentSettings(input: Partial<GrowthAgentSettings
 }
 
 export async function getGrowthPlatformConnections(storeId?: string): Promise<GrowthPlatformConnection[]> {
-  const { db, store } = await getStoreOrThrow(storeId);
+  const { db, store } = await getStoreOrThrow(storeId, { allowFallback: true });
   await ensureGrowthAgentDefaults(store.id);
-  if (!db.platformConnection) {
+  if (!db?.platformConnection) {
     return defaultPlatformConnections.map((connection, index) => ({ ...connection, id: `connection-${index}` }));
   }
 
@@ -230,8 +302,8 @@ export async function saveGrowthPlatformConnection(input: {
 }
 
 export async function getGrowthFindings(storeId?: string): Promise<GrowthFinding[]> {
-  const { db, store } = await getStoreOrThrow(storeId);
-  if (!db.agentFinding) return [];
+  const { db, store } = await getStoreOrThrow(storeId, { allowFallback: true });
+  if (!db?.agentFinding) return [];
   const rows = await db.agentFinding.findMany({ where: { storeId: store.id }, orderBy: { createdAt: "desc" }, take: 25 });
   return rows.map((row: any) => ({
     id: row.id,
@@ -248,8 +320,8 @@ export async function getGrowthFindings(storeId?: string): Promise<GrowthFinding
 }
 
 export async function replaceGrowthFindings(findings: GrowthFinding[], storeId?: string) {
-  const { db, store } = await getStoreOrThrow(storeId);
-  if (!db.agentFinding) return { ok: true, count: findings.length };
+  const { db, store } = await getStoreOrThrow(storeId, { allowFallback: true });
+  if (!db?.agentFinding) return { ok: true, count: findings.length };
   await db.agentFinding.deleteMany({ where: { storeId: store.id } });
   if (findings.length) {
     await db.agentFinding.createMany({
@@ -271,9 +343,46 @@ export async function replaceGrowthFindings(findings: GrowthFinding[], storeId?:
   return { ok: true, count: findings.length };
 }
 
+export async function upsertGrowthFindings(findings: GrowthFinding[], storeId?: string) {
+  const { db, store } = await getStoreOrThrow(storeId, { allowFallback: true });
+  if (!db?.agentFinding) return { ok: true, count: findings.length };
+
+  for (const finding of findings) {
+    await db.agentFinding.upsert({
+      where: { id: finding.id },
+      update: {
+        findingType: finding.findingType,
+        severity: finding.severity,
+        metricName: finding.metricName,
+        summary: finding.summary,
+        possibleCauses: finding.possibleCauses,
+        recommendedActions: finding.recommendedActions,
+        confidenceScore: finding.confidenceScore,
+        sourceData: finding.sourceData ?? {},
+        createdAt: new Date(finding.timestamp)
+      },
+      create: {
+        id: finding.id,
+        storeId: store.id,
+        findingType: finding.findingType,
+        severity: finding.severity,
+        metricName: finding.metricName,
+        summary: finding.summary,
+        possibleCauses: finding.possibleCauses,
+        recommendedActions: finding.recommendedActions,
+        confidenceScore: finding.confidenceScore,
+        sourceData: finding.sourceData ?? {},
+        createdAt: new Date(finding.timestamp)
+      }
+    });
+  }
+
+  return { ok: true, count: findings.length };
+}
+
 export async function getGrowthActions(storeId?: string): Promise<GrowthAction[]> {
-  const { db, store } = await getStoreOrThrow(storeId);
-  if (!db.agentAction) return [];
+  const { db, store } = await getStoreOrThrow(storeId, { allowFallback: true });
+  if (!db?.agentAction) return [];
   const rows = await db.agentAction.findMany({ where: { storeId: store.id }, orderBy: { createdAt: "desc" }, take: 40 });
   return rows.map((row: any) => ({
     id: row.id,
@@ -294,8 +403,8 @@ export async function getGrowthActions(storeId?: string): Promise<GrowthAction[]
 }
 
 export async function createGrowthActions(actions: GrowthAction[], storeId?: string) {
-  const { db, store } = await getStoreOrThrow(storeId);
-  if (!db.agentAction) return { ok: true, count: actions.length };
+  const { db, store } = await getStoreOrThrow(storeId, { allowFallback: true });
+  if (!db?.agentAction) return { ok: true, count: actions.length };
   if (!actions.length) return { ok: true, count: 0 };
   await db.agentAction.createMany({
     data: actions.map((action) => ({
@@ -318,6 +427,53 @@ export async function createGrowthActions(actions: GrowthAction[], storeId?: str
     })),
     skipDuplicates: true
   });
+  return { ok: true, count: actions.length };
+}
+
+export async function upsertGrowthActions(actions: GrowthAction[], storeId?: string) {
+  const { db, store } = await getStoreOrThrow(storeId, { allowFallback: true });
+  if (!db?.agentAction) return { ok: true, count: actions.length };
+
+  for (const action of actions) {
+    await db.agentAction.upsert({
+      where: { id: action.id },
+      update: {
+        actionType: action.actionType,
+        status: action.status,
+        title: action.title,
+        reason: action.reason,
+        payload: action.payload,
+        estimatedImpact: action.estimatedImpact ?? {},
+        riskLevel: action.riskLevel,
+        confidenceScore: action.confidenceScore,
+        approvalRequired: action.approvalRequired,
+        approvedBy: action.approvedBy ?? null,
+        dryRun: true,
+        executedAt: action.executedAt ? new Date(action.executedAt) : null,
+        failureReason: action.failureReason ?? null,
+        createdAt: new Date(action.createdAt)
+      },
+      create: {
+        id: action.id,
+        storeId: store.id,
+        actionType: action.actionType,
+        status: action.status,
+        title: action.title,
+        reason: action.reason,
+        payload: action.payload,
+        estimatedImpact: action.estimatedImpact ?? {},
+        riskLevel: action.riskLevel,
+        confidenceScore: action.confidenceScore,
+        approvalRequired: action.approvalRequired,
+        approvedBy: action.approvedBy ?? null,
+        dryRun: true,
+        executedAt: action.executedAt ? new Date(action.executedAt) : null,
+        failureReason: action.failureReason ?? null,
+        createdAt: new Date(action.createdAt)
+      }
+    });
+  }
+
   return { ok: true, count: actions.length };
 }
 
@@ -360,8 +516,8 @@ export async function updateGrowthActionStatus(input: {
 }
 
 export async function getGrowthMetricSnapshots(storeId?: string): Promise<GrowthMetricSnapshot[]> {
-  const { db, store } = await getStoreOrThrow(storeId);
-  if (!db.metricSnapshot) return [];
+  const { db, store } = await getStoreOrThrow(storeId, { allowFallback: true });
+  if (!db?.metricSnapshot) return [];
   const rows = await db.metricSnapshot.findMany({ where: { storeId: store.id }, orderBy: { bucketedAt: "desc" }, take: 48 });
   return rows.map((row: any) => ({
     id: row.id,
@@ -378,8 +534,8 @@ export async function createGrowthMetricSnapshot(input: {
   metrics: Record<string, unknown>;
   confidenceScore?: number | null;
 }, storeId?: string) {
-  const { db, store } = await getStoreOrThrow(storeId);
-  if (!db.metricSnapshot) return { ok: true };
+  const { db, store } = await getStoreOrThrow(storeId, { allowFallback: true });
+  if (!db?.metricSnapshot) return { ok: true };
   await db.metricSnapshot.create({
     data: {
       storeId: store.id,
@@ -393,12 +549,12 @@ export async function createGrowthMetricSnapshot(input: {
 }
 
 export async function getGrowthAgentStoreContext(storeId?: string) {
-  return getStoreOrThrow(storeId);
+  return getStoreOrThrow(storeId, { allowFallback: true });
 }
 
 export async function getGrowthWebhookEvents(storeId?: string) {
-  const { db, store } = await getStoreOrThrow(storeId);
-  if (!db.webhookEvent) return [];
+  const { db, store } = await getStoreOrThrow(storeId, { allowFallback: true });
+  if (!db?.webhookEvent) return [];
   const rows = await db.webhookEvent.findMany({ where: { storeId: store.id }, orderBy: { createdAt: "desc" }, take: 30 });
   return rows.map((row: any) => ({
     id: row.id,
@@ -413,8 +569,8 @@ export async function getGrowthWebhookEvents(storeId?: string) {
 }
 
 export async function getGrowthAttributionSessions(storeId?: string) {
-  const { db, store } = await getStoreOrThrow(storeId);
-  if (!db.attributionSession) return [];
+  const { db, store } = await getStoreOrThrow(storeId, { allowFallback: true });
+  if (!db?.attributionSession) return [];
   const rows = await db.attributionSession.findMany({ where: { storeId: store.id }, include: { affiliateMember: true }, orderBy: { createdAt: "desc" }, take: 30 });
   return rows.map((row: any) => ({
     id: row.id,
