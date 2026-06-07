@@ -26,7 +26,8 @@ import {
 } from "@/lib/services/meta-ads-report-insights-service";
 import {
   generateInstagramInsights,
-  type InstagramInsights
+  type InstagramInsights,
+  type InstagramAffiliateSummary
 } from "@/lib/services/instagram-report-insights-service";
 import { buildMarketingPlannerInfluencerIntelligence } from "@/lib/services/marketing-planner-influencer-service";
 import {
@@ -63,7 +64,7 @@ export interface WeeklyReportBundle {
     affiliates: Array<{
       username: string;
       displayName: string | null;
-      status: string;
+      status: InstagramAffiliateSummary["status"];
       postsStored: number;
       lastPostAt: string | null;
       attributedSales: number;
