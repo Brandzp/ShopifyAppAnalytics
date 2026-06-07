@@ -2,6 +2,7 @@ import { AppShell } from "@/components/layout/app-shell";
 import { SectionHeading } from "@/components/ui/section-heading";
 import { AffiliatePortalNav } from "@/components/affiliate-portal/portal-nav";
 import { AffiliateAttributionSyncButton } from "@/components/affiliate-portal/affiliate-attribution-sync-button";
+import { UploadConversionsCsvButton } from "@/components/affiliate-portal/upload-conversions-csv-button";
 import { getAppChromeData } from "@/lib/services/analytics-service";
 import { getAffiliateConversions } from "@/lib/services/affiliate-portal-service";
 import { DataTable } from "@/components/shared/data-table";
@@ -20,8 +21,9 @@ export default async function ConversionsPage() {
             title="Referral orders and attributions"
             description="Track which affiliate orders were matched, how they were tracked, and what commission they generated."
           />
-          <div className="flex flex-wrap gap-3">
+          <div className="flex flex-wrap items-start gap-3">
             <AffiliateAttributionSyncButton storeId={chrome.store.id} />
+            <UploadConversionsCsvButton />
             <a href="/api/affiliate-portal/conversions/export" className={buttonVariants({ variant: "secondary" })}>
               Export CSV
             </a>

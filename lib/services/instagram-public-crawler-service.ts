@@ -153,23 +153,104 @@ function publicInstagramHeaders(username: string) {
   };
 }
 
-async function fetchPublicInstagramProfile(username: string): Promise<PublicInstagramUser | null> {
-  const params = new URLSearchParams({ username });
-  const response = await fetch(`${INSTAGRAM_PROFILE_ENDPOINT}?${params.toString()}`, {
-    cache: "no-store",
-    headers: publicInstagramHeaders(username)
+const BROWSER_USER_AGENT =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36";
+
+/**
+ * Launches a headless Chromium via Playwright. Instagram serves a 429 to bare
+ * server-side fetches of its web_profile_info endpoint, so we drive a real
+ * browser instead. Dynamically imported so Playwright isn't pulled into the
+ * Next build graph.
+ */
+async function launchCrawlerBrowser() {
+  let chromium: typeof import("playwright").chromium;
+  try {
+    ({ chromium } = await import("playwright"));
+  } catch {
+    throw new AppError(
+      'Playwright is not installed. Run "npm i -D @playwright/test" then "npx playwright install".',
+      500
+    );
+  }
+
+  try {
+    return await chromium.launch({
+      headless: true,
+      args: ["--disable-blink-features=AutomationControlled", "--no-sandbox"]
+    });
+  } catch (error) {
+    throw new AppError(
+      `Could not launch the Playwright browser for the Instagram crawler: ${
+        error instanceof Error ? error.message : String(error)
+      }. Run "npx playwright install".`,
+      500
+    );
+  }
+}
+
+/**
+ * Resolves a profile's public data by loading the real Instagram page in the
+ * browser. The page itself requests web_profile_info; we capture that response.
+ * If it doesn't fire, we replay the request from inside the browser context
+ * (which now carries Instagram's cookies) — far less likely to be 429'd than a
+ * bare server fetch.
+ */
+async function fetchProfileViaBrowser(
+  context: import("playwright").BrowserContext,
+  username: string
+): Promise<PublicInstagramUser | null> {
+  const page = await context.newPage();
+  let captured: PublicInstagramUser | null = null;
+
+  page.on("response", async (response) => {
+    try {
+      if (!response.url().includes("/api/v1/users/web_profile_info/")) return;
+      const json = await response.json();
+      const user = json?.data?.user;
+      if (user) captured = user as PublicInstagramUser;
+    } catch {
+      // ignore non-JSON / detached responses
+    }
   });
 
-  if (response.status === 404) {
-    return null;
-  }
+  try {
+    const navigation = await page.goto(profileUrl(username), {
+      waitUntil: "domcontentloaded",
+      timeout: 45000
+    });
 
-  if (!response.ok) {
-    throw new AppError(`Instagram public crawler failed for @${username} with status ${response.status}.`, response.status);
-  }
+    if (navigation && navigation.status() === 404) {
+      return null;
+    }
 
-  const payload = await response.json();
-  return (payload?.data?.user ?? null) as PublicInstagramUser | null;
+    // Give the in-page web_profile_info XHR a chance to land.
+    for (let attempt = 0; attempt < 12 && !captured; attempt += 1) {
+      await page.waitForTimeout(500);
+    }
+    if (captured) return captured;
+
+    // Fallback: same endpoint, but issued from the browser context so it
+    // carries the cookies/session Instagram just set.
+    const apiResponse = await context.request.get(
+      `${INSTAGRAM_PROFILE_ENDPOINT}?${new URLSearchParams({ username }).toString()}`,
+      { headers: publicInstagramHeaders(username) }
+    );
+
+    if (apiResponse.status() === 404) {
+      return null;
+    }
+    if (!apiResponse.ok()) {
+      throw new AppError(
+        `Instagram crawler failed for @${username} with status ${apiResponse.status()}.`,
+        apiResponse.status()
+      );
+    }
+
+    const payload = await apiResponse.json();
+    return (payload?.data?.user ?? null) as PublicInstagramUser | null;
+  } finally {
+    await page.close().catch(() => undefined);
+  }
 }
 
 function getPostCaption(node: PublicInstagramNode) {
@@ -288,12 +369,38 @@ function getTaggedUsernames(node: PublicInstagramNode) {
     .filter(Boolean) as string[];
 }
 
+// Pulls every "@handle" and "#hashtag" out of a caption so the matcher can
+// check them as first-class signals (not just substring matches inside
+// arbitrary text). Lowercased to align with the rest of the matcher.
+function extractMentionsAndTags(caption: string): { mentions: string[]; hashtags: string[] } {
+  const mentions = Array.from(caption.matchAll(/@([a-z0-9._]{1,30})/gi)).map((m) => m[1].toLowerCase());
+  // Hashtags can include Hebrew / Unicode letters in addition to ASCII, so
+  // use Unicode property classes rather than [A-Za-z0-9_].
+  const hashtags = Array.from(caption.matchAll(/#([\p{L}\p{N}_]{1,80})/gu)).map((m) => m[1].toLowerCase());
+  return { mentions, hashtags };
+}
+
 function isBrandRelatedPost(node: PublicInstagramNode, relatedTerms: string[]) {
-  const caption = getPostCaption(node).toLowerCase();
-  const taggedUsers = getTaggedUsernames(node);
+  const rawCaption = getPostCaption(node);
+  const caption = rawCaption.toLowerCase();
+  const tagged = getTaggedUsernames(node);
+  const { mentions, hashtags } = extractMentionsAndTags(rawCaption);
   const terms = relatedTerms.map(normalizeRelatedTerm).filter(Boolean) as string[];
 
-  return terms.some((term) => caption.includes(term) || taggedUsers.includes(term.replace(/^@/, "")));
+  return terms.some((rawTerm) => {
+    const term = rawTerm.replace(/^@/, "").replace(/^#/, "");
+    if (!term) return false;
+    // Caption substring match — covers free-form brand mentions like
+    // "loving the new Incense Parfums scent".
+    if (caption.includes(term)) return true;
+    // Explicit @mention or tagged-in-photo match (case-insensitive).
+    if (mentions.includes(term)) return true;
+    if (tagged.includes(term)) return true;
+    // Hashtag match — affiliates frequently tag the brand via #incenseparfums
+    // even when the caption itself is a different sentence in their own voice.
+    if (hashtags.includes(term)) return true;
+    return false;
+  });
 }
 
 async function saveProfileAndPosts(input: {
@@ -471,12 +578,32 @@ export async function crawlPublicInstagramProfiles(input: InstagramPublicCrawler
   ];
   const warnings: string[] = [];
   const crawledProfiles: InstagramPublicCrawledProfile[] = [];
+  let browser: import("playwright").Browser | null = null;
 
   try {
+    browser = await launchCrawlerBrowser();
+    const context = await browser.newContext({
+      userAgent: BROWSER_USER_AGENT,
+      locale: "en-US",
+      viewport: { width: 1280, height: 800 }
+    });
+
     for (const [index, target] of profilesToCrawl.entries()) {
       if (index > 0) await sleep(PROFILE_DELAY_MS);
 
-      const user = await fetchPublicInstagramProfile(target.username);
+      let user: PublicInstagramUser | null = null;
+      try {
+        user = await fetchProfileViaBrowser(context, target.username);
+      } catch (profileError) {
+        // One unreachable / rate-limited profile shouldn't abort the whole run.
+        warnings.push(
+          `@${target.username} could not be crawled: ${
+            profileError instanceof Error ? profileError.message : String(profileError)
+          }`
+        );
+        continue;
+      }
+
       if (!user?.username) {
         warnings.push(`@${target.username} did not return public profile data.`);
         continue;
@@ -541,5 +668,7 @@ export async function crawlPublicInstagramProfiles(input: InstagramPublicCrawler
       detailsJson: { source: PUBLIC_CRAWLER_PLATFORM }
     }).catch(() => undefined);
     throw error;
+  } finally {
+    if (browser) await browser.close().catch(() => undefined);
   }
 }

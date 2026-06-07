@@ -8,6 +8,9 @@ import { StatTile } from "@/components/dashboard-v2/kpi-tile";
 import { RetentionLineChartV2 } from "@/components/dashboard-v2/retention-line-chart";
 import { BarInsightChart } from "@/components/charts/bar-insight-chart";
 import { getAppChromeData, getRetentionPayload } from "@/lib/services/analytics-service";
+import { buildCohortRetention } from "@/lib/services/cohort-retention-service";
+import { resolveActiveStoreId } from "@/lib/services/offline-sales-service";
+import { CohortHeatmap } from "@/components/retention/cohort-heatmap";
 import { formatNumber } from "@/lib/utils";
 import { getAppLocale, getDictionary } from "@/lib/i18n";
 
@@ -15,8 +18,16 @@ export default async function RetentionPage() {
   const locale = await getAppLocale();
   const dictionary = getDictionary(locale);
   const tips = dictionary.retention.tips;
-  const [retention, chrome] = await Promise.all([getRetentionPayload(), getAppChromeData()]);
+  const [retention, chrome, storeId] = await Promise.all([
+    getRetentionPayload(),
+    getAppChromeData(),
+    resolveActiveStoreId()
+  ]);
   const snap = retention.snapshot;
+  // 12-month cohort retention — the single best signal for LTV health.
+  const cohortReport = storeId
+    ? await buildCohortRetention({ storeId, lookbackMonths: 12 }).catch(() => null)
+    : null;
 
   // Narrative
   const repeatRate = snap.repeatPurchaseRate;
@@ -162,36 +173,26 @@ export default async function RetentionPage() {
 
         <section className="space-y-3">
           <SectionHead
-            eyebrow="Coming next"
-            title="Cohorts & lifecycle benchmarks"
-            hint="Placeholders for now — they'll light up once full order history is connected."
+            eyebrow="Step 4"
+            title="Cohort retention — do customers come back?"
+            hint="Each row is a group of customers acquired in the same month. Columns show what percent of that cohort ordered again N months later. Darker = better retention. Compare recent rows (top) to older rows (bottom): if recent cohorts retain worse, marketing is buying first-order tourists."
           />
-          <div className="grid items-start gap-4 md:grid-cols-2">
-            <Card>
-              <CardHeader className="pb-2">
-                <div className="flex items-center gap-1.5">
-                  <CardTitle className="text-base">{dictionary.retention.cohortView}</CardTitle>
-                  <HelpTip>{tips.cohort}</HelpTip>
-                </div>
-                <p className="text-sm text-muted-foreground">{dictionary.retention.cohortDescription}</p>
-              </CardHeader>
-              <CardContent>
+          <Card>
+            <CardHeader className="pb-2">
+              <div className="flex items-center gap-1.5">
+                <CardTitle className="text-base">{dictionary.retention.cohortView}</CardTitle>
+                <HelpTip>{tips.cohort}</HelpTip>
+              </div>
+              <p className="text-sm text-muted-foreground">{dictionary.retention.cohortDescription}</p>
+            </CardHeader>
+            <CardContent>
+              {cohortReport ? (
+                <CohortHeatmap report={cohortReport} locale={locale} display="rate" />
+              ) : (
                 <p className="text-sm leading-6 text-muted-foreground">{retention.cohortPlaceholder}</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="pb-2">
-                <div className="flex items-center gap-1.5">
-                  <CardTitle className="text-base">{dictionary.retention.avgTimeBetweenOrders}</CardTitle>
-                  <HelpTip>{tips.avgTime}</HelpTip>
-                </div>
-                <p className="text-sm text-muted-foreground">{dictionary.retention.avgTimeDescription}</p>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm leading-6 text-muted-foreground">{dictionary.retention.avgTimeTodo}</p>
-              </CardContent>
-            </Card>
-          </div>
+              )}
+            </CardContent>
+          </Card>
         </section>
       </div>
     </AppShell>
