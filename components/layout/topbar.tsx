@@ -45,6 +45,8 @@ export function Topbar({
         </div>
       </div>
       <ReportingPicker
+        storeId={store.id}
+        storeConnected={store.connected}
         initialPreset={(controls?.preset as never) ?? "last_30"}
         initialStart={controls?.startDate ?? new Date(Date.now() - 29 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)}
         initialEnd={controls?.endDate ?? new Date().toISOString().slice(0, 10)}

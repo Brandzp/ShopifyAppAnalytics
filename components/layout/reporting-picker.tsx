@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Calendar, ChevronDown, GitCompareArrows, Check } from "lucide-react";
+import { Calendar, ChevronDown, GitCompareArrows, Check, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { DualCalendar } from "@/components/layout/calendar";
@@ -140,6 +140,8 @@ function Popover({ open, onClose, children, className, align = "end" }: PopoverP
 }
 
 export interface ReportingPickerProps {
+  storeId?: string;
+  storeConnected?: boolean;
   initialPreset: RangePreset;
   initialStart: string;
   initialEnd: string;
@@ -156,6 +158,7 @@ export function ReportingPicker(props: ReportingPickerProps) {
   const [isPending, startTransition] = useTransition();
   const [rangeOpen, setRangeOpen] = useState(false);
   const [compareOpen, setCompareOpen] = useState(false);
+  const [syncing, setSyncing] = useState(false);
 
   const [preset, setPreset] = useState<RangePreset>(props.initialPreset);
   const [start, setStart] = useState<string>(props.initialStart);
@@ -173,6 +176,19 @@ export function ReportingPicker(props: ReportingPickerProps) {
   const [comparisonStart, setComparisonStart] = useState<string>(props.initialComparisonStart);
   const [comparisonEnd, setComparisonEnd] = useState<string>(props.initialComparisonEnd);
 
+  // Pending comparison state — what the user has SELECTED but not yet
+  // applied. We keep this separate from `comparisonMode` so the user can
+  // change their mind in the popover without firing off a slow page
+  // refresh on every click.
+  const [pendingComparisonMode, setPendingComparisonMode] = useState<ComparisonMode>(props.initialComparisonMode);
+
+  // Re-sync the pending comparison state every time the popover opens, so
+  // closing the popover without applying doesn't leave stale "pending" state
+  // on the next open.
+  useEffect(() => {
+    if (compareOpen) setPendingComparisonMode(comparisonMode);
+  }, [compareOpen, comparisonMode]);
+
   // Re-sync pending state every time the popover opens
   useEffect(() => {
     if (rangeOpen) {
@@ -184,35 +200,67 @@ export function ReportingPicker(props: ReportingPickerProps) {
     }
   }, [rangeOpen, start, end, preset]);
 
-  function commit(state: {
-    preset: RangePreset;
-    start: string;
-    end: string;
-    comparison: { mode: ComparisonMode; start?: string; end?: string };
-  }) {
+  async function resyncDataSources() {
+    // Pressing Apply / picking a preset means "show me this window as it looks
+    // right now", so pull the freshest data from every external source before
+    // re-rendering. Best-effort: the endpoint already swallows per-source
+    // failures (e.g. Meta/Instagram not connected), and a network error here
+    // must still let the page refresh with whatever data we have.
+    if (!props.storeConnected || !props.storeId) return;
+    try {
+      await fetch("/api/reporting/refresh", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ storeId: props.storeId })
+      });
+    } catch {
+      // ignore — fall through to refresh
+    }
+  }
+
+  async function commit(
+    state: {
+      preset: RangePreset;
+      start: string;
+      end: string;
+      comparison: { mode: ComparisonMode; start?: string; end?: string };
+    },
+    options: { resync: boolean }
+  ) {
     document.cookie = `reporting-date-range=${encodeURIComponent(JSON.stringify(state))}; path=/; max-age=31536000; samesite=lax`;
+    if (options.resync && props.storeConnected && props.storeId) {
+      setSyncing(true);
+      try {
+        await resyncDataSources();
+      } finally {
+        setSyncing(false);
+      }
+    }
     startTransition(() => {
       router.refresh();
     });
   }
 
-  function handleApplyRange() {
+  async function handleApplyRange() {
     if (!pendingStart || !pendingEnd) return;
     const nextStart = toInputDate(pendingStart);
     const nextEnd = toInputDate(pendingEnd);
     setPreset(pendingPreset);
     setStart(nextStart);
     setEnd(nextEnd);
+    await commit(
+      {
+        preset: pendingPreset,
+        start: nextStart,
+        end: nextEnd,
+        comparison: { mode: comparisonMode, start: comparisonStart, end: comparisonEnd }
+      },
+      { resync: true }
+    );
     setRangeOpen(false);
-    commit({
-      preset: pendingPreset,
-      start: nextStart,
-      end: nextEnd,
-      comparison: { mode: comparisonMode, start: comparisonStart, end: comparisonEnd }
-    });
   }
 
-  function handlePresetClick(value: RangePreset) {
+  async function handlePresetClick(value: RangePreset) {
     if (value === "custom") {
       setPendingPreset("custom");
       return;
@@ -220,12 +268,15 @@ export function ReportingPicker(props: ReportingPickerProps) {
     // Non-custom presets apply immediately and close the popover
     setPreset(value);
     setRangeOpen(false);
-    commit({
-      preset: value,
-      start,
-      end,
-      comparison: { mode: comparisonMode, start: comparisonStart, end: comparisonEnd }
-    });
+    await commit(
+      {
+        preset: value,
+        start,
+        end,
+        comparison: { mode: comparisonMode, start: comparisonStart, end: comparisonEnd }
+      },
+      { resync: true }
+    );
   }
 
   function handleStartTextChange(value: string) {
@@ -248,38 +299,91 @@ export function ReportingPicker(props: ReportingPickerProps) {
     setEndText(toInputDate(e));
   }
 
+  // Picking an option in the comparison popover now sets PENDING state only,
+  // not the committed value. The user has to click Apply to commit. Same UX
+  // as the date-range picker — gives an explicit confirmation step and avoids
+  // hot-applying on every accidental click.
   function handleComparisonChoice(mode: ComparisonMode) {
-    setComparisonMode(mode);
-    if (mode !== "custom") {
-      setCompareOpen(false);
-      commit({
+    setPendingComparisonMode(mode);
+  }
+
+  function handleApplyComparison() {
+    // Validation: custom mode requires both dates filled.
+    if (pendingComparisonMode === "custom" && (!comparisonStart || !comparisonEnd)) return;
+    setComparisonMode(pendingComparisonMode);
+    setCompareOpen(false);
+    void commit(
+      {
         preset,
         start,
         end,
-        comparison: { mode }
-      });
-    }
-  }
-
-  function handleCustomComparisonApply() {
-    setCompareOpen(false);
-    commit({
-      preset,
-      start,
-      end,
-      comparison: { mode: "custom", start: comparisonStart, end: comparisonEnd }
-    });
+        comparison:
+          pendingComparisonMode === "custom"
+            ? { mode: "custom", start: comparisonStart, end: comparisonEnd }
+            : { mode: pendingComparisonMode }
+      },
+      { resync: false }
+    );
   }
 
   const rangeButtonLabel =
     preset === "custom" ? rangeSummary(start, end) || props.initialRangeLabel : props.initialRangeLabel;
 
+  const isLoading = isPending || syncing;
+  const loadingLabel = syncing
+    ? "Syncing Shopify, Meta & Instagram…"
+    : isPending
+      ? "Applying new range — this may take up to a minute"
+      : "";
+
   return (
     <div className="flex flex-wrap items-center gap-2">
+      {/* Top-of-page progress bar — pinned, always visible while any apply/sync
+          is in flight. Indeterminate animation because the underlying page
+          refresh has no real progress to measure. Inline keyframes so we
+          don't have to touch global CSS. */}
+      {isLoading ? (
+        <>
+          <style>{`@keyframes pwr-progress {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
+          }`}</style>
+          <div
+            role="progressbar"
+            aria-label={loadingLabel}
+            aria-busy="true"
+            className="pointer-events-none fixed inset-x-0 top-0 z-[9999] h-1 overflow-hidden bg-indigo-100"
+          >
+            <div
+              className="h-full w-1/3 bg-indigo-600"
+              style={{ animation: "pwr-progress 1.4s ease-in-out infinite" }}
+            />
+          </div>
+          <div className="pointer-events-none fixed inset-x-0 top-1 z-[9998] flex justify-center">
+            <span className="rounded-b-md bg-indigo-600 px-3 py-1 text-xs font-medium text-white shadow-md">
+              <Loader2 className="me-1.5 inline h-3 w-3 animate-spin" aria-hidden />
+              {loadingLabel}
+            </span>
+          </div>
+        </>
+      ) : null}
+
+      {syncing ? (
+        <span
+          role="status"
+          aria-live="polite"
+          className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3.5 py-2 text-sm font-medium text-muted-foreground shadow-sm"
+        >
+          <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+          Syncing Shopify, Meta &amp; Instagram…
+        </span>
+      ) : null}
+
       {/* RANGE BUTTON */}
       <div className="relative">
         <button
           type="button"
+          disabled={syncing}
           onClick={() => {
             setRangeOpen((v) => !v);
             setCompareOpen(false);
@@ -289,6 +393,7 @@ export function ReportingPicker(props: ReportingPickerProps) {
           className={cn(
             "inline-flex items-center gap-2 rounded-full border border-border bg-card px-3.5 py-2 text-sm font-medium shadow-sm transition-colors",
             "hover:bg-muted/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/60",
+            "disabled:cursor-not-allowed disabled:opacity-60",
             rangeOpen && "bg-muted/60"
           )}
         >
@@ -391,10 +496,10 @@ export function ReportingPicker(props: ReportingPickerProps) {
                 <Button
                   type="button"
                   size="sm"
-                  disabled={isPending || !pendingStart || !pendingEnd}
+                  disabled={isPending || syncing || !pendingStart || !pendingEnd}
                   onClick={handleApplyRange}
                 >
-                  {isPending ? "Applying…" : "Apply"}
+                  {syncing ? "Syncing data…" : isPending ? "Applying…" : "Apply"}
                 </Button>
               </div>
             </div>
@@ -406,6 +511,7 @@ export function ReportingPicker(props: ReportingPickerProps) {
       <div className="relative">
         <button
           type="button"
+          disabled={syncing}
           onClick={() => {
             setCompareOpen((v) => !v);
             setRangeOpen(false);
@@ -415,6 +521,7 @@ export function ReportingPicker(props: ReportingPickerProps) {
           className={cn(
             "inline-flex items-center gap-2 rounded-full border border-border bg-card px-3.5 py-2 text-sm font-medium shadow-sm transition-colors",
             "hover:bg-muted/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/60",
+            "disabled:cursor-not-allowed disabled:opacity-60",
             compareOpen && "bg-muted/60"
           )}
         >
@@ -429,7 +536,8 @@ export function ReportingPicker(props: ReportingPickerProps) {
         <Popover open={compareOpen} onClose={() => setCompareOpen(false)} align="end" className="w-[320px]">
           <div className="p-2">
             {COMPARISON_OPTIONS.map((option) => {
-              const active = comparisonMode === option.value;
+              const active = pendingComparisonMode === option.value;
+              const committed = comparisonMode === option.value;
               return (
                 <button
                   key={option.value}
@@ -441,12 +549,14 @@ export function ReportingPicker(props: ReportingPickerProps) {
                   )}
                 >
                   <span>{option.label}</span>
-                  {active ? <Check className="h-3.5 w-3.5 text-muted-foreground" aria-hidden /> : null}
+                  {active ? <Check className="h-3.5 w-3.5 text-muted-foreground" aria-hidden /> : committed ? (
+                    <span className="text-[10px] uppercase tracking-wider text-muted-foreground">current</span>
+                  ) : null}
                 </button>
               );
             })}
 
-            {comparisonMode === "custom" ? (
+            {pendingComparisonMode === "custom" ? (
               <div className="mt-2 space-y-2 border-t border-border/70 px-3 pt-3">
                 <div className="flex flex-col gap-1">
                   <label className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
@@ -471,23 +581,34 @@ export function ReportingPicker(props: ReportingPickerProps) {
                     className="rounded-lg border border-border bg-background px-3 py-2 text-sm tabular-nums"
                   />
                 </div>
-                <div className="flex justify-end pt-1">
-                  <Button
-                    type="button"
-                    size="sm"
-                    disabled={
-                      isPending ||
-                      !comparisonStart ||
-                      !comparisonEnd ||
-                      comparisonStart > comparisonEnd
-                    }
-                    onClick={handleCustomComparisonApply}
-                  >
-                    {isPending ? "Applying…" : "Apply"}
-                  </Button>
-                </div>
               </div>
             ) : null}
+
+            <div className="mt-2 flex items-center justify-end gap-2 border-t border-border/70 px-1 pt-2">
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => setCompareOpen(false)}
+                disabled={isPending || syncing}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                disabled={
+                  isPending ||
+                  syncing ||
+                  pendingComparisonMode === comparisonMode ||
+                  (pendingComparisonMode === "custom" &&
+                    (!comparisonStart || !comparisonEnd || comparisonStart > comparisonEnd))
+                }
+                onClick={handleApplyComparison}
+              >
+                {isPending || syncing ? "Applying…" : "Apply"}
+              </Button>
+            </div>
           </div>
         </Popover>
       </div>

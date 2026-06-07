@@ -1,6 +1,7 @@
 ﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import type { ShopifyConnectionSummary, SyncRunSummary } from "@/lib/domain/types";
@@ -124,6 +125,20 @@ export function ShopifyConnectionManager({
     return labels.notConnected;
   }, [labels.connected, labels.notConnected, labels.syncRunning, syncStatus.connection]);
 
+  // Surfaces the last persisted sync failure — this covers manual syncs AND
+  // the hourly background cron (both write connection.syncStatus/lastSyncError).
+  const syncError =
+    syncStatus.connection?.syncStatus === "error"
+      ? syncStatus.connection?.lastSyncError ?? null
+      : null;
+  // The credential/encryption-key failure is the one that needs a specific
+  // remediation rather than just showing the raw GCM error string.
+  const isCredentialError =
+    !!syncError &&
+    /unable to authenticate data|unsupported state|SHOPIFY_CREDENTIALS_ENCRYPTION_KEY|malformed Shopify credential|decrypt/i.test(
+      syncError
+    );
+
   useEffect(() => {
     if (syncStatus.connection?.syncStatus !== "running") {
       return;
@@ -209,6 +224,41 @@ export function ShopifyConnectionManager({
             </Button>
           </div>
 
+          {syncError ? (
+            <div className="rounded-2xl border border-rose-200 bg-rose-50/60 p-5">
+              <div className="flex items-start gap-3">
+                <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-rose-500 text-white">
+                  <AlertTriangle className="h-5 w-5" aria-hidden />
+                </span>
+                <div className="space-y-2">
+                  <p className="text-sm font-semibold text-rose-900">
+                    {isCredentialError
+                      ? "Shopify sync is blocked — credentials can’t be decrypted"
+                      : "Last Shopify sync failed"}
+                  </p>
+                  {isCredentialError ? (
+                    <p className="text-sm text-rose-800">
+                      Your saved Shopify Admin API token can’t be decrypted, so every
+                      sync (including the hourly background job) is failing. This
+                      happens when <code className="font-mono text-xs">SHOPIFY_CREDENTIALS_ENCRYPTION_KEY</code>{" "}
+                      changed since the token was saved. Fix it by either re-entering
+                      and saving the access token above, or restoring the original
+                      encryption key — then run a sync again.
+                    </p>
+                  ) : (
+                    <p className="text-sm text-rose-800">
+                      The most recent sync didn’t complete. The hourly background
+                      sync will retry automatically.
+                    </p>
+                  )}
+                  <p className="rounded-lg bg-rose-100/70 px-3 py-1.5 font-mono text-xs text-rose-900">
+                    {syncError}
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
           <div className="rounded-2xl border border-border/70 bg-background/70 p-4 text-sm">
             <p className="font-semibold">{labels.connectionState}: {connectionStateLabel}</p>
             <p className="mt-2 text-muted-foreground">
@@ -216,9 +266,6 @@ export function ShopifyConnectionManager({
                 ? `${labels.lastSync}: ${new Date(syncStatus.connection.lastSyncAt).toLocaleString()}`
                 : labels.noSyncYet}
             </p>
-            {syncStatus.connection?.lastSyncError ? (
-              <p className="mt-2 text-danger">{syncStatus.connection.lastSyncError}</p>
-            ) : null}
           </div>
 
           {message ? <p className="text-sm text-success">{message}</p> : null}

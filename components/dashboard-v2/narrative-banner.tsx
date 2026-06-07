@@ -80,15 +80,21 @@ export function OverviewNarrative({
   const topProduct = overview.productPerformance[0];
   const currency = overview.store.currency;
 
+  const comparisonEnabled = overview.comparisonEnabled;
   const revenueDirection = revenueKpi?.change ?? 0;
   const positive = revenueDirection >= 0;
 
-  const headline = positive
-    ? `You earned ${formatCurrency(revenueKpi?.value ?? 0, currency)} this period — up ${Math.abs(revenueDirection).toFixed(1)}% vs. the prior period.`
-    : `You earned ${formatCurrency(revenueKpi?.value ?? 0, currency)} this period — down ${Math.abs(revenueDirection).toFixed(1)}% vs. the prior period.`;
+  const headline =
+    comparisonEnabled && revenueKpi
+      ? positive
+        ? `You earned ${formatCurrency(revenueKpi.value, currency)} this period — up ${Math.abs(revenueDirection).toFixed(1)}% vs. the prior period.`
+        : `You earned ${formatCurrency(revenueKpi.value, currency)} this period — down ${Math.abs(revenueDirection).toFixed(1)}% vs. the prior period.`
+      : `You earned ${formatCurrency(revenueKpi?.value ?? 0, currency)} this period.`;
 
   const profitLine = profitKpi
-    ? `Estimated profit landed at ${formatCurrency(profitKpi.value, currency)} (${profitKpi.change >= 0 ? "+" : ""}${profitKpi.change.toFixed(1)}%).`
+    ? comparisonEnabled && typeof profitKpi.change === "number"
+      ? `Estimated profit landed at ${formatCurrency(profitKpi.value, currency)} (${profitKpi.change >= 0 ? "+" : ""}${profitKpi.change.toFixed(1)}%).`
+      : `Estimated profit landed at ${formatCurrency(profitKpi.value, currency)}.`
     : null;
 
   const productLine = topProduct

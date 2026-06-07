@@ -24,9 +24,9 @@ export function CollectionChips({
 
   return (
     <span className="inline-flex flex-wrap items-center gap-1">
-      {visible.map((title) => (
+      {visible.map((title, idx) => (
         <span
-          key={title}
+          key={`${title}-${idx}`}
           className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-foreground"
           title={title}
         >

@@ -86,8 +86,10 @@ export function KpiTile({
   const Icon = IconOverride ?? defaultIcon(kpi.label);
   const hint = hintOverride ?? auto.hint;
   const tooltip = tooltipOverride ?? auto.tooltip;
-  const positive = kpi.change > 0;
-  const negative = kpi.change < 0;
+  const hasChange = typeof kpi.change === "number";
+  const change = kpi.change ?? 0;
+  const positive = change > 0;
+  const negative = change < 0;
   const ChangeIcon = positive ? ArrowUpRight : negative ? ArrowDownRight : Minus;
 
   return (
@@ -97,17 +99,19 @@ export function KpiTile({
           <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-600">
             <Icon className="h-4 w-4" aria-hidden />
           </span>
-          <span
-            className={cn(
-              "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold",
-              positive && "bg-emerald-500/10 text-emerald-700",
-              negative && "bg-rose-500/10 text-rose-700",
-              !positive && !negative && "bg-muted text-muted-foreground"
-            )}
-          >
-            <ChangeIcon className="h-3 w-3" />
-            {formatSignedPercent(kpi.change)}
-          </span>
+          {hasChange ? (
+            <span
+              className={cn(
+                "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold",
+                positive && "bg-emerald-500/10 text-emerald-700",
+                negative && "bg-rose-500/10 text-rose-700",
+                !positive && !negative && "bg-muted text-muted-foreground"
+              )}
+            >
+              <ChangeIcon className="h-3 w-3" />
+              {formatSignedPercent(change)}
+            </span>
+          ) : null}
         </div>
         <div className="mt-4 flex items-center gap-1.5">
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">

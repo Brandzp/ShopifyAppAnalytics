@@ -8,6 +8,8 @@ import { BarInsightChart } from "@/components/charts/bar-insight-chart";
 import { CollectionChips } from "@/components/dashboard-v2/collection-chips";
 import { DataTable } from "@/components/shared/data-table";
 import { getAppChromeData, getProfitAnalyticsPayload } from "@/lib/services/analytics-service";
+import { buildChannelCacReport } from "@/lib/services/channel-cac-service";
+import { resolveActiveStoreId } from "@/lib/services/offline-sales-service";
 import { formatCurrency, formatNumber } from "@/lib/utils";
 import { getAppLocale, getDictionary } from "@/lib/i18n";
 
@@ -16,8 +18,19 @@ export default async function ProfitPage() {
   const dictionary = getDictionary(locale);
   const tips = dictionary.profit.tips;
   const overviewColTips = dictionary.overview.colTips;
-  const [profit, chrome] = await Promise.all([getProfitAnalyticsPayload(), getAppChromeData()]);
+  const [profit, chrome, storeId] = await Promise.all([
+    getProfitAnalyticsPayload(),
+    getAppChromeData(),
+    resolveActiveStoreId()
+  ]);
   const currency = chrome.store.currency;
+  const channelCac = storeId
+    ? await buildChannelCacReport({
+        storeId,
+        start: new Date(`${chrome.controls.startDate}T00:00:00Z`),
+        end: new Date(`${chrome.controls.endDate}T23:59:59Z`)
+      }).catch(() => null)
+    : null;
 
   // Narrative
   const totalRevenue = profit.productPerformance.reduce((acc, row) => acc + row.revenue, 0);
@@ -93,10 +106,30 @@ export default async function ProfitPage() {
               </CardHeader>
               <CardContent>
                 <BarInsightChart
-                  data={profit.collectionPerformance.map((item) => ({
-                    collection: item.collection,
-                    estimatedProfit: item.estimatedProfit
-                  }))}
+                  data={(() => {
+                    // Render only the top contributors and roll the long tail
+                    // into a single "Other" bar. Without this the x-axis crams
+                    // 40+ labels into a few hundred pixels and nothing is
+                    // readable. Sorted desc so the heroes are on the left.
+                    const MAX_BARS = 10;
+                    const sorted = [...profit.collectionPerformance]
+                      .filter((c) => Number(c.estimatedProfit) > 0)
+                      .sort((a, b) => Number(b.estimatedProfit) - Number(a.estimatedProfit));
+                    const top = sorted.slice(0, MAX_BARS);
+                    const rest = sorted.slice(MAX_BARS);
+                    const tailLabel = locale === "he" ? `אחר (${rest.length})` : `Other (${rest.length})`;
+                    const tail =
+                      rest.length > 0
+                        ? [{
+                            collection: tailLabel,
+                            estimatedProfit: rest.reduce((sum, c) => sum + Number(c.estimatedProfit), 0)
+                          }]
+                        : [];
+                    return [...top.map((item) => ({
+                      collection: item.collection,
+                      estimatedProfit: Number(item.estimatedProfit)
+                    })), ...tail];
+                  })()}
                   dataKey="estimatedProfit"
                   xKey="collection"
                   color="#0080FF"
@@ -278,6 +311,22 @@ export default async function ProfitPage() {
           </div>
         </section>
 
+        {/* Per-channel CAC & contribution margin */}
+        {channelCac && channelCac.rows.length > 0 ? (
+          <section className="space-y-3">
+            <SectionHead
+              eyebrow={locale === "he" ? "ערוצים" : "Channels"}
+              title={locale === "he" ? "רווח תרומה ועלות רכישת לקוח לפי ערוץ" : "Channel CAC & contribution margin"}
+              hint={
+                locale === "he"
+                  ? "כמה כל ערוץ עולה לך, מה החזיר בהכנסה, ומה נשאר ברווח תרומה אחרי COGS והוצאת פרסום מיוחסת. מומלצת = להגדיל. לעיון = לבחון קריאייטיב/קהל. להרעיב = לעצור הוצאה."
+                  : "How much each channel costs, what it returned in revenue, and what's left as contribution margin after COGS and attributed spend. Push = scale, review = check creative/audience, starve = stop spending."
+              }
+            />
+            <ChannelCacTable report={channelCac} currency={currency} locale={locale} />
+          </section>
+        ) : null}
+
         {/* Bundle / refund placeholders */}
         <section className="space-y-3">
           <SectionHead
@@ -314,5 +363,114 @@ export default async function ProfitPage() {
         </section>
       </div>
     </AppShell>
+  );
+}
+
+function ChannelCacTable({
+  report,
+  currency,
+  locale
+}: {
+  report: import("@/lib/services/channel-cac-service").ChannelCacReport;
+  currency: string;
+  locale: "he" | "en";
+}) {
+  const isHe = locale === "he";
+  const lang = (he: string, en: string) => (isHe ? he : en);
+  const fmt = (n: number) => formatCurrency(n, currency);
+  const recPill = (rec: import("@/lib/services/channel-cac-service").ChannelCacRow["recommendation"]) => {
+    const label = {
+      push: { he: "להגדיל", en: "Push" },
+      hold: { he: "להחזיק", en: "Hold" },
+      review: { he: "לעיין", en: "Review" },
+      starve: { he: "להרעיב", en: "Starve" },
+      no_data: { he: "אין נתונים", en: "No data" }
+    }[rec];
+    const cls = {
+      push: "bg-emerald-100 text-emerald-900 border-emerald-300",
+      hold: "bg-sky-100 text-sky-900 border-sky-300",
+      review: "bg-amber-100 text-amber-900 border-amber-300",
+      starve: "bg-rose-100 text-rose-900 border-rose-300",
+      no_data: "bg-slate-100 text-slate-700 border-slate-300"
+    }[rec];
+    return (
+      <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold ${cls}`}>
+        {label[isHe ? "he" : "en"]}
+      </span>
+    );
+  };
+
+  return (
+    <div className="overflow-x-auto rounded-lg border border-border">
+      <table className="w-full border-collapse text-xs">
+        <thead className="bg-slate-50">
+          <tr>
+            <th className="px-3 py-2 text-start text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+              {lang("ערוץ", "Channel")}
+            </th>
+            <th className="px-3 py-2 text-end text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+              {lang("הזמנות", "Orders")}
+            </th>
+            <th className="px-3 py-2 text-end text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+              {lang("הכנסה", "Revenue")}
+            </th>
+            <th className="px-3 py-2 text-end text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+              {lang("הוצאה", "Spend")}
+            </th>
+            <th className="px-3 py-2 text-end text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+              {lang("רווח תרומה", "Contribution")}
+            </th>
+            <th className="px-3 py-2 text-end text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+              {lang("מרווח %", "Margin %")}
+            </th>
+            <th className="px-3 py-2 text-end text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+              CAC
+            </th>
+            <th className="px-3 py-2 text-center text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+              {lang("המלצה", "Verdict")}
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {report.rows.map((r) => (
+            <tr key={r.channel} className="border-t border-border">
+              <td className="px-3 py-2">
+                <div className="font-semibold">{r.displayName}</div>
+                <div className="text-[10px] text-muted-foreground">
+                  {r.spendSource === "meta_insights"
+                    ? lang("מקור עלות: Meta Insights", "Cost source: Meta Insights")
+                    : r.spendSource === "affiliate_commission"
+                      ? lang("מקור עלות: עמלות שותפים", "Cost source: affiliate commissions")
+                      : r.spendSource === "assumed_zero"
+                        ? lang("מקור עלות: 0 (אורגני)", "Cost source: 0 (organic)")
+                        : lang("מקור עלות: לא ידוע", "Cost source: unknown")}
+                </div>
+              </td>
+              <td className="px-3 py-2 text-end">{r.orders}</td>
+              <td className="px-3 py-2 text-end">{fmt(r.revenue)}</td>
+              <td className="px-3 py-2 text-end">
+                {r.attributedSpend > 0 ? fmt(r.attributedSpend) : "—"}
+              </td>
+              <td className={`px-3 py-2 text-end font-semibold ${r.contributionMargin < 0 ? "text-rose-700" : "text-emerald-700"}`}>
+                {fmt(r.contributionMargin)}
+              </td>
+              <td className="px-3 py-2 text-end">
+                {(r.contributionMarginRate * 100).toFixed(1)}%
+              </td>
+              <td className="px-3 py-2 text-end">
+                {r.cac != null ? fmt(r.cac) : "—"}
+              </td>
+              <td className="px-3 py-2 text-center">{recPill(r.recommendation)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <div className="border-t border-border bg-slate-50 px-3 py-2 text-[10px] text-muted-foreground">
+        {lang(
+          `כיסוי שיוך: ${Math.round(report.attributionCoverage * 100)}% · הקצאת COGS פר ערוץ ב-v1 לפי משקל הכנסה (יחודד בעתיד)`,
+          `Attribution coverage: ${Math.round(report.attributionCoverage * 100)}% · v1 allocates COGS per channel by revenue share (refined in future)`
+        )}
+      </div>
+    </div>
   );
 }

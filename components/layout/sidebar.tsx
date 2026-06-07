@@ -1,8 +1,8 @@
 "use client";
 
-import Link from "next/link";
+import Link, { useLinkStatus } from "next/link";
 import { usePathname } from "next/navigation";
-import { Bell, CalendarRange, LayoutDashboard, LineChart, Menu, PackageCheck, Settings2, Sparkles, Users2, Megaphone, Bot } from "lucide-react";
+import { Bell, CalendarRange, LayoutDashboard, LineChart, Loader2, Menu, PackageCheck, Settings2, Sparkles, Users2, Megaphone, Bot, FileSpreadsheet, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useMemo, useState } from "react";
@@ -12,6 +12,11 @@ function getNavigation(labels: { nav: Record<string, string> }, locale: AppLocal
   return [
     { href: "/", label: labels.nav.overview, icon: LayoutDashboard },
     { href: "/profit", label: labels.nav.profit, icon: LineChart },
+    {
+      href: "/sales-summary",
+      label: locale === "he" ? "מצב אופליין" : "Offline Status",
+      icon: FileSpreadsheet
+    },
     { href: "/retention", label: labels.nav.retention, icon: Users2 },
     {
       href: "/product-follow-ups",
@@ -19,12 +24,31 @@ function getNavigation(labels: { nav: Record<string, string> }, locale: AppLocal
       icon: PackageCheck
     },
     { href: "/affiliate-portal", label: locale === "he" ? "פורטל שותפים" : "Affiliate Portal", icon: Megaphone },
+    { href: "/creative", label: locale === "he" ? "סטודיו קריאייטיב" : "Creative", icon: Sparkles },
     { href: "/weekly-summary", label: labels.nav.weeklySummary, icon: Sparkles },
     { href: "/growth-agent", label: "Growth Agent", icon: Bot },
     { href: "/marketing-planner", label: locale === "he" ? "גאנט שיווקי" : "Marketing Planner", icon: CalendarRange },
     { href: "/alerts", label: labels.nav.alerts, icon: Bell },
     { href: "/settings", label: labels.nav.settings, icon: Settings2 }
   ] as const;
+}
+
+/**
+ * Renders the nav item's icon, swapping it for a spinner while a click on this
+ * link has a navigation in flight. `useLinkStatus` only reports `pending` for
+ * the enclosing <Link>, so the user gets feedback exactly on the item they
+ * clicked while the destination page does its server work.
+ */
+function NavLinkIcon({ Icon, isActive }: { Icon: LucideIcon; isActive: boolean }) {
+  const { pending } = useLinkStatus();
+  const className = cn(
+    "h-4 w-4 shrink-0",
+    isActive ? "text-foreground" : "text-muted-foreground group-hover/nav:text-foreground"
+  );
+  if (pending) {
+    return <Loader2 className={cn(className, "animate-spin")} aria-label="Loading" />;
+  }
+  return <Icon className={className} aria-hidden />;
 }
 
 function NavContent({
@@ -63,7 +87,8 @@ function NavContent({
           return (
             <Link
               key={item.href}
-              href={item.href}
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              href={item.href as any}
               aria-current={isActive ? "page" : undefined}
               className={cn(
                 "group/nav relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
@@ -79,7 +104,7 @@ function NavContent({
                   isActive ? "bg-foreground" : "bg-transparent group-hover/nav:bg-border"
                 )}
               />
-              <Icon className={cn("h-4 w-4 shrink-0", isActive ? "text-foreground" : "text-muted-foreground group-hover/nav:text-foreground")} />
+              <NavLinkIcon Icon={Icon} isActive={isActive} />
               <span className="truncate">{item.label}</span>
             </Link>
           );

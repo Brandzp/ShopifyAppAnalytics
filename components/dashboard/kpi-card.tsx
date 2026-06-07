@@ -16,7 +16,9 @@ export function KpiCard({
   changeLabel?: string;
   tooltip?: React.ReactNode;
 }) {
-  const positive = kpi.change >= 0;
+  const hasChange = typeof kpi.change === "number";
+  const change = kpi.change ?? 0;
+  const positive = change >= 0;
   const Icon = positive ? ArrowUpRight : ArrowDownRight;
 
   return (
@@ -29,16 +31,20 @@ export function KpiCard({
         <CardTitle className="text-2xl sm:text-3xl">{formatKpiValue(kpi, currency)}</CardTitle>
       </CardHeader>
       <CardContent className="flex flex-wrap items-center gap-2 pt-1">
-        <span
-          className={cn(
-            "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold",
-            positive ? "bg-success/10 text-success" : "bg-danger/10 text-danger"
-          )}
-        >
-          <Icon className="h-3.5 w-3.5" />
-          {formatSignedPercent(kpi.change)}
-        </span>
-        <span className="text-xs text-muted-foreground">{changeLabel}</span>
+        {hasChange ? (
+          <>
+            <span
+              className={cn(
+                "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold",
+                positive ? "bg-success/10 text-success" : "bg-danger/10 text-danger"
+              )}
+            >
+              <Icon className="h-3.5 w-3.5" />
+              {formatSignedPercent(change)}
+            </span>
+            <span className="text-xs text-muted-foreground">{changeLabel}</span>
+          </>
+        ) : null}
       </CardContent>
     </Card>
   );
