@@ -36,6 +36,28 @@ Legend:
 | `app/print` | **experimental** | Printable report rendering (supports weekly/monthly export). |
 | `app/globals.css` | **core** | Global styles (not a feature; listed for completeness). |
 
+### `app/api/` major areas
+
+Mirror the feature classification above; listed explicitly so the API surface
+is auditable. (Source: real listing of `app/api/*/`.)
+
+| API area | Classification | Drives |
+|----------|----------------|--------|
+| `app/api/shopify` | **core** | Connection test/save, sync execute/status — the ingestion backbone. |
+| `app/api/settings` | **core** | Settings / connection management endpoints. |
+| `app/api/alerts` | **core** | Alert feed/config endpoints. |
+| `app/api/reporting` | **core** | Report data/export endpoints (weekly/monthly). |
+| `app/api/weekly-summary` | **core** | Weekly founder-summary endpoints. |
+| `app/api/sales-summary` | **core** | Offline/online sales summary endpoints. |
+| `app/api/webhooks` | **core** | Shopify webhook receivers. |
+| `app/api/cron` | **core** (dispatch) | In-process cron self-fetch targets; each job inherits its feature's class. |
+| `app/api/creative` | **experimental** | Creative AI generation jobs/projects. |
+| `app/api/creator` | **experimental** | Creator portal/admin endpoints. |
+| `app/api/affiliate-portal` | **experimental** | Affiliate portal, attribution, conversion import. |
+| `app/api/growth-agent` | **experimental** | Growth-agent actions, connections, rules, history. |
+| `app/api/marketing-planner` | **experimental** | Marketing planner brief/plan endpoints. |
+| `app/api/meta-ads` | **experimental** | Meta/Instagram ads ingestion (API-only; no top-level page). |
+
 ## `lib/services/` significant areas
 
 | Service group | Classification | Description |
@@ -64,6 +86,18 @@ Legend:
 | `creative-new.html`, `edit.html` | **deprecated** | Loose HTML prototypes at repo root; not wired into the Next.js app. |
 | `tmp-test-file.txt` | **deprecated** | Temp file; remove. |
 | `dev-server.log` | **deprecated** | Dev log present at repo root; should be gitignored. |
+
+## Known gaps
+
+- **AttributionSession table is EMPTY (0 rows).** Nothing is currently writing
+  click/visit sessions, so conversion- and funnel-based metrics (click ->
+  visit -> order attribution, affiliate conversion rate from sessions) are
+  **unavailable**. Only **order-based** metrics work today (revenue, profit,
+  retention, alerts, weekly summary), because those derive from synced Shopify
+  orders rather than tracked sessions. Affiliate-portal conversion numbers that
+  depend on sessions will read as zero until session ingestion is wired up.
+- Treat any **experimental** area's "conversion" or "attribution" figures with
+  caution while the session table stays empty.
 
 ## Notes / risks
 
