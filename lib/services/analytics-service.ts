@@ -1,4 +1,4 @@
-﻿import { getProfitAnalyticsFromDb, getRetentionAnalyticsFromDb } from "@/lib/data/prisma-analytics-repository";
+﻿import { getProfitAnalyticsFromDb, getRetentionAnalyticsFromDb, getShopifyParityOverview } from "@/lib/data/prisma-analytics-repository";
 import { getAnalyticsRepository } from "@/lib/repositories";
 import { getReportingDateRangeSelection } from "@/lib/server/reporting-date-range";
 import { getAppLocale, getDictionary } from "@/lib/i18n";
@@ -116,43 +116,86 @@ export async function getOverviewPayload(): Promise<OverviewPayload> {
   const locale = await getAppLocale();
   const dictionary = getDictionary(locale);
   const repository = await getAnalyticsRepository();
-  const [store, dailyMetrics, previousPeriodMetrics, collectionPerformance, discounts, productPerformance] =
-    await Promise.all([
-      repository.getStore(),
-      repository.getDailyMetrics(),
-      repository.getPreviousPeriodMetrics(),
-      repository.getCollectionPerformance(),
-      repository.getDiscountUsage(),
-      getProfitAnalyticsPayload().then((payload) => payload.productPerformance)
-    ]);
+  const reportingRange = await getReportingDateRangeSelection(locale);
+  const comparisonEnabled = reportingRange.comparison.enabled;
 
-  const comparisonMetrics = buildComparisonMetrics(dailyMetrics, previousPeriodMetrics, {
+  const [store, parity, collectionPerformance, discounts, productPerformance] = await Promise.all([
+    repository.getStore(),
+    getShopifyParityOverview(),
+    repository.getCollectionPerformance(),
+    repository.getDiscountUsage(),
+    getProfitAnalyticsPayload().then((payload) => payload.productPerformance)
+  ]);
+
+  // Shopify-parity numbers (reconcile to Shopify's Sales report). Fall back to
+  // the legacy per-order metrics only when the parity layer is unavailable
+  // (no DB / disconnected preview store).
+  const cur = parity?.current ?? null;
+  const prev = parity?.previous ?? null;
+  const dailyMetrics: DailyMetric[] = parity ? parity.daily : await repository.getDailyMetrics();
+  const previousPeriodMetrics: DailyMetric[] =
+    comparisonEnabled && prev
+      ? [
+          {
+            date: "previous",
+            revenue: prev.totalSales,
+            estimatedProfit: prev.estimatedProfit,
+            returningCustomerRate: prev.returningCustomerRate,
+            averageOrderValue: prev.averageOrderValue,
+            discountRate: prev.discountRate,
+            refundRate: prev.refundRate,
+            orders: prev.orders
+          }
+        ]
+      : comparisonEnabled && !parity
+        ? await repository.getPreviousPeriodMetrics()
+        : [];
+
+  const comparisonMetrics = comparisonEnabled
+    ? buildComparisonMetrics(dailyMetrics, previousPeriodMetrics, {
     revenue: dictionary.overview.revenue,
     estimatedProfit: dictionary.overview.estimatedProfit,
     returningCustomerRate: locale === "he" ? "×©×™×¢×•×¨ ×œ×§×•×—×•×ª ×—×•×–×¨×™×" : "Returning Customer Rate",
     discountRate: locale === "he" ? "×©×™×¢×•×¨ ×”× ×—×•×ª" : "Discount Rate"
-  });
-  const revenue = sum(dailyMetrics.map((metric) => metric.revenue));
-  const estimatedProfit = sum(dailyMetrics.map((metric) => metric.estimatedProfit));
-  const returningCustomerRate = average(dailyMetrics.map((metric) => metric.returningCustomerRate));
-  const averageOrderValue = average(dailyMetrics.map((metric) => metric.averageOrderValue));
-  const discountRate = average(dailyMetrics.map((metric) => metric.discountRate));
-  const refundRate = average(dailyMetrics.map((metric) => metric.refundRate));
+      })
+    : [];
+  const revenue = cur ? cur.totalSales : sum(dailyMetrics.map((metric) => metric.revenue));
+  const estimatedProfit = cur ? cur.estimatedProfit : sum(dailyMetrics.map((metric) => metric.estimatedProfit));
+  const returningCustomerRate = cur
+    ? cur.returningCustomerRate
+    : average(dailyMetrics.map((metric) => metric.returningCustomerRate));
+  const averageOrderValue = cur
+    ? cur.averageOrderValue
+    : average(dailyMetrics.map((metric) => metric.averageOrderValue));
+  const discountRate = cur ? cur.discountRate : average(dailyMetrics.map((metric) => metric.discountRate));
+  const refundRate = cur ? cur.refundRate : average(dailyMetrics.map((metric) => metric.refundRate));
   const topProduct = productPerformance[0];
   const mostProfitableCollection = [...collectionPerformance].sort((a, b) => b.estimatedProfit - a.estimatedProfit)[0];
   const topDiscount = discounts[0];
   const biggestDropMetric = comparisonMetrics.filter((metric) => metric.change < 0).sort((a, b) => a.change - b.change)[0];
   const alerts = buildOverviewAlerts(locale, refundRate, discountRate, returningCustomerRate);
+  const aovChange =
+    comparisonEnabled && cur && prev
+      ? cur.averageOrderValue - prev.averageOrderValue
+      : comparisonEnabled && !parity
+        ? averageOrderValue - average(previousPeriodMetrics.map((metric) => metric.averageOrderValue))
+        : undefined;
+  const refundChange =
+    comparisonEnabled && cur && prev
+      ? cur.refundRate - prev.refundRate
+      : comparisonEnabled && !parity
+        ? refundRate - average(previousPeriodMetrics.map((metric) => metric.refundRate))
+        : undefined;
 
-  return {
+  const payload: OverviewPayload = {
     store,
     kpis: [
-      { label: dictionary.overview.revenue, value: revenue, change: comparisonMetrics[0]?.change ?? 0, format: "currency" },
-      { label: dictionary.overview.estimatedProfit, value: estimatedProfit, change: comparisonMetrics[1]?.change ?? 0, format: "currency" },
-      { label: locale === "he" ? "×©×™×¢×•×¨ ×œ×§×•×—×•×ª ×—×•×–×¨×™×" : "Returning Customer Rate", value: returningCustomerRate, change: comparisonMetrics[2]?.change ?? 0, format: "percent" },
-      { label: locale === "he" ? "×¢×¨×š ×”×–×ž× ×” ×ž×ž×•×¦×¢" : "Average Order Value", value: averageOrderValue, change: averageOrderValue - average(previousPeriodMetrics.map((metric) => metric.averageOrderValue)), format: "currency" },
-      { label: locale === "he" ? "×©×™×¢×•×¨ ×”× ×—×•×ª" : "Discount Rate", value: discountRate, change: comparisonMetrics[3]?.change ?? 0, format: "percent" },
-      { label: locale === "he" ? "×©×™×¢×•×¨ ×”×—×–×¨×™×" : "Refund Rate", value: refundRate, change: refundRate - average(previousPeriodMetrics.map((metric) => metric.refundRate)), format: "percent" }
+      { label: dictionary.overview.revenue, value: revenue, change: comparisonMetrics[0]?.change, format: "currency" },
+      { label: dictionary.overview.estimatedProfit, value: estimatedProfit, change: comparisonMetrics[1]?.change, format: "currency" },
+      { label: locale === "he" ? "×©×™×¢×•×¨ ×œ×§×•×—×•×ª ×—×•×–×¨×™×" : "Returning Customer Rate", value: returningCustomerRate, change: comparisonMetrics[2]?.change, format: "percent" },
+      { label: locale === "he" ? "×¢×¨×š ×”×–×ž× ×” ×ž×ž×•×¦×¢" : "Average Order Value", value: averageOrderValue, change: aovChange, format: "currency" },
+      { label: locale === "he" ? "×©×™×¢×•×¨ ×”× ×—×•×ª" : "Discount Rate", value: discountRate, change: comparisonMetrics[3]?.change, format: "percent" },
+      { label: locale === "he" ? "×©×™×¢×•×¨ ×”×—×–×¨×™×" : "Refund Rate", value: refundRate, change: refundChange, format: "percent" }
     ],
     dailyMetrics,
     insights: [
@@ -247,8 +290,20 @@ export async function getOverviewPayload(): Promise<OverviewPayload> {
     collectionPerformance,
     discounts,
     alerts,
-    comparisonMetrics
+    comparisonMetrics,
+    comparisonEnabled
   };
+
+  if (!comparisonEnabled) {
+    // No comparison selected: drop the comparative "What changed this week"
+    // panel (always the first actionPanel entry) and the "Biggest drop vs
+    // prior period" insight (always the 4th insight) so nothing implies a
+    // period-over-period delta the user didn't ask for.
+    payload.actionPanel = payload.actionPanel.slice(1);
+    payload.insights = payload.insights.filter((_, index) => index !== 3);
+  }
+
+  return payload;
 }
 
 export async function getProfitAnalyticsPayload(): Promise<ProfitAnalyticsPayload> {

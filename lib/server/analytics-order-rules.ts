@@ -1,6 +1,3 @@
-const IGNORED_ANALYTICS_DISCOUNT_CODES = new Set(["custom discount"]);
-const MAX_IGNORED_FULFILLED_ORDER_TOTAL = 20;
-
 function normalizeDiscountCode(code?: string | null) {
   return String(code ?? "")
     .trim()
@@ -9,8 +6,10 @@ function normalizeDiscountCode(code?: string | null) {
 }
 
 export function isAnalyticsDiscountCode(code?: string | null) {
-  const normalized = normalizeDiscountCode(code);
-  return Boolean(normalized) && !IGNORED_ANALYTICS_DISCOUNT_CODES.has(normalized);
+  // Count every real discount code, matching Shopify's reports. (Previously
+  // "custom discount" was suppressed, which made our discount totals diverge
+  // from Shopify.)
+  return Boolean(normalizeDiscountCode(code));
 }
 
 export function pickAnalyticsDiscountCode(codes: Array<string | null | undefined>) {
@@ -18,17 +17,12 @@ export function pickAnalyticsDiscountCode(codes: Array<string | null | undefined
   return typeof match === "string" ? match : undefined;
 }
 
-export function shouldIgnoreOrderForAnalytics(order: {
+export function shouldIgnoreOrderForAnalytics(_order: {
   totalPrice?: number | null;
   fulfillmentStatus?: string | null;
 }) {
-  const fulfillmentStatus = String(order.fulfillmentStatus ?? "").trim().toUpperCase();
-  const totalPrice = Number(order.totalPrice ?? 0);
-
-  return (
-    fulfillmentStatus === "FULFILLED" &&
-    Number.isFinite(totalPrice) &&
-    totalPrice >= 0 &&
-    totalPrice <= MAX_IGNORED_FULFILLED_ORDER_TOTAL
-  );
+  // Shopify's reports count every order. We previously dropped fulfilled
+  // orders <= 20 (intended to hide test/sample orders) but that silently made
+  // every analytics total lower than Shopify, so it's disabled.
+  return false;
 }

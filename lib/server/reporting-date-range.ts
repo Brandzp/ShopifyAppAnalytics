@@ -1,7 +1,89 @@
 import { cookies } from "next/headers";
-import { getDefaultDateRange, getPreviousDateRange } from "@/lib/server/analytics";
+import { withOptionalDb } from "@/lib/server/db";
 
 export const REPORTING_DATE_RANGE_COOKIE = "reporting-date-range";
+
+const DEFAULT_TIME_ZONE = "UTC";
+
+/**
+ * Day boundaries must be computed in the *store's* timezone so windows line up
+ * with Shopify's own reports (Shopify reports in store time). Orders are stored
+ * with UTC `createdAt`, so e.g. "May 1" in Asia/Jerusalem is 2026-04-30T21:00Z
+ * .. 2026-05-01T20:59:59Z — not the server-local midnight we used before.
+ */
+export async function getStoreTimeZone(): Promise<string> {
+  return withOptionalDb(async (db) => {
+    const store = await db.store.findFirst({
+      where: { connected: true, connection: { isNot: null } },
+      orderBy: { updatedAt: "desc" },
+      select: { timezone: true }
+    });
+    return store?.timezone || DEFAULT_TIME_ZONE;
+  }, DEFAULT_TIME_ZONE);
+}
+
+type CalendarDate = { year: number; month: number; day: number };
+
+function intlParts(date: Date, timeZone: string) {
+  const dtf = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    hour12: false,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit"
+  });
+  const map: Record<string, number> = {};
+  for (const part of dtf.formatToParts(date)) {
+    if (part.type !== "literal") map[part.type] = Number(part.value);
+  }
+  // Intl can emit hour "24" at midnight; normalize to 0.
+  if (map.hour === 24) map.hour = 0;
+  return map;
+}
+
+/** ms to add to a UTC instant to get wall-clock time in `timeZone`. */
+function tzOffsetMs(date: Date, timeZone: string): number {
+  const p = intlParts(date, timeZone);
+  const asUtc = Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second);
+  return asUtc - date.getTime();
+}
+
+/** The UTC instant for start/end-of-day of a calendar date in `timeZone`. */
+function zonedBoundaryUtc(cal: CalendarDate, mode: "start" | "end", timeZone: string): Date {
+  const [hh, mm, ss, ms] = mode === "start" ? [0, 0, 0, 0] : [23, 59, 59, 999];
+  const guess = Date.UTC(cal.year, cal.month - 1, cal.day, hh, mm, ss, ms);
+  // Resolve twice so DST transition days settle on the correct offset.
+  let result = guess - tzOffsetMs(new Date(guess), timeZone);
+  result = guess - tzOffsetMs(new Date(result), timeZone);
+  return new Date(result);
+}
+
+/** Today's calendar date as seen in `timeZone`. */
+function zonedToday(timeZone: string, now = new Date()): CalendarDate {
+  const p = intlParts(now, timeZone);
+  return { year: p.year, month: p.month, day: p.day };
+}
+
+function calNoon(cal: CalendarDate) {
+  return new Date(Date.UTC(cal.year, cal.month - 1, cal.day, 12, 0, 0, 0));
+}
+
+function calFrom(date: Date): CalendarDate {
+  return { year: date.getUTCFullYear(), month: date.getUTCMonth() + 1, day: date.getUTCDate() };
+}
+
+function addCalendarDays(cal: CalendarDate, days: number): CalendarDate {
+  const d = calNoon(cal);
+  d.setUTCDate(d.getUTCDate() + days);
+  return calFrom(d);
+}
+
+function calWeekday(cal: CalendarDate) {
+  return calNoon(cal).getUTCDay(); // 0 = Sunday
+}
 
 export type RangePreset =
   | "today"
@@ -47,82 +129,69 @@ export interface ReportingDateRangeSelection {
   };
 }
 
-function toInputDate(value: Date) {
-  return value.toISOString().slice(0, 10);
+function toInputDate(value: Date, timeZone: string) {
+  const p = intlParts(value, timeZone);
+  return `${p.year.toString().padStart(4, "0")}-${p.month.toString().padStart(2, "0")}-${p.day
+    .toString()
+    .padStart(2, "0")}`;
 }
 
-function startOfDay(value: Date) {
-  const next = new Date(value);
-  next.setHours(0, 0, 0, 0);
-  return next;
-}
-
-function endOfDay(value: Date) {
-  const next = new Date(value);
-  next.setHours(23, 59, 59, 999);
-  return next;
-}
-
-function parseInputDate(value: string, mode: "start" | "end") {
+function parseInputDate(value: string, mode: "start" | "end", timeZone: string) {
   const [year, month, day] = value.split("-").map(Number);
   if (!year || !month || !day) return null;
-  const date = new Date(year, month - 1, day);
-  if (Number.isNaN(date.getTime())) return null;
-  return mode === "start" ? startOfDay(date) : endOfDay(date);
+  const cal: CalendarDate = { year, month, day };
+  const probe = new Date(Date.UTC(year, month - 1, day, 12));
+  if (Number.isNaN(probe.getTime())) return null;
+  return zonedBoundaryUtc(cal, mode, timeZone);
 }
 
-export function resolvePreset(preset: RangePreset, now = new Date()): { start: Date; end: Date } {
-  const today = startOfDay(now);
+export function resolvePreset(
+  preset: RangePreset,
+  timeZone: string = DEFAULT_TIME_ZONE,
+  now = new Date()
+): { start: Date; end: Date } {
+  const today = zonedToday(timeZone, now);
+  const startOf = (cal: CalendarDate) => zonedBoundaryUtc(cal, "start", timeZone);
+  const endOf = (cal: CalendarDate) => zonedBoundaryUtc(cal, "end", timeZone);
+
   switch (preset) {
     case "today":
-      return { start: today, end: endOfDay(today) };
+      return { start: startOf(today), end: endOf(today) };
     case "yesterday": {
-      const y = new Date(today);
-      y.setDate(y.getDate() - 1);
-      return { start: startOfDay(y), end: endOfDay(y) };
+      const y = addCalendarDays(today, -1);
+      return { start: startOf(y), end: endOf(y) };
     }
-    case "last_7": {
-      const start = new Date(today);
-      start.setDate(start.getDate() - 6);
-      return { start: startOfDay(start), end: endOfDay(today) };
-    }
-    case "last_30": {
-      const start = new Date(today);
-      start.setDate(start.getDate() - 29);
-      return { start: startOfDay(start), end: endOfDay(today) };
-    }
-    case "last_90": {
-      const start = new Date(today);
-      start.setDate(start.getDate() - 89);
-      return { start: startOfDay(start), end: endOfDay(today) };
-    }
-    case "wtd": {
-      const start = new Date(today);
-      const day = start.getDay(); // 0 = Sun
-      start.setDate(start.getDate() - day);
-      return { start: startOfDay(start), end: endOfDay(today) };
-    }
-    case "mtd": {
-      const start = new Date(today.getFullYear(), today.getMonth(), 1);
-      return { start: startOfDay(start), end: endOfDay(today) };
-    }
+    case "last_7":
+      return { start: startOf(addCalendarDays(today, -6)), end: endOf(today) };
+    case "last_30":
+      return { start: startOf(addCalendarDays(today, -29)), end: endOf(today) };
+    case "last_90":
+      return { start: startOf(addCalendarDays(today, -89)), end: endOf(today) };
+    case "wtd":
+      return { start: startOf(addCalendarDays(today, -calWeekday(today))), end: endOf(today) };
+    case "mtd":
+      return { start: startOf({ year: today.year, month: today.month, day: 1 }), end: endOf(today) };
     case "qtd": {
-      const quarterStartMonth = Math.floor(today.getMonth() / 3) * 3;
-      const start = new Date(today.getFullYear(), quarterStartMonth, 1);
-      return { start: startOfDay(start), end: endOfDay(today) };
+      const quarterStartMonth = Math.floor((today.month - 1) / 3) * 3 + 1;
+      return {
+        start: startOf({ year: today.year, month: quarterStartMonth, day: 1 }),
+        end: endOf(today)
+      };
     }
-    case "ytd": {
-      const start = new Date(today.getFullYear(), 0, 1);
-      return { start: startOfDay(start), end: endOfDay(today) };
-    }
-    case "last_year": {
-      const start = new Date(today.getFullYear() - 1, 0, 1);
-      const end = new Date(today.getFullYear() - 1, 11, 31);
-      return { start: startOfDay(start), end: endOfDay(end) };
-    }
+    case "ytd":
+      return { start: startOf({ year: today.year, month: 1, day: 1 }), end: endOf(today) };
+    case "last_year":
+      return {
+        start: startOf({ year: today.year - 1, month: 1, day: 1 }),
+        end: endOf({ year: today.year - 1, month: 12, day: 31 })
+      };
     case "custom":
     default:
-      return getDefaultDateRange(now);
+      // Fallback when a custom range is missing/invalid.
+      return {
+        start: startOf(addCalendarDays(today, -29)),
+        end: endOf(today)
+      };
   }
 }
 
@@ -191,40 +260,52 @@ function describeRange(start: Date, end: Date, locale: "en" | "he" = "en") {
   return startStr === endStr ? startStr : `${startStr} – ${endStr}`;
 }
 
+function previousPeriod(current: { start: Date; end: Date }): { start: Date; end: Date } {
+  // The equal-length block ending the instant before the current window.
+  const lengthMs = current.end.getTime() - current.start.getTime();
+  const end = new Date(current.start.getTime() - 1);
+  const start = new Date(end.getTime() - lengthMs);
+  return { start, end };
+}
+
 function resolveComparison(
   current: { start: Date; end: Date },
-  raw: { mode: ComparisonMode; start?: string; end?: string }
+  raw: { mode: ComparisonMode; start?: string; end?: string },
+  timeZone: string
 ): { start: Date; end: Date } {
   switch (raw.mode) {
     case "prev_year": {
-      const start = new Date(current.start);
-      const end = new Date(current.end);
-      start.setFullYear(start.getFullYear() - 1);
-      end.setFullYear(end.getFullYear() - 1);
-      return { start: startOfDay(start), end: endOfDay(end) };
+      const s = calFrom(current.start);
+      const e = calFrom(current.end);
+      return {
+        start: zonedBoundaryUtc({ ...s, year: s.year - 1 }, "start", timeZone),
+        end: zonedBoundaryUtc({ ...e, year: e.year - 1 }, "end", timeZone)
+      };
     }
     case "prev_year_dow": {
       const lengthDays = Math.round((current.end.getTime() - current.start.getTime()) / 86400000);
-      const start = new Date(current.start);
-      start.setFullYear(start.getFullYear() - 1);
-      const dowDiff = current.start.getDay() - start.getDay();
-      start.setDate(start.getDate() + dowDiff);
-      const end = new Date(start);
-      end.setDate(end.getDate() + lengthDays);
-      return { start: startOfDay(start), end: endOfDay(end) };
+      const cur = calFrom(current.start);
+      let start: CalendarDate = { ...cur, year: cur.year - 1 };
+      const dowDiff = calWeekday(cur) - calWeekday(start);
+      start = addCalendarDays(start, dowDiff);
+      const end = addCalendarDays(start, lengthDays);
+      return {
+        start: zonedBoundaryUtc(start, "start", timeZone),
+        end: zonedBoundaryUtc(end, "end", timeZone)
+      };
     }
     case "custom": {
-      const parsedStart = raw.start ? parseInputDate(raw.start, "start") : null;
-      const parsedEnd = raw.end ? parseInputDate(raw.end, "end") : null;
+      const parsedStart = raw.start ? parseInputDate(raw.start, "start", timeZone) : null;
+      const parsedEnd = raw.end ? parseInputDate(raw.end, "end", timeZone) : null;
       if (parsedStart && parsedEnd && parsedStart <= parsedEnd) {
         return { start: parsedStart, end: parsedEnd };
       }
-      return getPreviousDateRange(current);
+      return previousPeriod(current);
     }
     case "none":
     case "prev_period":
     default:
-      return getPreviousDateRange(current);
+      return previousPeriod(current);
   }
 }
 
@@ -260,31 +341,32 @@ export async function getReportingDateRangeSelection(locale: "en" | "he" = "en")
   const cookieStore = await cookies();
   const raw = cookieStore.get(REPORTING_DATE_RANGE_COOKIE)?.value;
   const state = readState(raw);
+  const timeZone = await getStoreTimeZone();
 
   let preset: RangePreset = state?.preset ?? "last_30";
   let current: { start: Date; end: Date };
 
   if (preset === "custom") {
-    const customStart = state?.start ? parseInputDate(state.start, "start") : null;
-    const customEnd = state?.end ? parseInputDate(state.end, "end") : null;
+    const customStart = state?.start ? parseInputDate(state.start, "start", timeZone) : null;
+    const customEnd = state?.end ? parseInputDate(state.end, "end", timeZone) : null;
     if (customStart && customEnd && customStart <= customEnd) {
       current = { start: customStart, end: customEnd };
     } else {
       preset = "last_30";
-      current = resolvePreset(preset);
+      current = resolvePreset(preset, timeZone);
     }
   } else {
-    current = resolvePreset(preset);
+    current = resolvePreset(preset, timeZone);
   }
 
   const comparisonRaw = state?.comparison ?? { mode: "prev_period" as ComparisonMode };
-  const comparisonRange = resolveComparison(current, comparisonRaw);
+  const comparisonRange = resolveComparison(current, comparisonRaw, timeZone);
 
   return {
     start: current.start,
     end: current.end,
-    startInput: toInputDate(current.start),
-    endInput: toInputDate(current.end),
+    startInput: toInputDate(current.start, timeZone),
+    endInput: toInputDate(current.end, timeZone),
     label: presetLabel(preset, locale) + (preset === "custom" ? "" : ""),
     preset,
     comparison: {
@@ -292,8 +374,8 @@ export async function getReportingDateRangeSelection(locale: "en" | "he" = "en")
       enabled: comparisonRaw.mode !== "none",
       start: comparisonRange.start,
       end: comparisonRange.end,
-      startInput: toInputDate(comparisonRange.start),
-      endInput: toInputDate(comparisonRange.end),
+      startInput: toInputDate(comparisonRange.start, timeZone),
+      endInput: toInputDate(comparisonRange.end, timeZone),
       label: comparisonLabel(comparisonRaw.mode, locale)
     }
   };

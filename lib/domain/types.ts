@@ -70,6 +70,8 @@ export interface OrderLineItem {
   unitPrice: number;
   discountAmount: number;
   estimatedCost: number;
+  refundedQuantity: number;
+  refundedSubtotal: number;
 }
 
 export interface Order {
@@ -106,7 +108,8 @@ export interface DailyMetric {
 export interface KPI {
   label: string;
   value: number;
-  change: number;
+  /** Period-over-period change. Undefined when no comparison is selected. */
+  change?: number;
   format: KpiFormat;
 }
 
@@ -200,6 +203,7 @@ export interface OverviewPayload {
   discounts: DiscountUsage[];
   alerts: Alert[];
   comparisonMetrics: ComparisonMetric[];
+  comparisonEnabled: boolean;
 }
 
 export interface ProfitAnalyticsPayload {

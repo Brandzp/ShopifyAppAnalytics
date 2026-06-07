@@ -149,8 +149,6 @@ export function buildProductPerformance(
   const grouped = new Map<string, ProductPerformanceRow>();
 
   for (const order of orders) {
-    const orderRevenue = order.lineItems.reduce((total, item) => total + item.unitPrice * item.quantity, 0);
-
     for (const lineItem of order.lineItems) {
       const productId = lineItem.productId;
       if (!productId) continue;
@@ -158,7 +156,11 @@ export function buildProductPerformance(
       if (!product) continue;
 
       const lineRevenue = lineItem.unitPrice * lineItem.quantity;
-      const refundShare = orderRevenue ? (order.refundAmount * lineRevenue) / orderRevenue : 0;
+      // Shopify's "Net items sold" = items sold − items returned. We track
+      // refunds at the line item level (see mapOrderNode), so the math here
+      // is exact instead of a pro-rated approximation.
+      const netUnits = Math.max(0, lineItem.quantity - lineItem.refundedQuantity);
+      const refundImpact = lineItem.refundedSubtotal;
       const current = grouped.get(productId) ?? {
         productId,
         productTitle: product.title,
@@ -172,11 +174,11 @@ export function buildProductPerformance(
         inventoryQuantity: product.inventoryQuantity ?? null
       };
 
-      current.unitsSold += lineItem.quantity;
+      current.unitsSold += netUnits;
       current.revenue += lineRevenue;
       current.discountImpact += lineItem.discountAmount;
-      current.refundImpact += refundShare;
-      current.estimatedProfit += lineRevenue - lineItem.discountAmount - refundShare - lineItem.estimatedCost;
+      current.refundImpact += refundImpact;
+      current.estimatedProfit += lineRevenue - lineItem.discountAmount - refundImpact - lineItem.estimatedCost;
       grouped.set(productId, current);
     }
   }
