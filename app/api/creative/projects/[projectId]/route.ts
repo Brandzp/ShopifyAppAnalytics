@@ -1,0 +1,29 @@
+import { NextResponse } from "next/server";
+import { resolveActiveStoreId } from "@/lib/services/offline-sales-service";
+import { getProjectDetail } from "@/lib/services/creative-project-service";
+import { toErrorMessage } from "@/lib/server/errors";
+
+// GET /api/creative/projects/[projectId]
+// Returns the full project detail (sources + assets) so the client can poll
+// for updates while a batch job is running.
+export const dynamic = "force-dynamic";
+
+export async function GET(
+  _request: Request,
+  context: { params: Promise<{ projectId: string }> }
+) {
+  try {
+    const { projectId } = await context.params;
+    const storeId = await resolveActiveStoreId();
+    if (!storeId) {
+      return NextResponse.json({ ok: false, error: "No active store." }, { status: 400 });
+    }
+    const project = await getProjectDetail(storeId, projectId);
+    if (!project) {
+      return NextResponse.json({ ok: false, error: "Project not found." }, { status: 404 });
+    }
+    return NextResponse.json({ ok: true, project });
+  } catch (error) {
+    return NextResponse.json({ ok: false, error: toErrorMessage(error) }, { status: 500 });
+  }
+}

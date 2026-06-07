@@ -1,0 +1,164 @@
+"use client";
+
+import Link from "next/link";
+import { Plus, Sparkles, ImageIcon, Film, Megaphone, Box } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
+import type { AppLocale } from "@/lib/i18n";
+import type { CreativeProjectSummary, CreativeType } from "@/lib/domain/creative-types";
+
+const TYPE_ICON: Record<CreativeType, typeof Sparkles> = {
+  PACKSHOT: Box,
+  INSTAGRAM_POST: ImageIcon,
+  UGC_VIDEO: Film,
+  META_AD: Megaphone
+};
+
+function typeLabel(type: CreativeType, locale: AppLocale): string {
+  if (locale === "he") {
+    return {
+      PACKSHOT: "פאקשוט",
+      INSTAGRAM_POST: "פוסט לאינסטגרם",
+      UGC_VIDEO: "סרטון UGC",
+      META_AD: "מודעה ל־Meta"
+    }[type];
+  }
+  return {
+    PACKSHOT: "Packshot",
+    INSTAGRAM_POST: "Instagram post",
+    UGC_VIDEO: "UGC video",
+    META_AD: "Meta ad"
+  }[type];
+}
+
+function statusLabel(status: string, locale: AppLocale): string {
+  if (locale === "he") {
+    return (
+      ({
+        draft: "טיוטה",
+        generating: "מייצר…",
+        ready: "מוכן",
+        archived: "ארכיון"
+      } as Record<string, string>)[status] ?? status
+    );
+  }
+  return (
+    ({
+      draft: "Draft",
+      generating: "Generating…",
+      ready: "Ready",
+      archived: "Archived"
+    } as Record<string, string>)[status] ?? status
+  );
+}
+
+export function CreativeProjectsList({
+  initialProjects,
+  locale
+}: {
+  initialProjects: CreativeProjectSummary[];
+  locale: AppLocale;
+}) {
+  const isHe = locale === "he";
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-semibold">{isHe ? "הפרויקטים שלי" : "Your projects"}</h2>
+          <p className="text-sm text-muted-foreground">
+            {isHe
+              ? "כל פרויקט מקבץ קבצי מקור ונכסים שנוצרו."
+              : "Each project bundles your source uploads with the assets generated from them."}
+          </p>
+        </div>
+        <Link href={"/creative/new" as any}>
+          <Button>
+            <Plus className={cn("h-4 w-4", isHe ? "ml-2" : "mr-2")} />
+            {isHe ? "פרויקט חדש" : "New project"}
+          </Button>
+        </Link>
+      </div>
+
+      {initialProjects.length === 0 ? (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center gap-3 py-16 text-center">
+            <Sparkles className="h-10 w-10 text-indigo-500" aria-hidden />
+            <h3 className="text-base font-semibold">
+              {isHe ? "אין עדיין פרויקטים" : "No projects yet"}
+            </h3>
+            <p className="max-w-md text-sm text-muted-foreground">
+              {isHe
+                ? "התחילו עם פאקשוט: העלו תמונה של מוצר וקבלו תמונה מקצועית מוכנה לרשתות."
+                : "Start with a packshot — upload a product photo and get a polished, ready-to-publish image back."}
+            </p>
+            <Link href={"/creative/new" as any}>
+              <Button>
+                <Plus className={cn("h-4 w-4", isHe ? "ml-2" : "mr-2")} />
+                {isHe ? "צור פרויקט ראשון" : "Create your first project"}
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {initialProjects.map((project) => {
+            const Icon = TYPE_ICON[project.creativeType] ?? Sparkles;
+            return (
+              <Link
+                key={project.id}
+                href={`/creative/${project.id}` as any}
+                className="group block focus:outline-none"
+              >
+                <Card className="overflow-hidden transition-shadow group-hover:shadow-md">
+                  <div className="relative aspect-square w-full bg-muted">
+                    {project.coverThumbUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={project.coverThumbUrl}
+                        alt={project.name}
+                        className="absolute inset-0 h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="absolute inset-0 flex items-center justify-center text-muted-foreground">
+                        <Icon className="h-10 w-10" aria-hidden />
+                      </div>
+                    )}
+                  </div>
+                  <CardContent className="space-y-2 p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="truncate text-sm font-semibold">{project.name}</p>
+                      <span
+                        className={cn(
+                          "shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide",
+                          project.status === "ready"
+                            ? "bg-emerald-100 text-emerald-700"
+                            : project.status === "generating"
+                              ? "bg-amber-100 text-amber-800"
+                              : "bg-slate-100 text-slate-600"
+                        )}
+                      >
+                        {statusLabel(project.status, locale)}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs text-muted-foreground">
+                      <span className="inline-flex items-center gap-1">
+                        <Icon className="h-3.5 w-3.5" aria-hidden />
+                        {typeLabel(project.creativeType, locale)}
+                      </span>
+                      <span>
+                        {project.readyCount}/{project.assetCount || project.targetCount}{" "}
+                        {isHe ? "מוכנים" : "ready"}
+                      </span>
+                    </div>
+                  </CardContent>
+                </Card>
+              </Link>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
