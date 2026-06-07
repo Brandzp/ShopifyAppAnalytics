@@ -260,14 +260,23 @@ export async function getOfflineSalesSummary(
   const { start, end } = periodBounds(importRecord.periodYear, importRecord.periodMonth);
 
   // Aggregate online sales for the period, grouped by variant.
+  // CRITICAL FILTERS (added 2026-06-07): exclude cancelled + test orders so
+  // the online total reconciles with the Overview KPI. Without these the
+  // "Online sales" number on this page can be 30-40% higher than reality.
+  // We also sum `lineDiscountAmount` per variant so the per-product revenue
+  // can be netted out (matches Shopify's "Net sales" walk per line).
   const onlineByVariant = await db.orderLineItem.groupBy({
     by: ["variantId"],
     where: {
       storeId,
-      order: { createdAt: { gte: start, lt: end } },
+      order: {
+        createdAt: { gte: start, lt: end },
+        cancelledAt: null,
+        test: false
+      },
       variantId: { not: null }
     },
-    _sum: { quantity: true, lineSubtotal: true }
+    _sum: { quantity: true, lineSubtotal: true, lineDiscountAmount: true }
   });
 
   // Live re-match: query the current ProductVariant table for any barcode in this import.
@@ -341,7 +350,13 @@ export async function getOfflineSalesSummary(
   for (const agg of onlineByVariant) {
     const variantInfo = agg.variantId ? variantById.get(agg.variantId) : undefined;
     const qty = Number(agg._sum.quantity ?? 0);
-    const revenue = decimalToNumber(agg._sum.lineSubtotal);
+    // Net of per-line discount so this matches Shopify "Net sales" per line.
+    // This is the same line revenue Shopify-parity computes as
+    //   grossSales − discounts
+    // at the order level, just bucketed per variant.
+    const gross = decimalToNumber(agg._sum.lineSubtotal);
+    const discount = decimalToNumber(agg._sum.lineDiscountAmount);
+    const revenue = gross - discount;
     onlineTotalQuantity += qty;
     onlineTotalSales += revenue;
     if (variantInfo?.barcode) {

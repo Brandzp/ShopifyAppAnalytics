@@ -385,6 +385,25 @@ export interface ShopifyParityOverview {
 }
 
 /**
+ * Same Shopify-parity sales summary as `getShopifyParityOverview`, but for
+ * any arbitrary window — used by services that need the reconciled numbers
+ * for a custom range (contribution margin, weekly report bundle, etc.)
+ * rather than the active reporting window.
+ *
+ * Returns null if the store has no DB connection (preview mode).
+ */
+export async function getShopifySalesSummaryForWindow(
+  storeId: string,
+  start: Date,
+  end: Date
+): Promise<ShopifySalesSummary | null> {
+  return withOptionalDb(
+    async (db) => computeSalesSummary(db, storeId, start, end),
+    null
+  );
+}
+
+/**
  * Single source of truth for the headline numbers, computed to reconcile with
  * Shopify's Sales report for the active reporting window.
  */

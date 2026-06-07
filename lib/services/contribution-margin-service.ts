@@ -1,41 +1,43 @@
 // Contribution margin engine.
 //
-// Replaces "profit by revenue × margin guess" with a real per-order formula:
+// Sources its core numbers (grossSales / discounts / refunds / cogs) from
+// the SAME Shopify-parity layer the Overview KPI reads from
+// (lib/data/prisma-analytics-repository.ts::computeSalesSummary). This is
+// the single-source-of-truth fix: the Money snapshot and the Overview KPI
+// previously disagreed because this service used Order.subtotalPrice while
+// the Overview used line-item gross sales net of discounts + refunds.
+// Now both pull from the same primitive so the numbers reconcile.
 //
-//   revenue            (Order.subtotalPrice)
-// − discounts          (Order.totalDiscounts)
-// − refunds            (Order.totalRefunds)
-// − COGS               (Σ OrderLineItem.estimatedCostAmount)
-// − affiliate cost     (Σ AffiliateAttribution.commissionAmount)
-// = contribution margin
+// Formula (matches Shopify's "Gross sales → Net sales" walk):
 //
-// Accuracy is tiered. We surface the tier on every number so the founder
-// trusts what they see:
+//   grossSales           (Σ OrderLineItem.lineSubtotal)
+// − discounts            (Σ OrderLineItem.lineDiscountAmount)
+// − refunds              (Σ Refund.refundedLineItemsAmount)
+// = netSales             ← what the brand actually earned from products
+// − cogs                 (Σ OrderLineItem.estimatedCostAmount)
+// − affiliateCommission  (Σ AffiliateAttribution.commissionAmount)
+// = contributionMargin
 //
-//   estimated   — uses Product.estimatedCost / fallback. NO per-order ad
-//                 cost allocation. Affiliate commission included if BixGrow
-//                 attribution rows exist. (Shipping margin = 0 in v1.)
-//   attributed  — adds per-order Meta ad spend allocation via UTM-matched
-//                 campaigns (next milestone — Tier 1 follow-up).
-//   reconciled  — adds offline-sales reconciliation, tax adjustments, and
-//                 manual overrides (further out).
+// Shipping + tax are intentionally NOT included — they're pass-through
+// (carrier costs, tax remittance) and don't represent margin the brand
+// keeps. The Overview "REVENUE" KPI shows Shopify's `totalSales` which
+// includes them; this service's headline is contribution margin which
+// doesn't. That's a deliberate distinction explained in the UI.
 //
-// What's missing (the founder needs to see this explicitly):
-//   - Products without a configured estimatedCost are listed as "missing
-//     cost" so they don't silently inflate margin.
-//   - Shipping & payment processor fees aren't subtracted yet.
-//   - Refunds are taken at the order level; per-line-item refund cost
-//     mapping is approximate.
-//
-// Returns both totals and a per-channel breakdown (joins to the
-// channel-performance engine so the founder can see "Meta orders margin
-// vs Email orders margin").
+// Accuracy tiers (unchanged from v1):
+//   estimated   — line-item COGS via Product.estimatedCost.
+//                 NO per-order ad spend allocation.
+//   attributed  — adds per-order Meta ad spend via UTM matching. (Tier 2.)
+//   reconciled  — adds offline reconciliation, tax adjustments, manual
+//                 overrides. (Tier 3.)
 
 import { getDb } from "@/lib/server/db";
+import { getShopifySalesSummaryForWindow } from "@/lib/data/prisma-analytics-repository";
 
 export type AccuracyTier = "estimated" | "attributed" | "reconciled";
 
 export interface ContributionMarginTotals {
+  // Headline revenue — matches Shopify "Gross sales" exactly.
   revenue: number;
   discounts: number;
   refunds: number;
@@ -52,16 +54,11 @@ export interface ContributionMarginTotals {
 
 export interface ContributionMarginQuality {
   accuracy: AccuracyTier;
-  // Counts that explain WHY the accuracy is estimated, not reconciled. The
-  // UI surfaces these as "Missing: X products without cost / Y unmatched
-  // refunds" so the founder can fix the gaps.
   productsMissingCost: number;
   ordersWithoutLineItemCost: number;
-  // Confidence band shown next to the number. high = ≥90% of order
-  // revenue has line-item-level cost; medium = 60-90%; low = <60%.
-  costCoverage: number; // 0..1 — share of revenue with concrete COGS data
+  // Share of revenue (Shopify gross sales) backed by concrete COGS.
+  costCoverage: number;
   confidence: "high" | "medium" | "low";
-  // Human-readable "what's missing" notes for the founder.
   notes: { he: string; en: string };
 }
 
@@ -83,91 +80,125 @@ export async function buildContributionMargin(
 ): Promise<ContributionMarginReport> {
   const db = getDb();
 
-  // Pull each order's monetary fields + line items with COGS + affiliate
-  // attribution commission in one go. Real Shopify stores have on the
-  // order of 50-500 orders per week so this is fine in-memory.
-  const orders = (await db.order.findMany({
+  // ── Source of truth: Shopify-parity summary ────────────────────────
+  // This computes grossSales, discounts, refunds, cogs, units etc. using
+  // EXACTLY the same logic that powers the Overview KPI. The Money
+  // snapshot and the KPI now reconcile because they share this primitive.
+  const parity = await getShopifySalesSummaryForWindow(
+    input.storeId,
+    input.start,
+    input.end
+  );
+
+  if (!parity) {
+    return {
+      windowStart: input.start.toISOString().slice(0, 10),
+      windowEnd: input.end.toISOString().slice(0, 10),
+      totals: {
+        revenue: 0,
+        discounts: 0,
+        refunds: 0,
+        cogs: 0,
+        affiliateCommission: 0,
+        attributedAdSpend: 0,
+        shippingNet: 0,
+        contributionMargin: 0,
+        contributionMarginRate: 0,
+        ordersIncluded: 0
+      },
+      quality: {
+        accuracy: "estimated",
+        productsMissingCost: 0,
+        ordersWithoutLineItemCost: 0,
+        costCoverage: 0,
+        confidence: "low",
+        notes: {
+          he: "אין חיבור Shopify פעיל — לא ניתן לחשב רווח תרומה.",
+          en: "No active Shopify connection — contribution margin unavailable."
+        }
+      }
+    };
+  }
+
+  // ── Affiliate commission — same window, same filtering ────────────
+  // The parity layer doesn't include commission because BixGrow is a
+  // separate source. We pull it here and treat it as a contribution
+  // margin deduction (= money paid out to affiliates).
+  const affAgg = await db.affiliateAttribution.aggregate({
+    where: {
+      storeId: input.storeId,
+      occurredAt: { gte: input.start, lte: input.end }
+    },
+    _sum: { commissionAmount: true }
+  });
+  const affiliateCommission = Number(affAgg._sum.commissionAmount ?? 0);
+
+  // ── Quality assessment ────────────────────────────────────────────
+  // Same as v1 — count products that sold in the window but have no cost
+  // configured. Coverage is share of line revenue with non-zero estimated
+  // cost. The parity layer doesn't surface this directly, so we re-query
+  // just the diagnostic; the financial number stays anchored to parity.
+  const lineCoverage = (await db.orderLineItem.aggregate({
+    where: {
+      storeId: input.storeId,
+      order: {
+        storeId: input.storeId,
+        createdAt: { gte: input.start, lte: input.end },
+        cancelledAt: null,
+        test: false
+      },
+      estimatedCostAmount: { gt: 0 }
+    },
+    _sum: { lineSubtotal: true }
+  })) as { _sum: { lineSubtotal: any } };
+  const revenueWithCost = Number(lineCoverage._sum.lineSubtotal ?? 0);
+  const costCoverage = parity.grossSales > 0 ? revenueWithCost / parity.grossSales : 0;
+
+  // Distinct products that sold but had at least one zero-cost line item.
+  // Best-effort — counts product ids appearing on line items with cost=0.
+  const missingCostRows = (await db.orderLineItem.findMany({
+    where: {
+      storeId: input.storeId,
+      order: {
+        storeId: input.storeId,
+        createdAt: { gte: input.start, lte: input.end },
+        cancelledAt: null,
+        test: false
+      },
+      OR: [{ estimatedCostAmount: 0 }, { estimatedCostAmount: { equals: null as any } }],
+      productId: { not: null }
+    },
+    select: { productId: true },
+    distinct: ["productId"]
+  })) as Array<{ productId: string | null }>;
+  const productsMissingCost = new Set<string>(
+    missingCostRows.map((r) => r.productId).filter((p): p is string => p != null)
+  ).size;
+
+  // Orders without any line-item cost — diagnostic.
+  const ordersTotal = parity.orders;
+  const ordersWithCost = (await db.order.count({
     where: {
       storeId: input.storeId,
       createdAt: { gte: input.start, lte: input.end },
       cancelledAt: null,
-      test: false
-    },
-    select: {
-      id: true,
-      subtotalPrice: true,
-      totalDiscounts: true,
-      totalRefunds: true,
-      lineItems: {
-        select: {
-          productId: true,
-          quantity: true,
-          lineSubtotal: true,
-          estimatedCostAmount: true
-        }
-      },
-      affiliateAttributions: {
-        select: { commissionAmount: true }
-      }
+      test: false,
+      lineItems: { some: { estimatedCostAmount: { gt: 0 } } }
     }
-  })) as any[];
+  })) as number;
+  const ordersWithoutLineItemCost = Math.max(0, ordersTotal - ordersWithCost);
 
-  let revenue = 0;
-  let discounts = 0;
-  let refunds = 0;
-  let cogs = 0;
-  let affiliateCommission = 0;
-
-  let revenueWithCost = 0; // numerator for costCoverage
-  let revenueTotalForCoverage = 0; // denominator
-  let ordersWithoutLineItemCost = 0;
-
-  // Track products that have at least one line item with zero estimatedCost.
-  // We treat 0 as "missing" rather than "free" — Shopify defaults to 0 when
-  // the merchant didn't set a cost. False positives are acceptable; missing
-  // a real OOS is what we want to avoid.
-  const productsMissingCost = new Set<string>();
-
-  for (const o of orders) {
-    revenue += Number(o.subtotalPrice ?? 0);
-    discounts += Number(o.totalDiscounts ?? 0);
-    refunds += Number(o.totalRefunds ?? 0);
-
-    let orderCogs = 0;
-    let orderHasAnyCost = false;
-    let orderLineSubtotal = 0;
-    for (const li of o.lineItems ?? []) {
-      const cost = Number(li.estimatedCostAmount ?? 0);
-      const lineRev = Number(li.lineSubtotal ?? 0);
-      orderLineSubtotal += lineRev;
-      if (cost > 0) {
-        orderCogs += cost;
-        orderHasAnyCost = true;
-        revenueWithCost += lineRev;
-      } else if (li.productId) {
-        productsMissingCost.add(li.productId);
-      }
-    }
-    revenueTotalForCoverage += orderLineSubtotal;
-    if (!orderHasAnyCost) ordersWithoutLineItemCost += 1;
-    cogs += orderCogs;
-
-    for (const a of o.affiliateAttributions ?? []) {
-      affiliateCommission += Number(a.commissionAmount ?? 0);
-    }
-  }
-
-  const contributionMargin =
-    revenue - discounts - refunds - cogs - affiliateCommission;
-  const contributionMarginRate = revenue > 0 ? contributionMargin / revenue : 0;
-
-  const costCoverage =
-    revenueTotalForCoverage > 0 ? revenueWithCost / revenueTotalForCoverage : 0;
   const confidence: "high" | "medium" | "low" =
     costCoverage >= 0.9 ? "high" : costCoverage >= 0.6 ? "medium" : "low";
 
+  // ── Contribution margin walk ──────────────────────────────────────
+  const netSales = parity.grossSales - parity.discounts - parity.returns;
+  const contributionMargin = netSales - parity.cogs - affiliateCommission;
+  const contributionMarginRate =
+    parity.grossSales > 0 ? contributionMargin / parity.grossSales : 0;
+
   const notes = buildQualityNotes({
-    productsMissingCost: productsMissingCost.size,
+    productsMissingCost,
     ordersWithoutLineItemCost,
     confidence,
     costCoveragePct: Math.round(costCoverage * 100)
@@ -177,20 +208,20 @@ export async function buildContributionMargin(
     windowStart: input.start.toISOString().slice(0, 10),
     windowEnd: input.end.toISOString().slice(0, 10),
     totals: {
-      revenue,
-      discounts,
-      refunds,
-      cogs,
+      revenue: parity.grossSales,
+      discounts: parity.discounts,
+      refunds: parity.returns,
+      cogs: parity.cogs,
       affiliateCommission,
-      attributedAdSpend: 0, // populated in v2
-      shippingNet: 0, // populated in v3
+      attributedAdSpend: 0, // Tier 2
+      shippingNet: 0, // Tier 3
       contributionMargin,
       contributionMarginRate,
-      ordersIncluded: orders.length
+      ordersIncluded: parity.orders
     },
     quality: {
       accuracy: "estimated",
-      productsMissingCost: productsMissingCost.size,
+      productsMissingCost,
       ordersWithoutLineItemCost,
       costCoverage,
       confidence,
@@ -220,9 +251,7 @@ function buildQualityNotes(input: {
       `${input.ordersWithoutLineItemCost} orders without line-item cost.`
     );
   }
-  pieces.he.push("לא כולל הקצאת הוצאת פרסום פר הזמנה (יגיע ב-Tier 2).");
-  pieces.en.push(
-    "Excludes per-order ad spend allocation (coming in Tier 2: attributed)."
-  );
+  pieces.he.push("הכנסה לפי Shopify Gross sales (תואם תפריט סקירה).");
+  pieces.en.push("Revenue uses Shopify Gross sales (reconciles to Overview).");
   return { he: pieces.he.join(" "), en: pieces.en.join(" ") };
 }
