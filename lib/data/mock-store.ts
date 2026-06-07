@@ -52,7 +52,7 @@ export const orders: Order[] = [
     isRefunded: false,
     refundAmount: 0,
     discountCode: "SPRING10",
-    lineItems: [{ productId: "p1", quantity: 1, unitPrice: 92, discountAmount: 9, estimatedCost: 28 }]
+    lineItems: [{ productId: "p1", quantity: 1, unitPrice: 92, discountAmount: 9, estimatedCost: 28, refundedQuantity: 0, refundedSubtotal: 0 }]
   },
   {
     id: "o2",
@@ -62,7 +62,7 @@ export const orders: Order[] = [
     isRefunded: false,
     refundAmount: 0,
     discountCode: "BUNDLE15",
-    lineItems: [{ productId: "p3", quantity: 1, unitPrice: 128, discountAmount: 19, estimatedCost: 46 }]
+    lineItems: [{ productId: "p3", quantity: 1, unitPrice: 128, discountAmount: 19, estimatedCost: 46, refundedQuantity: 0, refundedSubtotal: 0 }]
   },
   {
     id: "o3",
@@ -72,8 +72,8 @@ export const orders: Order[] = [
     isRefunded: false,
     refundAmount: 0,
     lineItems: [
-      { productId: "p1", quantity: 1, unitPrice: 92, discountAmount: 0, estimatedCost: 28 },
-      { productId: "p2", quantity: 1, unitPrice: 34, discountAmount: 0, estimatedCost: 9 }
+      { productId: "p1", quantity: 1, unitPrice: 92, discountAmount: 0, estimatedCost: 28, refundedQuantity: 0, refundedSubtotal: 0 },
+      { productId: "p2", quantity: 1, unitPrice: 34, discountAmount: 0, estimatedCost: 9, refundedQuantity: 0, refundedSubtotal: 0 }
     ]
   },
   {
@@ -84,7 +84,7 @@ export const orders: Order[] = [
     isRefunded: true,
     refundAmount: 34,
     discountCode: "WELCOME10",
-    lineItems: [{ productId: "p2", quantity: 2, unitPrice: 34, discountAmount: 7, estimatedCost: 18 }]
+    lineItems: [{ productId: "p2", quantity: 2, unitPrice: 34, discountAmount: 7, estimatedCost: 18, refundedQuantity: 2, refundedSubtotal: 61 }]
   },
   {
     id: "o5",
@@ -93,7 +93,7 @@ export const orders: Order[] = [
     orderNumber: "#4836",
     isRefunded: false,
     refundAmount: 0,
-    lineItems: [{ productId: "p5", quantity: 1, unitPrice: 44, discountAmount: 0, estimatedCost: 14 }]
+    lineItems: [{ productId: "p5", quantity: 1, unitPrice: 44, discountAmount: 0, estimatedCost: 14, refundedQuantity: 0, refundedSubtotal: 0 }]
   },
   {
     id: "o6",
@@ -104,8 +104,8 @@ export const orders: Order[] = [
     refundAmount: 0,
     discountCode: "VIP20",
     lineItems: [
-      { productId: "p6", quantity: 1, unitPrice: 146, discountAmount: 29, estimatedCost: 58 },
-      { productId: "p2", quantity: 1, unitPrice: 34, discountAmount: 0, estimatedCost: 9 }
+      { productId: "p6", quantity: 1, unitPrice: 146, discountAmount: 29, estimatedCost: 58, refundedQuantity: 0, refundedSubtotal: 0 },
+      { productId: "p2", quantity: 1, unitPrice: 34, discountAmount: 0, estimatedCost: 9, refundedQuantity: 0, refundedSubtotal: 0 }
     ]
   },
   {
@@ -115,7 +115,7 @@ export const orders: Order[] = [
     orderNumber: "#4844",
     isRefunded: false,
     refundAmount: 0,
-    lineItems: [{ productId: "p2", quantity: 2, unitPrice: 34, discountAmount: 0, estimatedCost: 18 }]
+    lineItems: [{ productId: "p2", quantity: 2, unitPrice: 34, discountAmount: 0, estimatedCost: 18, refundedQuantity: 0, refundedSubtotal: 0 }]
   },
   {
     id: "o8",
@@ -125,8 +125,8 @@ export const orders: Order[] = [
     isRefunded: false,
     refundAmount: 0,
     lineItems: [
-      { productId: "p4", quantity: 1, unitPrice: 68, discountAmount: 0, estimatedCost: 22 },
-      { productId: "p2", quantity: 1, unitPrice: 34, discountAmount: 0, estimatedCost: 9 }
+      { productId: "p4", quantity: 1, unitPrice: 68, discountAmount: 0, estimatedCost: 22, refundedQuantity: 0, refundedSubtotal: 0 },
+      { productId: "p2", quantity: 1, unitPrice: 34, discountAmount: 0, estimatedCost: 9, refundedQuantity: 0, refundedSubtotal: 0 }
     ]
   },
   {
@@ -138,8 +138,8 @@ export const orders: Order[] = [
     refundAmount: 0,
     discountCode: "SPRING10",
     lineItems: [
-      { productId: "p1", quantity: 1, unitPrice: 92, discountAmount: 9, estimatedCost: 28 },
-      { productId: "p5", quantity: 1, unitPrice: 44, discountAmount: 4, estimatedCost: 14 }
+      { productId: "p1", quantity: 1, unitPrice: 92, discountAmount: 9, estimatedCost: 28, refundedQuantity: 0, refundedSubtotal: 0 },
+      { productId: "p5", quantity: 1, unitPrice: 44, discountAmount: 4, estimatedCost: 14, refundedQuantity: 0, refundedSubtotal: 0 }
     ]
   }
 ];

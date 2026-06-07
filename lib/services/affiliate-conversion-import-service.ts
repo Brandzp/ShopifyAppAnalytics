@@ -302,6 +302,11 @@ export async function importAffiliateConversionsCsv(input: {
       result.membersUpdated += 1;
     }
 
+    // By this point every path above has assigned `member`, but TypeScript
+    // cannot narrow the reassigned `let` across the if/else, so confirm it.
+    if (!member) continue;
+    const memberId = member.id;
+
     for (const c of conversions) {
       const orderId = orderIdByNumber.get(c.orderNumber) ?? null;
       if (orderId) result.ordersMatched += 1;
@@ -316,7 +321,7 @@ export async function importAffiliateConversionsCsv(input: {
         const dup = await db.affiliateAttribution.findFirst({
           where: {
             storeId: input.storeId,
-            affiliateMemberId: member.id,
+            affiliateMemberId: memberId,
             orderId: null,
             occurredAt: c.occurredAt,
             salesAmount: c.total
@@ -330,7 +335,7 @@ export async function importAffiliateConversionsCsv(input: {
         await db.affiliateAttribution.create({
           data: {
             storeId: input.storeId,
-            affiliateMemberId: member.id,
+            affiliateMemberId: memberId,
             orderId: null,
             sourceType: c.coupon ? "coupon" : "link",
             trackingMethod: c.trackingBy ?? null,
@@ -347,7 +352,7 @@ export async function importAffiliateConversionsCsv(input: {
       const existing = await db.affiliateAttribution.findUnique({
         where: {
           affiliateMemberId_orderId: {
-            affiliateMemberId: member.id,
+            affiliateMemberId: memberId,
             orderId
           }
         },
@@ -369,7 +374,7 @@ export async function importAffiliateConversionsCsv(input: {
         await db.affiliateAttribution.create({
           data: {
             storeId: input.storeId,
-            affiliateMemberId: member.id,
+            affiliateMemberId: memberId,
             orderId,
             sourceType: c.coupon ? "coupon" : "link",
             trackingMethod: c.trackingBy ?? null,
