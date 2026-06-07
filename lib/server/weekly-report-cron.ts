@@ -10,12 +10,17 @@
 // actually generate + send.
 //
 // Env knobs:
-//   WEEKLY_REPORT_CRON_DISABLED=1   → don't schedule at all
+//   ENABLE_WEEKLY_REPORT_CRON=1     → opt-in. Default OFF in development, ON in
+//                                     production. Set to start it locally.
+//   WEEKLY_REPORT_CRON_DISABLED=1   → hard kill switch (overrides ENABLE_*)
 //   WEEKLY_REPORT_CRON_MS=<ms>      → override the polling interval
 //   WEEKLY_REPORT_CRON_URL=<url>    → override the endpoint pinged
 
+import { isCronEnabled, fetchWithTimeout, computeBackoffMs } from "./cron-util";
+
 const DEFAULT_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 const BOOT_DELAY_MS = 30_000; // wait 30s after boot before the first tick
+const FETCH_TIMEOUT_MS = 2 * 60 * 1000; // report generation can take a while
 const GLOBAL_KEY = "__weeklyReportCronHandle__";
 const ISRAEL_TZ = "Asia/Jerusalem";
 
@@ -73,7 +78,10 @@ function isDueWindow(now = new Date()): { weekly: boolean; monthly: boolean } {
 }
 
 export function startWeeklyReportCron(): void {
-  if (process.env.WEEKLY_REPORT_CRON_DISABLED === "1") return;
+  if (!isCronEnabled("WEEKLY_REPORT")) {
+    console.log("[weekly-report-cron] DISABLED (set ENABLE_WEEKLY_REPORT_CRON=1 to enable)");
+    return;
+  }
 
   const globalScope = globalThis as typeof globalThis & {
     [GLOBAL_KEY]?: NodeJS.Timeout;
@@ -85,19 +93,33 @@ export function startWeeklyReportCron(): void {
   const url = resolveCronUrl();
 
   let running = false;
+  let failures = 0; // consecutive failures, drives backoff
+  let backoffUntil = 0; // epoch ms; skip ticks before this
   const tick = async () => {
     if (running) return;
+    if (Date.now() < backoffUntil) return;
     const due = isDueWindow();
     if (!due.weekly && !due.monthly) return;
     running = true;
     try {
-      const response = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ weekly: due.weekly, monthly: due.monthly })
-      });
+      const response = await fetchWithTimeout(
+        url,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ weekly: due.weekly, monthly: due.monthly })
+        },
+        FETCH_TIMEOUT_MS
+      );
       if (!response.ok) {
-        console.warn(`[weekly-report-cron] tick failed: HTTP ${response.status}`);
+        failures += 1;
+        const backoff = computeBackoffMs(failures, intervalMs);
+        backoffUntil = Date.now() + backoff;
+        console.warn(
+          `[weekly-report-cron] tick failed: HTTP ${response.status} (attempt ${failures}, backing off ${Math.round(
+            backoff / 1000
+          )}s)`
+        );
         return;
       }
       const body = (await response.json().catch(() => ({}))) as {
@@ -107,8 +129,18 @@ export function startWeeklyReportCron(): void {
       if (body.ran?.length) {
         console.log(`[weekly-report-cron] ran: ${body.ran.join(", ")}`);
       }
+      failures = 0;
+      backoffUntil = 0;
     } catch (error) {
-      console.error("[weekly-report-cron] trigger failed", error);
+      failures += 1;
+      const backoff = computeBackoffMs(failures, intervalMs);
+      backoffUntil = Date.now() + backoff;
+      console.error(
+        `[weekly-report-cron] trigger failed (attempt ${failures}, backing off ${Math.round(
+          backoff / 1000
+        )}s)`,
+        error instanceof Error ? error.message : error
+      );
     } finally {
       running = false;
     }
