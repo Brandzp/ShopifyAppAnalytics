@@ -17,6 +17,7 @@ export const PRODUCTS_QUERY = /* GraphQL */ `
               node {
                 id
                 sku
+                barcode
                 title
                 price
                 compareAtPrice

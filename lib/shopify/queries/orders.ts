@@ -10,6 +10,9 @@ export const ORDERS_QUERY = /* GraphQL */ `
           updatedAt
           processedAt
           currencyCode
+          taxesIncluded
+          cancelledAt
+          test
           subtotalPriceSet {
             shopMoney {
               amount
@@ -38,6 +41,12 @@ export const ORDERS_QUERY = /* GraphQL */ `
           displayFinancialStatus
           displayFulfillmentStatus
           sourceName
+          customerJourneySummary {
+            firstVisit {
+              landingPage
+              referrerUrl
+            }
+          }
           customer {
             id
           }
@@ -80,6 +89,20 @@ export const ORDERS_QUERY = /* GraphQL */ `
                     amount
                   }
                 }
+                taxLines {
+                  priceSet {
+                    shopMoney {
+                      amount
+                    }
+                  }
+                }
+                discountAllocations {
+                  allocatedAmountSet {
+                    shopMoney {
+                      amount
+                    }
+                  }
+                }
                 product {
                   id
                 }
@@ -96,7 +119,15 @@ export const ORDERS_QUERY = /* GraphQL */ `
               edges {
                 node {
                   quantity
+                  lineItem {
+                    id
+                  }
                   subtotalSet {
+                    shopMoney {
+                      amount
+                    }
+                  }
+                  totalTaxSet {
                     shopMoney {
                       amount
                     }

@@ -140,14 +140,16 @@ export async function requestShopifyAccessTokenWithClientCredentials(shopDomain:
     throw new AppError("Missing SHOPIFY_CLIENTID or SHOPIFY_CLIENT_SECRET. Add them to .env to use Shopify client-credentials auth.", 500);
   }
 
+  // Shopify's client credentials grant requires form-urlencoded, not JSON.
+  // https://shopify.dev/docs/apps/build/authentication-authorization/access-tokens/client-credentials-grant
   const response = await fetch(`https://${shopDomain}/admin/oauth/access_token`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
+    headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
+    body: new URLSearchParams({
       client_id: clientId,
       client_secret: clientSecret,
       grant_type: "client_credentials"
-    }),
+    }).toString(),
     cache: "no-store"
   });
 

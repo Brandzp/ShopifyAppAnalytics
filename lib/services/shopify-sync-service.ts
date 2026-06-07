@@ -10,7 +10,18 @@ import { mapCustomerNode, mapOrderNode, mapProductNode, mapShopMetadata } from "
 import { getStoredShopifyCredentials } from "@/lib/services/shopify-connection-service";
 import type { SyncMode, SyncRunSummary } from "@/lib/domain/types";
 
-const STALE_SYNC_THRESHOLD_MS = 20 * 60 * 1000;
+// A full initial sync for a high-volume store (tens of thousands of orders /
+// customers) legitimately runs well over 20 minutes. The old 20-minute cutoff
+// made the staleness watchdog guillotine healthy, in-progress syncs before they
+// could finish — so they never recorded success. Default to 3h; override with
+// SHOPIFY_SYNC_STALE_THRESHOLD_MIN if a store needs more/less.
+const STALE_SYNC_THRESHOLD_MS =
+  (() => {
+    const mins = Number(process.env.SHOPIFY_SYNC_STALE_THRESHOLD_MIN);
+    return Number.isFinite(mins) && mins > 0 ? mins : 180;
+  })() *
+  60 *
+  1000;
 const STALE_SYNC_ERROR_MESSAGE = "Previous sync was interrupted before completion.";
 const SUPERSEDED_SYNC_ERROR_MESSAGE = "This sync was closed after another sync completed for the store.";
 const ACTIVE_SYNC_ERROR_MESSAGE = "A Shopify sync is already running for this store. Wait for it to finish before starting another one.";
@@ -388,9 +399,14 @@ export async function syncOrders(storeId: string, updatedAfter?: Date | null) {
         totalShipping: mapped.order.totalShipping,
         totalRefunds: mapped.order.totalRefunds,
         totalPrice: mapped.order.totalPrice,
+        taxesIncluded: mapped.order.taxesIncluded,
         financialStatus: mapped.order.financialStatus,
         fulfillmentStatus: mapped.order.fulfillmentStatus,
+        cancelledAt: mapped.order.cancelledAt,
+        test: mapped.order.test,
         sourceName: mapped.order.sourceName,
+        landingSiteRef: mapped.order.landingSiteRef ?? null,
+        referringSite: mapped.order.referringSite ?? null,
         updatedAt: mapped.order.updatedAt,
         customerId: customer?.id ?? null
       },
@@ -408,9 +424,14 @@ export async function syncOrders(storeId: string, updatedAfter?: Date | null) {
         totalShipping: mapped.order.totalShipping,
         totalRefunds: mapped.order.totalRefunds,
         totalPrice: mapped.order.totalPrice,
+        taxesIncluded: mapped.order.taxesIncluded,
         financialStatus: mapped.order.financialStatus,
         fulfillmentStatus: mapped.order.fulfillmentStatus,
+        cancelledAt: mapped.order.cancelledAt,
+        test: mapped.order.test,
         sourceName: mapped.order.sourceName,
+        landingSiteRef: mapped.order.landingSiteRef ?? null,
+        referringSite: mapped.order.referringSite ?? null,
         updatedAt: mapped.order.updatedAt,
         customerId: customer?.id ?? null
       }
@@ -456,6 +477,9 @@ export async function syncOrders(storeId: string, updatedAfter?: Date | null) {
           discountedUnitPrice: lineItem.discountedUnitPrice,
           lineSubtotal: lineItem.lineSubtotal,
           lineDiscountAmount: lineItem.lineDiscountAmount,
+          taxAmount: lineItem.taxAmount,
+          refundedQuantity: lineItem.refundedQuantity,
+          refundedSubtotal: lineItem.refundedSubtotal,
           estimatedCostAmount: overrideCost ?? lineItem.estimatedCostAmount
         }
       });
@@ -683,4 +707,43 @@ export async function getSyncStatus(storeId?: string) {
       errorMessage: run.errorMessage
     }))
   };
+}
+
+/**
+ * Resolves the connected store and runs a full Shopify sync. Designed for the
+ * hourly background cron: it never throws, and a 409 ("a sync is already
+ * running") is treated as a benign skip so overlapping ticks don't error.
+ */
+export async function runScheduledFullSync(): Promise<{
+  ok: boolean;
+  skipped?: boolean;
+  storeId?: string;
+  error?: string;
+}> {
+  const store = await withOptionalDb<{ id: string } | null>(
+    (db) =>
+      db.store.findFirst({
+        where: { connected: true, connection: { isNot: null } },
+        orderBy: { updatedAt: "desc" },
+        select: { id: true }
+      }),
+    null
+  );
+
+  if (!store) {
+    return { ok: true, skipped: true };
+  }
+
+  try {
+    await runFullInitialSync(store.id);
+    return { ok: true, storeId: store.id };
+  } catch (error) {
+    const alreadyRunning = error instanceof AppError && error.statusCode === 409;
+    return {
+      ok: false,
+      skipped: alreadyRunning,
+      storeId: store.id,
+      error: toErrorMessage(error)
+    };
+  }
 }

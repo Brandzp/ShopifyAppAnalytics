@@ -52,6 +52,12 @@ model Store {
   webhookEvents              WebhookEvent[]
   shopifyCollections         ShopifyCollection[]
   productCollections         ProductCollectionMembership[]
+  offlineSalesImports        OfflineSalesImport[]
+  creativeProjects           CreativeProject[]
+  creativeSources            CreativeSource[]
+  creativeJobs               CreativeGenerationJob[]
+  weeklyReports              WeeklyReport[]
+  weeklyReportRecipients     WeeklyReportRecipient[]
   createdAt                  DateTime                      @default(now())
   updatedAt                  DateTime                      @updatedAt
 
@@ -280,6 +286,7 @@ model ProductVariant {
   productId         String
   shopifyVariantId  String
   sku               String?
+  barcode           String?
   title             String
   price             Decimal?        @db.Decimal(10, 2)
   compareAtPrice    Decimal?        @db.Decimal(10, 2)
@@ -292,6 +299,7 @@ model ProductVariant {
 
   @@unique([storeId, shopifyVariantId])
   @@index([storeId, sku])
+  @@index([storeId, barcode])
   @@index([productId])
 }
 
@@ -333,9 +341,21 @@ model Order {
   totalShipping         Decimal                @default(0) @db.Decimal(12, 2)
   totalRefunds          Decimal                @default(0) @db.Decimal(12, 2)
   totalPrice            Decimal                @default(0) @db.Decimal(12, 2)
+  taxesIncluded         Boolean                @default(false)
   financialStatus       String?
   fulfillmentStatus     String?
+  cancelledAt           DateTime?
+  test                  Boolean                @default(false)
   sourceName            String?
+  // Where the customer first landed on the storefront, with the original
+  // query string intact. This is the raw value Shopify sends back from the
+  // Admin API — we parse UTM / fbclid / referrer hints out of it at read
+  // time inside the channel-performance-engine, not at sync time, so the
+  // raw signal is preserved if we ever want to re-bucket.
+  landingSiteRef        String?
+  // Hostname of the previous page the customer was on when they arrived
+  // (e.g. "instagram.com", "google.com"). Shopify's `referring_site` field.
+  referringSite         String?
   updatedAt             DateTime
   store                 Store                  @relation(fields: [storeId], references: [id], onDelete: Cascade)
   customer              Customer?              @relation(fields: [customerId], references: [id], onDelete: SetNull)
@@ -364,6 +384,9 @@ model OrderLineItem {
   discountedUnitPrice Decimal         @default(0) @db.Decimal(10, 2)
   lineSubtotal        Decimal         @default(0) @db.Decimal(12, 2)
   lineDiscountAmount  Decimal         @default(0) @db.Decimal(12, 2)
+  taxAmount           Decimal         @default(0) @db.Decimal(12, 2)
+  refundedQuantity    Int             @default(0)
+  refundedSubtotal    Decimal         @default(0) @db.Decimal(12, 2)
   estimatedCostAmount Decimal         @default(0) @db.Decimal(12, 2)
   createdAt           DateTime        @default(now())
   updatedAt           DateTime        @updatedAt
@@ -439,17 +462,131 @@ model Summary {
   @@index([storeId, generatedAt(sort: Desc)])
 }
 
-model Alert {
-  id              String   @id @default(cuid())
-  storeId         String
-  severity        String
-  title           String
-  explanation     String
-  suggestedAction String
-  periodLabel     String
-  timestamp       DateTime
-  store           Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+// Weekly Meta Ads + Instagram report snapshot. Generated automatically every
+// Sunday by the weekly-report cron, and on-demand from the UI. We persist
+// only the underlying data JSON (KPIs, brands, insights, Instagram blocks);
+// the rendered PDF is regenerated on-demand by hitting /print/meta-ads-weekly
+// with the stored data so the history view can show any past report without
+// keeping multi-megabyte blobs on disk.
+//
+// kind: "weekly" for the standard Sunday report, "monthly" for the rollup
+// generated at month-end that reads the prior 4 weeklies.
+model WeeklyReport {
+  id          String   @id @default(cuid())
+  storeId     String
+  kind        String   @default("weekly") // "weekly" | "monthly"
+  periodStart DateTime
+  periodEnd   DateTime
+  dataJson    Json
+  insightsJson Json?
+  generatedAt DateTime @default(now())
+  sentAt      DateTime?
+  // Array of email addresses the cron actually sent it to — empty if the
+  // report was generated on-demand without a send.
+  sentToJson  Json?
+  errorMessage String?
+  store       Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
 
+  @@index([storeId, periodEnd(sort: Desc)])
+  @@index([storeId, kind, periodEnd(sort: Desc)])
+}
+
+// Email recipients for the weekly + monthly automated reports. Managed via
+// the Settings page (no admin auth check here — same trust model as the rest
+// of the app for now).
+model WeeklyReportRecipient {
+  id          String   @id @default(cuid())
+  storeId     String
+  email       String
+  displayName String?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  store       Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@unique([storeId, email])
+  @@index([storeId, active])
+}
+
+// Normalized alert table. Every detection engine in the app (restock-hero,
+// stockout-imminent, ROAS-collapse, refund-spike, silent-affiliate, sync-fail,
+// etc.) WRITES to this table via lib/services/alert-writer-service.ts. The
+// Command Center + Alerts page READ from here. Push model — see
+// memory/project_north_star_command_center.md.
+//
+// Migration note: the legacy alerts page reads `explanation`,
+// `suggestedAction`, `periodLabel`, `timestamp` via the Alert domain type
+// (lib/domain/types.ts). Those columns are kept nullable here and the new
+// alert-writer mirrors `description`→`explanation`,
+// `recommendedAction`→`suggestedAction`, `createdAt`→`timestamp` on insert.
+// Once the legacy Alerts page is replaced by the Command Center we can drop
+// the legacy columns in a follow-up migration.
+model Alert {
+  id                 String    @id @default(cuid())
+  storeId            String
+  // Stable type slug, e.g. "restock_hero", "stockout_imminent",
+  // "roas_collapse", "silent_affiliate", "sync_failure". Used to group and
+  // route alerts in the UI and to template their renderer.
+  type               String    @default("legacy")
+  // critical | high | medium | low. Existing severity values mapped in.
+  severity           String
+  // open | acknowledged | resolved | ignored. Default open. The UI updates
+  // this when the founder takes action.
+  status             String    @default("open")
+  // Origin engine — Shopify | Meta | BixGrow | Instagram | Calculated.
+  // Helps the user understand provenance and lets us route by source.
+  source             String    @default("Calculated")
+  // Detection engine that wrote this row — e.g. "restock-hero-alert-service".
+  // Diagnostic field, surfaced only in admin views.
+  detectedBy         String?
+  title              String
+  // New canonical description field — engines populate this; legacy
+  // `explanation` column below mirrors it.
+  description        String?
+  // New canonical action field — engines populate this; legacy
+  // `suggestedAction` column below mirrors it.
+  recommendedAction  String?
+  // Optional fields for numeric alerts (e.g. ROAS dropped from 5.2x to 1.8x).
+  metricName         String?
+  currentValue       Decimal?  @db.Decimal(14, 4)
+  previousValue      Decimal?  @db.Decimal(14, 4)
+  // Click-through targets. relatedEntityType examples: "product", "campaign",
+  // "affiliate", "order". relatedEntityId is the row id in the matching table.
+  // We don't enforce a relation — different alerts point at different models.
+  relatedEntityType  String?
+  relatedEntityId    String?
+  // Dedup key: detector decides what makes "the same alert," e.g.
+  // `restock_hero:<productId>`. Unique with storeId + status so the same
+  // fingerprint can re-fire after being resolved (we soft-delete via status).
+  fingerprint        String?
+  // Free-form JSON for type-specific data the renderer needs (e.g. restock
+  // detail blob, top product list, ROAS comparison snapshot). Keeps the
+  // model lean while letting each alert type carry rich context.
+  payloadJson        Json?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt @default(now())
+  // Set when the alert transitions to resolved/acknowledged/ignored.
+  resolvedAt         DateTime?
+  // Who or what cleared the alert. "user:<email>" | "system:<engine>" | null.
+  resolvedBy         String?
+
+  // ─── Legacy columns (kept for backward compatibility with the existing
+  // Alerts page). New writers populate them by mirroring the canonical
+  // fields. Drop once the Command Center replaces the legacy reader. ───
+  explanation        String?
+  suggestedAction    String?
+  periodLabel        String?
+  timestamp          DateTime?
+
+  store              Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  // One OPEN alert per (storeId, fingerprint). Including status lets us
+  // re-fire a resolved alert with the same fingerprint later.
+  @@unique([storeId, fingerprint, status])
+  @@index([storeId, status, severity])
+  @@index([storeId, type, status])
+  @@index([storeId, createdAt(sort: Desc)])
+  @@index([storeId, relatedEntityType, relatedEntityId])
   @@index([storeId, timestamp(sort: Desc)])
 }
 
@@ -779,4 +916,146 @@ model WebhookEvent {
 
   @@index([storeId, topic, createdAt(sort: Desc)])
   @@index([storeId, status])
+}
+
+model OfflineSalesImport {
+  id            String            @id @default(cuid())
+  storeId       String
+  fileName      String
+  sheetTitle    String?
+  periodYear    Int
+  periodMonth   Int
+  totalRows     Int               @default(0)
+  totalQuantity Decimal           @default(0) @db.Decimal(18, 2)
+  totalSales    Decimal           @default(0) @db.Decimal(18, 2)
+  currency      String?
+  notes         String?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  store         Store             @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  rows          OfflineSalesRow[]
+
+  @@unique([storeId, periodYear, periodMonth])
+  @@index([storeId, createdAt(sort: Desc)])
+}
+
+model OfflineSalesRow {
+  id               String             @id @default(cuid())
+  importId         String
+  itemName         String
+  barcode          String?
+  couponCode       String?
+  quantity         Decimal            @default(0) @db.Decimal(18, 2)
+  sales            Decimal            @default(0) @db.Decimal(18, 2)
+  matchedVariantId String?
+  matchedProductId String?
+  createdAt        DateTime           @default(now())
+  import           OfflineSalesImport @relation(fields: [importId], references: [id], onDelete: Cascade)
+
+  @@index([importId])
+  @@index([barcode])
+  @@index([couponCode])
+}
+
+// Creative studio: AI-generated packshots, IG posts, UGC, Meta ads.
+// String columns instead of enums to match the rest of the schema.
+
+model CreativeProject {
+  id           String                  @id @default(cuid())
+  storeId      String
+  name         String
+  productId    String?
+  creativeType String // "PACKSHOT" | "UGC_VIDEO" | "INSTAGRAM_POST" | "META_AD"
+  aspectRatio  String // "1:1" | "4:5" | "9:16" | "16:9"
+  status       String                  @default("draft") // "draft" | "generating" | "ready" | "archived"
+  provider     String                  @default("replicate") // "replicate" | "higgsfield"
+  targetCount  Int                     @default(1)
+  briefJson    Json?
+  styleJson    Json?
+  createdAt    DateTime                @default(now())
+  updatedAt    DateTime                @updatedAt
+  store        Store                   @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  sources      CreativeSource[]
+  assets       CreativeAsset[]
+  jobs         CreativeGenerationJob[]
+
+  @@index([storeId, createdAt(sort: Desc)])
+  @@index([storeId, creativeType])
+  @@index([status])
+}
+
+model CreativeSource {
+  id         String          @id @default(cuid())
+  storeId    String
+  projectId  String
+  kind       String // "USER_UPLOAD" | "SHOPIFY_PRODUCT_IMAGE"
+  storageKey String
+  mimeType   String
+  width      Int?
+  height     Int?
+  bytes      Int?
+  createdAt  DateTime        @default(now())
+  store      Store           @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  project    CreativeProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([storeId, createdAt(sort: Desc)])
+}
+
+model CreativeAsset {
+  id              String                 @id @default(cuid())
+  projectId       String
+  jobId           String?
+  assetType       String // "IMAGE" | "VIDEO"
+  status          String                 @default("pending") // "pending" | "rendering" | "ready" | "failed"
+  storageKey      String?
+  rawStorageKey   String?
+  thumbStorageKey String?
+  width           Int?
+  height          Int?
+  durationMs      Int?
+  promptUsed      String?
+  providerName    String?
+  providerJobId   String?
+  overlaysJson    Json?
+  metaJson        Json?
+  errorMessage    String?
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+  project         CreativeProject        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  job             CreativeGenerationJob? @relation(fields: [jobId], references: [id])
+
+  @@index([projectId, createdAt(sort: Desc)])
+  @@index([status])
+  @@index([providerJobId])
+}
+
+model CreativeGenerationJob {
+  id              String          @id @default(cuid())
+  storeId         String
+  projectId       String
+  jobType         String // "GENERATE_BATCH" | "REGEN_ASSET" | "EDIT_IMAGE"
+  status          String          @default("queued") // "queued" | "running" | "succeeded" | "failed" | "cancelled"
+  targetCount     Int             @default(1)
+  succeededCount  Int             @default(0)
+  failedCount     Int             @default(0)
+  payloadJson     Json
+  errorMessage    String?
+  startedAt       DateTime?
+  completedAt     DateTime?
+  attempts        Int             @default(0)
+  lockedAt        DateTime?
+  lockedBy        String?
+  providerName    String?
+  costEstimateUsd Decimal?        @db.Decimal(10, 4)
+  costActualUsd   Decimal?        @db.Decimal(10, 4)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  store           Store           @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  project         CreativeProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assets          CreativeAsset[]
+
+  @@index([status, createdAt])
+  @@index([storeId, status])
+  @@index([lockedAt])
 }

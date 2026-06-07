@@ -37,6 +37,9 @@ export const mockStoreRepository: AnalyticsRepository = {
   async getCollectionPerformance() {
     return collectionPerformance;
   },
+  async getProductStock() {
+    return [];
+  },
   async getAlerts() {
     return alerts;
   },

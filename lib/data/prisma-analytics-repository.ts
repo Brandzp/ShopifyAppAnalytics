@@ -2,6 +2,7 @@
 import type {
   Alert,
   CollectionPerformanceRow,
+  DailyMetric,
   Order,
   ProductStockRow,
   StockFlag,
@@ -12,7 +13,7 @@ import { withOptionalDb } from "@/lib/server/db";
 import { toNumber } from "@/lib/server/numbers";
 import { buildDailyMetrics, buildDiscountUsage, buildProductPerformance, buildRetentionSnapshot } from "@/lib/server/analytics";
 import { pickAnalyticsDiscountCode, shouldIgnoreOrderForAnalytics } from "@/lib/server/analytics-order-rules";
-import { getReportingDateRangeSelection } from "@/lib/server/reporting-date-range";
+import { getReportingDateRangeSelection, getStoreTimeZone } from "@/lib/server/reporting-date-range";
 
 const DISCONNECTED_PREVIEW_STORE: Store = {
   id: "local-preview-store",
@@ -61,25 +62,17 @@ function mapOrders(records: any[]): Order[] {
         quantity: item.quantity,
         unitPrice: item.quantity ? toNumber(item.lineSubtotal) / item.quantity : 0,
         discountAmount: toNumber(item.lineDiscountAmount),
-        estimatedCost: toNumber(item.estimatedCostAmount)
+        estimatedCost: toNumber(item.estimatedCostAmount),
+        refundedQuantity: Number(item.refundedQuantity ?? 0),
+        refundedSubtotal: toNumber(item.refundedSubtotal ?? 0)
       }))
     }));
 }
 
 function withAnalyticsOrderFilters(where: Record<string, unknown>) {
-  return {
-    AND: [
-      where,
-      {
-        NOT: {
-          AND: [
-            { fulfillmentStatus: { equals: "FULFILLED", mode: "insensitive" } },
-            { totalPrice: { gte: 0, lte: 20 } }
-          ]
-        }
-      }
-    ]
-  };
+  // No analytics-side order exclusions: Shopify's reports count every order,
+  // so we do too. (Previously this dropped fulfilled orders <= 20.)
+  return where;
 }
 
 function mapSummary(summary: any): Summary {
@@ -92,14 +85,23 @@ function mapSummary(summary: any): Summary {
 }
 
 function mapStoredAlert(alert: any): Alert {
+  // The Alert model now has both legacy columns (explanation / suggestedAction
+  // / periodLabel / timestamp) and the canonical fields written by the
+  // alert-writer (description / recommendedAction / createdAt). Prefer legacy
+  // when present (rows from before the push-model migration), fall back to
+  // canonical (rows from new writers).
+  const explanation = alert.explanation ?? alert.description ?? "";
+  const suggestedAction = alert.suggestedAction ?? alert.recommendedAction ?? "";
+  const periodLabel = alert.periodLabel ?? "";
+  const timestamp = (alert.timestamp ?? alert.createdAt) as Date;
   return {
     id: alert.id,
     severity: alert.severity,
     title: alert.title,
-    explanation: alert.explanation,
-    suggestedAction: alert.suggestedAction,
-    periodLabel: alert.periodLabel,
-    timestamp: alert.timestamp.toISOString()
+    explanation,
+    suggestedAction,
+    periodLabel,
+    timestamp: timestamp.toISOString()
   };
 }
 
@@ -168,6 +170,240 @@ async function getActiveRange() {
     current: { start: selection.start, end: selection.end },
     previous: { start: selection.comparison.start, end: selection.comparison.end }
   };
+}
+
+/**
+ * Shopify-parity sales numbers for a window. Mirrors Shopify's Sales report:
+ *  - gross / discounts / COGS / units come from line items (ex-tax), attributed
+ *    by the ORDER date.
+ *  - returns come from Refund rows, attributed by the REFUND date (this is the
+ *    key difference from the old logic, which subtracted refunds on the order
+ *    date and never reconciled with Shopify).
+ *  - netSales = gross − discounts − returns
+ *  - totalSales = netSales + shipping + taxes  (Shopify "Total sales")
+ */
+export interface ShopifySalesSummary {
+  orders: number;
+  grossSales: number;
+  discounts: number;
+  returns: number;
+  netSales: number;
+  shipping: number;
+  taxes: number;
+  totalSales: number;
+  cogs: number;
+  estimatedProfit: number;
+  unitsSold: number;
+  returningOrders: number;
+  returningCustomerRate: number;
+  discountRate: number;
+  refundRate: number;
+  averageOrderValue: number;
+}
+
+function num(value: unknown): number {
+  const n = Number(value ?? 0);
+  return Number.isFinite(n) ? n : 0;
+}
+
+async function computeSalesSummary(
+  db: any,
+  storeId: string,
+  start: Date,
+  end: Date
+): Promise<ShopifySalesSummary> {
+  const [orderAgg, lineAgg, refundAgg, returningRows] = await Promise.all([
+    db.order.aggregate({
+      // Shopify's Sales report excludes cancelled and test orders.
+      where: { storeId, createdAt: { gte: start, lte: end }, cancelledAt: null, test: false },
+      _count: { _all: true },
+      _sum: { totalShipping: true, totalTax: true }
+    }),
+    db.orderLineItem.aggregate({
+      where: { storeId, order: { createdAt: { gte: start, lte: end }, cancelledAt: null, test: false } },
+      _sum: { lineSubtotal: true, lineDiscountAmount: true, estimatedCostAmount: true, quantity: true }
+    }),
+    db.refund.aggregate({
+      // Returns of cancelled/test orders don't count in Shopify's report.
+      where: { storeId, createdAt: { gte: start, lte: end }, order: { cancelledAt: null, test: false } },
+      _sum: { refundedLineItemsAmount: true }
+    }),
+    // Set-based: one grouped scan for each customer's first-ever order, then a
+    // hash join. (A per-row correlated EXISTS here took 60-190s on 31k orders.)
+    db.$queryRaw`
+      WITH firsts AS (
+        SELECT "customerId", MIN("createdAt") AS first_at
+        FROM "Order"
+        WHERE "storeId" = ${storeId} AND "customerId" IS NOT NULL
+          AND "cancelledAt" IS NULL AND "test" = false
+        GROUP BY "customerId"
+      )
+      SELECT COUNT(*)::bigint AS count
+      FROM "Order" o
+      JOIN firsts f ON f."customerId" = o."customerId"
+      WHERE o."storeId" = ${storeId}
+        AND o."createdAt" >= ${start} AND o."createdAt" <= ${end}
+        AND o."cancelledAt" IS NULL AND o."test" = false
+        AND o."createdAt" > f.first_at`
+  ]);
+
+  const orders = num(orderAgg._count?._all);
+  const grossSales = num(lineAgg._sum?.lineSubtotal);
+  const discounts = num(lineAgg._sum?.lineDiscountAmount);
+  const cogs = num(lineAgg._sum?.estimatedCostAmount);
+  const unitsSold = num(lineAgg._sum?.quantity);
+  const returns = num(refundAgg._sum?.refundedLineItemsAmount);
+  const shipping = num(orderAgg._sum?.totalShipping);
+  const taxes = num(orderAgg._sum?.totalTax);
+  const netSales = grossSales - discounts - returns;
+  const totalSales = netSales + shipping + taxes;
+  const returningOrders = num(returningRows?.[0]?.count);
+
+  return {
+    orders,
+    grossSales,
+    discounts,
+    returns,
+    netSales,
+    shipping,
+    taxes,
+    totalSales,
+    cogs,
+    estimatedProfit: netSales - cogs,
+    unitsSold,
+    returningOrders,
+    returningCustomerRate: orders ? (returningOrders / orders) * 100 : 0,
+    discountRate: grossSales ? (discounts / grossSales) * 100 : 0,
+    refundRate: grossSales ? (returns / grossSales) * 100 : 0,
+    averageOrderValue: orders ? totalSales / orders : 0
+  };
+}
+
+async function computeDailySeries(
+  db: any,
+  storeId: string,
+  start: Date,
+  end: Date,
+  timeZone: string
+): Promise<DailyMetric[]> {
+  // (1) sales by ORDER day, (2) shipping/tax/orders/returning by ORDER day,
+  // (3) returns by REFUND day. Timestamps are stored UTC; reinterpret as UTC
+  // then convert to the store timezone before bucketing to a calendar day.
+  const [sales, ship, refunds] = await Promise.all([
+    db.$queryRawUnsafe(
+      `SELECT (o."createdAt" AT TIME ZONE 'UTC' AT TIME ZONE $4)::date AS d,
+              SUM(li."lineSubtotal") AS gross,
+              SUM(li."lineDiscountAmount") AS disc,
+              SUM(li."estimatedCostAmount") AS cogs,
+              SUM(li."quantity") AS units
+       FROM "Order" o JOIN "OrderLineItem" li ON li."orderId" = o."id"
+       WHERE o."storeId" = $1 AND o."createdAt" >= $2 AND o."createdAt" <= $3
+         AND o."cancelledAt" IS NULL AND o."test" = false
+       GROUP BY 1`,
+      storeId,
+      start,
+      end,
+      timeZone
+    ),
+    db.$queryRawUnsafe(
+      `WITH firsts AS (
+         SELECT "customerId", MIN("createdAt") AS first_at
+         FROM "Order"
+         WHERE "storeId" = $1 AND "customerId" IS NOT NULL
+           AND "cancelledAt" IS NULL AND "test" = false
+         GROUP BY "customerId"
+       )
+       SELECT (o."createdAt" AT TIME ZONE 'UTC' AT TIME ZONE $4)::date AS d,
+              SUM(o."totalShipping") AS ship,
+              SUM(o."totalTax") AS tax,
+              COUNT(*) AS orders,
+              COUNT(*) FILTER (
+                WHERE f."customerId" IS NOT NULL AND o."createdAt" > f.first_at
+              ) AS returning_orders
+       FROM "Order" o
+       LEFT JOIN firsts f ON f."customerId" = o."customerId"
+       WHERE o."storeId" = $1 AND o."createdAt" >= $2 AND o."createdAt" <= $3
+         AND o."cancelledAt" IS NULL AND o."test" = false
+       GROUP BY 1`,
+      storeId,
+      start,
+      end,
+      timeZone
+    ),
+    db.$queryRawUnsafe(
+      `SELECT (r."createdAt" AT TIME ZONE 'UTC' AT TIME ZONE $4)::date AS d,
+              SUM(r."refundedLineItemsAmount") AS returns
+       FROM "Refund" r
+       JOIN "Order" o ON o."id" = r."orderId"
+       WHERE r."storeId" = $1 AND r."createdAt" >= $2 AND r."createdAt" <= $3
+         AND o."cancelledAt" IS NULL AND o."test" = false
+       GROUP BY 1`,
+      storeId,
+      start,
+      end,
+      timeZone
+    )
+  ]);
+
+  type Bucket = {
+    gross: number; disc: number; cogs: number; units: number;
+    ship: number; tax: number; orders: number; returningOrders: number; returns: number;
+  };
+  const byDay = new Map<string, Bucket>();
+  const keyOf = (d: any) => new Date(d).toISOString().slice(0, 10);
+  const get = (k: string) => {
+    let b = byDay.get(k);
+    if (!b) { b = { gross: 0, disc: 0, cogs: 0, units: 0, ship: 0, tax: 0, orders: 0, returningOrders: 0, returns: 0 }; byDay.set(k, b); }
+    return b;
+  };
+  for (const r of sales) { const b = get(keyOf(r.d)); b.gross += num(r.gross); b.disc += num(r.disc); b.cogs += num(r.cogs); b.units += num(r.units); }
+  for (const r of ship) { const b = get(keyOf(r.d)); b.ship += num(r.ship); b.tax += num(r.tax); b.orders += num(r.orders); b.returningOrders += num(r.returning_orders); }
+  for (const r of refunds) { const b = get(keyOf(r.d)); b.returns += num(r.returns); }
+
+  return Array.from(byDay.entries())
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .map(([key, b]) => {
+      const net = b.gross - b.disc - b.returns;
+      const total = net + b.ship + b.tax;
+      return {
+        date: new Date(`${key}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+        revenue: total,
+        estimatedProfit: net - b.cogs,
+        returningCustomerRate: b.orders ? (b.returningOrders / b.orders) * 100 : 0,
+        averageOrderValue: b.orders ? total / b.orders : 0,
+        discountRate: b.gross ? (b.disc / b.gross) * 100 : 0,
+        refundRate: b.gross ? (b.returns / b.gross) * 100 : 0,
+        orders: b.orders
+      } satisfies DailyMetric;
+    });
+}
+
+export interface ShopifyParityOverview {
+  current: ShopifySalesSummary;
+  previous: ShopifySalesSummary;
+  daily: DailyMetric[];
+}
+
+/**
+ * Single source of truth for the headline numbers, computed to reconcile with
+ * Shopify's Sales report for the active reporting window.
+ */
+export async function getShopifyParityOverview(): Promise<ShopifyParityOverview | null> {
+  const store = await getConnectedStoreRecord();
+  if (!store) return null;
+  const [range, timeZone] = await Promise.all([getActiveRange(), getStoreTimeZone()]);
+
+  return withOptionalDb(
+    async (db) => {
+      const [current, previous, daily] = await Promise.all([
+        computeSalesSummary(db, store.id, range.current.start, range.current.end),
+        computeSalesSummary(db, store.id, range.previous.start, range.previous.end),
+        computeDailySeries(db, store.id, range.current.start, range.current.end, timeZone)
+      ]);
+      return { current, previous, daily };
+    },
+    null
+  );
 }
 
 export const STOCK_FLAG_THRESHOLDS = { red: 20, yellow: 50 } as const;
@@ -500,8 +736,15 @@ export const prismaAnalyticsRepository: AnalyticsRepository = {
     const alerts = await withOptionalDb(
       (db) =>
         db.alert.findMany({
-          where: { storeId: store.id },
-          orderBy: { timestamp: "desc" }
+          // Only surface alerts that haven't been resolved/ignored yet — the
+          // alert-writer marks rows resolved when the underlying condition
+          // clears or via the sweep on a no-longer-detected fingerprint.
+          where: { storeId: store.id, status: "open" },
+          orderBy: [
+            // critical first → low last, then newest first within a tier
+            { severity: "asc" },
+            { createdAt: "desc" }
+          ]
         }),
       []
     );
