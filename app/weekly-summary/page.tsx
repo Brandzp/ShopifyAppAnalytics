@@ -1,4 +1,4 @@
-import { ClipboardCopy, RotateCw, Send, Sparkles } from "lucide-react";
+import { ClipboardCopy, Send, Sparkles } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,7 @@ import { NarrativeBanner } from "@/components/dashboard-v2/narrative-banner";
 import { PageHead, SectionHead } from "@/components/dashboard-v2/section-head";
 import { InstagramCrawlEvidencePanel } from "@/components/shared/instagram-crawl-evidence-panel";
 import { MetaAdsIntelligencePanel } from "@/components/shared/meta-ads-intelligence-panel";
+import { ExportMetaAdsPdfButton } from "@/components/weekly-summary/export-meta-ads-pdf-button";
 import type {
   MarketingPlannerDirection,
   MarketingPlannerInfluencerIntelligence
@@ -283,12 +284,18 @@ export default async function WeeklySummaryPage() {
             description={dictionary.weeklySummary.description}
           />
           <div className="flex flex-wrap gap-2">
-            <Button variant="secondary" className="inline-flex items-center gap-1.5">
-              <RotateCw className="h-3.5 w-3.5" /> {dictionary.weeklySummary.regenerate}
-            </Button>
+            {/* Regenerate intentionally omitted until the summary-generation
+                pipeline is wired — having it here as a no-op was misleading. */}
             <Button variant="secondary" className="inline-flex items-center gap-1.5">
               <ClipboardCopy className="h-3.5 w-3.5" /> {dictionary.weeklySummary.copy}
             </Button>
+            <ExportMetaAdsPdfButton
+              from={range.startInput}
+              to={range.endInput}
+              storeId={chrome.store.id}
+              labelDownload={locale === "he" ? "ייצוא PDF" : "Export PDF"}
+              labelGenerating={locale === "he" ? "מייצר…" : "Generating…"}
+            />
             <Button className="inline-flex items-center gap-1.5">
               <Send className="h-3.5 w-3.5" /> {dictionary.weeklySummary.share}
             </Button>

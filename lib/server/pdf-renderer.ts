@@ -1,0 +1,100 @@
+// Playwright-backed PDF renderer.
+//
+// Launches a headless chromium, navigates to a fully-server-rendered page on
+// our own Next.js server, and asks chromium to print it to PDF. Used by
+// /api/weekly-summary/export/meta-ads-pdf and any future report exports.
+//
+// Why chromium and not a JS PDF library:
+//   • Hebrew RTL + custom fonts + gradients + glassmorphism all need a real
+//     browser renderer to look right.
+//   • The report page already exists at /print/meta-ads-weekly — chromium
+//     renders the same CSS the user sees in their browser, so there's no
+//     divergence between preview and PDF.
+//
+// Trade-off: chromium adds ~150MB to the deployment artifact. On bare VPS /
+// Docker that's fine; on Vercel/Lambda you'd swap to @sparticuz/chromium.
+//
+// Browser lifecycle: we launch a fresh browser per request. That's the
+// simplest correct option for low PDF volume. If this becomes a hot path,
+// swap to a persistent singleton + page pool — but premature pooling brings
+// its own zombie-process hazards.
+
+import type { Browser, LaunchOptions } from "playwright";
+
+export interface RenderPdfInput {
+  // Fully-qualified URL the headless browser should navigate to. Must be
+  // reachable from the same machine the Next.js server runs on — usually
+  // http://127.0.0.1:<port>/print/... built by the caller.
+  url: string;
+  // Forwarded as Playwright cookies so the print page sees the same logged-in
+  // session as the user who triggered the export. The cookie is set against
+  // the URL's hostname.
+  cookies?: Array<{ name: string; value: string }>;
+  // PDF format. Defaults to A4 portrait, which matches the report layout's
+  // 880px max-width well.
+  format?: "A4" | "Letter";
+}
+
+export async function renderPdfFromUrl(input: RenderPdfInput): Promise<Buffer> {
+  // Lazy-require so build-time tooling that doesn't have `playwright`
+  // installed can still type-check the rest of the app.
+  const { chromium } = await import("playwright");
+
+  const launchOptions: LaunchOptions = {
+    headless: true,
+    // Standard flags for running chromium inside Docker / restricted shells.
+    args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"]
+  };
+
+  let browser: Browser | null = null;
+  try {
+    browser = await chromium.launch(launchOptions);
+    const context = await browser.newContext({
+      // Render at 1.0 device pixel ratio for crisp PDF text. 2.0 makes
+      // the file 4× larger with no visible improvement.
+      deviceScaleFactor: 1
+    });
+
+    if (input.cookies?.length) {
+      const target = new URL(input.url);
+      await context.addCookies(
+        input.cookies.map((c) => ({
+          name: c.name,
+          value: c.value,
+          domain: target.hostname,
+          path: "/",
+          httpOnly: false,
+          secure: target.protocol === "https:",
+          sameSite: "Lax" as const
+        }))
+      );
+    }
+
+    const page = await context.newPage();
+
+    // `networkidle` waits for ~500ms with no in-flight requests — needed
+    // because the print page may fetch images/fonts after the initial paint.
+    //
+    // Timeout bumped to 180s because the executive page does multiple
+    // sequential OpenAI calls + the influencer intelligence service before
+    // first paint. Until we cache those, the worst-case page load (cold dev
+    // compile + fresh insight generation) can take 60-90s. 180s gives us
+    // safe headroom; production builds without dev compile drop this back
+    // under 30s naturally.
+    await page.goto(input.url, { waitUntil: "networkidle", timeout: 180_000 });
+
+    const pdf = await page.pdf({
+      format: input.format ?? "A4",
+      // The page paints its own dark background; printBackground is required
+      // to keep it instead of dropping back to white.
+      printBackground: true,
+      // No margins — the report has its own internal padding and we want
+      // the gradient to bleed edge-to-edge.
+      margin: { top: "0", right: "0", bottom: "0", left: "0" }
+    });
+
+    return Buffer.from(pdf);
+  } finally {
+    if (browser) await browser.close().catch(() => undefined);
+  }
+}
