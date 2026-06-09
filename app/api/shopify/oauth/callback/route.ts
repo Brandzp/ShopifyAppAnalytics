@@ -39,7 +39,7 @@ export async function GET(request: Request) {
     const shopDomain = normalizeOauthShopDomain(url.searchParams.get("shop"));
 
     // 2. HMAC over the query string, signed with the app's client secret.
-    if (!verifyOauthHmac(url.searchParams)) {
+    if (!(await verifyOauthHmac(url.searchParams))) {
       return fail("Shopify OAuth HMAC validation failed.", 401);
     }
 
@@ -51,7 +51,7 @@ export async function GET(request: Request) {
       .find((part) => part.startsWith(`${SHOPIFY_OAUTH_STATE_COOKIE}=`))
       ?.slice(SHOPIFY_OAUTH_STATE_COOKIE.length + 1);
 
-    const stateValid = verifyOauthState({
+    const stateValid = await verifyOauthState({
       shopDomain,
       returnedState: url.searchParams.get("state"),
       signedStateCookie: stateCookie ? decodeURIComponent(stateCookie) : null

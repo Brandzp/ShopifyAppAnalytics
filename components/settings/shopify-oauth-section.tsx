@@ -1,0 +1,233 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import { ExternalLink, Loader2, KeyRound, CheckCircle2, AlertTriangle } from "lucide-react";
+
+// The OAuth section that lives at the top of the Shopify connection card.
+// Two parts:
+//   1. "Install via Shopify" button — operator types a shop domain, clicks
+//      → redirected to Shopify's authorize screen → callback saves token.
+//   2. "Shopify Partner app credentials" — collapsible form for storing the
+//      App API Key + API Secret directly in the DB (alternative to env vars).
+//      Saves to /api/settings/shopify-app-config.
+//
+// Either path is acceptable. DB-stored credentials win if both are set.
+
+interface AppConfigStatus {
+  clientId: string | null;
+  clientSecretLastFour: string | null;
+  hasEnvFallback: { clientId: boolean; clientSecret: boolean };
+}
+
+export function ShopifyOauthSection() {
+  const [shopDomain, setShopDomain] = useState("");
+  const [config, setConfig] = useState<AppConfigStatus | null>(null);
+  const [showCredentialsForm, setShowCredentialsForm] = useState(false);
+  const [clientIdInput, setClientIdInput] = useState("");
+  const [clientSecretInput, setClientSecretInput] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [savedMsg, setSavedMsg] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadConfig = async () => {
+    try {
+      const res = await fetch("/api/settings/shopify-app-config");
+      const body = await res.json();
+      if (res.ok && body.ok) {
+        setConfig(body);
+        setClientIdInput(body.clientId ?? "");
+      }
+    } catch {
+      // ignore
+    }
+  };
+
+  useEffect(() => {
+    void loadConfig();
+  }, []);
+
+  const handleInstall = () => {
+    if (!shopDomain.trim()) {
+      setError("Enter your Shopify store domain first (e.g. yourstore.myshopify.com).");
+      return;
+    }
+    setError(null);
+    // Top-level navigation to the install route — it issues a 302 redirect
+    // to Shopify which a fetch() would refuse to follow cross-origin.
+    window.location.href = `/api/shopify/oauth/install?shop=${encodeURIComponent(shopDomain.trim())}`;
+  };
+
+  const handleSaveCredentials = async () => {
+    setSaving(true);
+    setError(null);
+    setSavedMsg(null);
+    try {
+      const res = await fetch("/api/settings/shopify-app-config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          clientId: clientIdInput.trim() || undefined,
+          clientSecret: clientSecretInput.trim() || undefined
+        })
+      });
+      const body = await res.json();
+      if (!res.ok || !body?.ok) throw new Error(body?.error ?? "Failed to save.");
+      setSavedMsg("Credentials saved. You can now click 'Install via Shopify' above.");
+      setClientSecretInput("");
+      void loadConfig();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Unexpected error.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const credentialsReady =
+    (config?.clientId || config?.hasEnvFallback.clientId) &&
+    (config?.clientSecretLastFour || config?.hasEnvFallback.clientSecret);
+
+  const credentialsSource: string[] = [];
+  if (config?.clientId) credentialsSource.push("Client ID (DB)");
+  else if (config?.hasEnvFallback.clientId) credentialsSource.push("Client ID (env var)");
+  if (config?.clientSecretLastFour) credentialsSource.push("Secret (DB)");
+  else if (config?.hasEnvFallback.clientSecret) credentialsSource.push("Secret (env var)");
+
+  return (
+    <div className="space-y-4 rounded-2xl border border-violet-200 bg-gradient-to-br from-violet-50/40 to-indigo-50/40 p-5">
+      <div className="flex items-start gap-3">
+        <div className="rounded-lg bg-violet-100 p-2 text-violet-700">
+          <KeyRound className="h-5 w-5" aria-hidden />
+        </div>
+        <div className="flex-1">
+          <h3 className="text-sm font-semibold">Install via Shopify (OAuth — recommended)</h3>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Get an Admin API token automatically without copy-pasting. Requires a Shopify Partner app
+            (Client ID + Secret) configured below or in env vars.
+          </p>
+        </div>
+      </div>
+
+      {credentialsReady ? (
+        <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-xs">
+          <p className="flex items-center gap-1.5 font-semibold text-emerald-900">
+            <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />
+            Partner app credentials are set
+          </p>
+          <p className="mt-1 text-emerald-800">{credentialsSource.join(" · ")}</p>
+        </div>
+      ) : (
+        <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs">
+          <p className="flex items-center gap-1.5 font-semibold text-amber-900">
+            <AlertTriangle className="h-3.5 w-3.5" aria-hidden />
+            Partner app credentials are missing
+          </p>
+          <p className="mt-1 text-amber-900">
+            Configure them below before OAuth can work, or paste an Admin token in the form further down as a fallback.
+          </p>
+        </div>
+      )}
+
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+        <input
+          type="text"
+          placeholder="yourstore.myshopify.com"
+          value={shopDomain}
+          onChange={(e) => setShopDomain(e.target.value)}
+          className="flex-1 rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-300"
+        />
+        <button
+          type="button"
+          onClick={handleInstall}
+          disabled={!credentialsReady}
+          className="inline-flex items-center gap-1.5 rounded-md bg-violet-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-violet-800 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          Install via Shopify
+          <ExternalLink className="h-3.5 w-3.5" aria-hidden />
+        </button>
+      </div>
+
+      <details
+        open={!credentialsReady}
+        onToggle={(e) => setShowCredentialsForm((e.target as HTMLDetailsElement).open)}
+        className="rounded-lg border border-border bg-card p-4 text-sm"
+      >
+        <summary className="cursor-pointer font-medium">
+          Shopify Partner app credentials
+          {showCredentialsForm ? " (hide)" : " — Client ID + Secret"}
+        </summary>
+        <div className="mt-3 space-y-3">
+          <p className="text-xs text-muted-foreground">
+            From your Shopify Partner Dashboard → your app → Client credentials. The Client Secret starts with{" "}
+            <code className="rounded bg-slate-100 px-1 text-[10px]">shpss_</code>. Stored encrypted at rest.
+          </p>
+
+          <label className="block">
+            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Client ID
+            </span>
+            <input
+              type="text"
+              placeholder="32-char hex string from Partner Dashboard"
+              value={clientIdInput}
+              onChange={(e) => setClientIdInput(e.target.value)}
+              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-300"
+            />
+          </label>
+
+          <label className="block">
+            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Client Secret {config?.clientSecretLastFour ? "(currently set — paste again to replace)" : ""}
+            </span>
+            <input
+              type="password"
+              placeholder="shpss_..."
+              value={clientSecretInput}
+              onChange={(e) => setClientSecretInput(e.target.value)}
+              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-300"
+            />
+          </label>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleSaveCredentials}
+              disabled={saving || (!clientIdInput.trim() && !clientSecretInput.trim())}
+              className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-3 py-1.5 text-xs font-semibold hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {saving ? <Loader2 className="h-3 w-3 animate-spin" aria-hidden /> : null}
+              {saving ? "Saving..." : "Save credentials"}
+            </button>
+            <a
+              href="https://partners.shopify.com/current/apps"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-[11px] text-sky-700 hover:underline"
+            >
+              Open Partner Dashboard
+              <ExternalLink className="h-3 w-3" aria-hidden />
+            </a>
+          </div>
+
+          {savedMsg ? (
+            <p className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-[11px] text-emerald-800">
+              ✓ {savedMsg}
+            </p>
+          ) : null}
+          {error ? (
+            <p className="rounded-md border border-rose-200 bg-rose-50 px-3 py-1.5 text-[11px] text-rose-800">
+              ⚠ {error}
+            </p>
+          ) : null}
+
+          <p className="text-[11px] text-muted-foreground">
+            Make sure your Partner app has{" "}
+            <code className="rounded bg-slate-100 px-1">
+              {process.env.NEXT_PUBLIC_APP_URL ?? "https://your-app-url"}/api/shopify/oauth/callback
+            </code>{" "}
+            in its Allowed redirection URLs.
+          </p>
+        </div>
+      </details>
+    </div>
+  );
+}

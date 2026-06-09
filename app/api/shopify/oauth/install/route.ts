@@ -19,7 +19,7 @@ export async function GET(request: Request) {
   const appUrl = process.env.APP_URL?.replace(/\/$/, "") ?? "http://localhost:3000";
 
   try {
-    const { authorizeUrl, signedState } = buildInstallRedirect(url.searchParams.get("shop"));
+    const { authorizeUrl, signedState } = await buildInstallRedirect(url.searchParams.get("shop"));
 
     const response = NextResponse.redirect(authorizeUrl);
     response.cookies.set(SHOPIFY_OAUTH_STATE_COOKIE, signedState, {

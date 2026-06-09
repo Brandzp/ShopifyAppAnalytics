@@ -5,6 +5,7 @@ import { AlertTriangle, HelpCircle, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import type { ShopifyConnectionSummary, SyncRunSummary } from "@/lib/domain/types";
+import { ShopifyOauthSection } from "@/components/settings/shopify-oauth-section";
 
 // Map raw Shopify / network errors into plain-English remediations. The
 // raw 401 "Invalid API key or access token" is technically accurate but
@@ -200,6 +201,17 @@ export function ShopifyConnectionManager({
           <CardDescription>{labels.description}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {/* OAuth section — the recommended path. Operators paste a shop
+              domain and click Install; Shopify hands us a real token via
+              callback. The paste-token form below stays available as a
+              fallback (or for stores using a Custom App). */}
+          <ShopifyOauthSection />
+
+          <div className="rounded-md border border-border bg-slate-50/50 px-3 py-2 text-[11px] text-slate-700">
+            <strong>OR</strong> paste a Custom App Admin API access token below (starts with{" "}
+            <code className="rounded bg-slate-200 px-1 text-[10px]">shpat_</code>).
+          </div>
+
           <div className="grid gap-4 md:grid-cols-2">
             <label className="space-y-2 text-sm">
               <span className="text-muted-foreground">{labels.shopDomain}</span>

@@ -215,6 +215,17 @@ model MetaAdsCampaignInsight {
   @@index([creativeId])
 }
 
+// Global key/value config — values that aren't tied to a single store.
+// Example: the Shopify Partner app credentials (Client ID + Client Secret)
+// that authorize the OAuth install flow across every tenant.
+// Encrypted values use the same encryptSecret() helper as other secrets.
+model SystemConfig {
+  key       String   @id
+  value     String
+  encrypted Boolean  @default(false)
+  updatedAt DateTime @updatedAt
+}
+
 model SyncRun {
   id             String    @id @default(cuid())
   storeId        String

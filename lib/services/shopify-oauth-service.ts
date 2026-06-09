@@ -46,14 +46,59 @@ interface ShopifyOauthConfig {
   redirectUri: string;
 }
 
-function getOauthConfig(): ShopifyOauthConfig {
-  const clientId = process.env.SHOPIFY_CLIENTID?.trim();
-  const clientSecret = process.env.SHOPIFY_CLIENT_SECRET?.trim();
+// Cache: hold the resolved config for the lifetime of the process so we
+// don't hit the DB on every OAuth request. The TTL is small (1 min) so
+// rotating credentials via the Settings UI takes effect quickly.
+let configCache: { value: ShopifyOauthConfig; loadedAt: number } | null = null;
+const CONFIG_CACHE_TTL_MS = 60 * 1000;
+
+/**
+ * Resolve the Shopify Partner app credentials. Priority order:
+ *   1. SystemConfig rows in the DB (set via /api/settings/shopify-app-config)
+ *   2. Environment variables (SHOPIFY_CLIENTID / SHOPIFY_CLIENT_SECRET)
+ *
+ * This gives the operator two paths: paste the credentials into the
+ * Settings UI (writes to DB) or set them as Render env vars. Either
+ * works; DB wins if both are set.
+ */
+async function getOauthConfig(): Promise<ShopifyOauthConfig> {
+  if (configCache && Date.now() - configCache.loadedAt < CONFIG_CACHE_TTL_MS) {
+    return configCache.value;
+  }
+
+  let clientId: string | undefined;
+  let clientSecret: string | undefined;
+
+  // DB lookup — best effort. If the table doesn't exist yet (legacy) or
+  // any row is missing, we fall through to env vars.
+  try {
+    const { getDb } = await import("@/lib/server/db");
+    const { decryptSecret } = await import("@/lib/security/encryption");
+    const db = getDb();
+    const rows = (await db.systemConfig.findMany({
+      where: {
+        key: { in: ["shopify_partner_client_id", "shopify_partner_client_secret"] }
+      },
+      select: { key: true, value: true, encrypted: true }
+    })) as Array<{ key: string; value: string; encrypted: boolean }>;
+    for (const row of rows) {
+      const raw = row.encrypted ? decryptSecret(row.value) : row.value;
+      if (row.key === "shopify_partner_client_id") clientId = raw.trim();
+      if (row.key === "shopify_partner_client_secret") clientSecret = raw.trim();
+    }
+  } catch {
+    // DB unavailable / table missing — fall through to env
+  }
+
+  // Env-var fallback
+  if (!clientId) clientId = process.env.SHOPIFY_CLIENTID?.trim();
+  if (!clientSecret) clientSecret = process.env.SHOPIFY_CLIENT_SECRET?.trim();
+
   const appUrl = process.env.APP_URL?.trim();
 
   if (!clientId || !clientSecret || !appUrl) {
     throw new AppError(
-      "Missing SHOPIFY_CLIENTID, SHOPIFY_CLIENT_SECRET, or APP_URL. Set them in .env to use Shopify OAuth.",
+      "Missing Shopify Partner app credentials. Either paste them in Settings → Shopify connection, or set SHOPIFY_CLIENTID + SHOPIFY_CLIENT_SECRET (and APP_URL) as environment variables.",
       500
     );
   }
@@ -63,13 +108,21 @@ function getOauthConfig(): ShopifyOauthConfig {
     ? configuredScopes.split(",").map((scope) => scope.trim()).filter(Boolean).join(",")
     : DEFAULT_SCOPES.join(",");
 
-  return {
+  const resolved: ShopifyOauthConfig = {
     clientId,
     clientSecret,
     appUrl: appUrl.replace(/\/$/, ""),
     scopes,
     redirectUri: `${appUrl.replace(/\/$/, "")}/api/shopify/oauth/callback`
   };
+  configCache = { value: resolved, loadedAt: Date.now() };
+  return resolved;
+}
+
+// Invalidate the cache — called by /api/settings/shopify-app-config when
+// the operator saves new credentials.
+export function invalidateShopifyOauthConfigCache(): void {
+  configCache = null;
 }
 
 /**
@@ -100,13 +153,13 @@ export function generateOauthState(): string {
  * The cookie binds the nonce to the shop and is signed with the client secret so
  * the callback can validate state without any server-side session store.
  */
-export function buildInstallRedirect(shopInput: string | null | undefined): {
+export async function buildInstallRedirect(shopInput: string | null | undefined): Promise<{
   authorizeUrl: string;
   shopDomain: string;
   state: string;
   signedState: string;
-} {
-  const { clientId, clientSecret, scopes, redirectUri } = getOauthConfig();
+}> {
+  const { clientId, clientSecret, scopes, redirectUri } = await getOauthConfig();
   const shopDomain = normalizeOauthShopDomain(shopInput);
   const state = generateOauthState();
 
@@ -133,12 +186,12 @@ function signState(shopDomain: string, state: string, clientSecret: string): str
 }
 
 /** Constant-time check that the returned state matches the signed cookie. */
-export function verifyOauthState(input: {
+export async function verifyOauthState(input: {
   shopDomain: string;
   returnedState: string | null;
   signedStateCookie: string | null;
-}): boolean {
-  const { clientSecret } = getOauthConfig();
+}): Promise<boolean> {
+  const { clientSecret } = await getOauthConfig();
   const returnedState = input.returnedState?.trim();
   const cookie = input.signedStateCookie?.trim();
   if (!returnedState || !cookie) return false;
@@ -166,8 +219,8 @@ function timingSafeEqualStrings(a: string, b: string): boolean {
  * Spec: remove `hmac` and `signature`, sort the remaining params, join as
  * `key=value` pairs with `&`, HMAC-SHA256 with the app's client secret, hex.
  */
-export function verifyOauthHmac(searchParams: URLSearchParams): boolean {
-  const { clientSecret } = getOauthConfig();
+export async function verifyOauthHmac(searchParams: URLSearchParams): Promise<boolean> {
+  const { clientSecret } = await getOauthConfig();
   const providedHmac = searchParams.get("hmac");
   if (!providedHmac) return false;
 
@@ -193,7 +246,7 @@ interface TokenExchangeResult {
  * POST https://{shop}/admin/oauth/access_token  { client_id, client_secret, code }
  */
 export async function exchangeShopifyCode(shopDomain: string, code: string): Promise<TokenExchangeResult> {
-  const { clientId, clientSecret } = getOauthConfig();
+  const { clientId, clientSecret } = await getOauthConfig();
   const cleanCode = code.trim();
   if (!cleanCode) {
     throw new AppError("Shopify did not return an authorization code.", 400);
