@@ -3,6 +3,7 @@ import { getDb } from "@/lib/server/db";
 import { runFullInitialSync } from "@/lib/services/shopify-sync-service";
 import { syncMetaAdsCampaignInsights } from "@/lib/services/meta-ads-service";
 import { syncInstagramPosts } from "@/lib/services/instagram-service";
+import { refreshMetaTokensNearExpiry } from "@/lib/services/meta-token-refresh-service";
 
 // Multi-source data refresh — the unified 2-hour cron tick.
 //
@@ -40,6 +41,24 @@ interface PerStoreResult {
 async function handler() {
   const db = getDb();
 
+  // Pre-step: refresh any Meta long-lived tokens that are within 7 days of
+  // expiry. Runs once at the top of each tick (not per-store) because the
+  // refresh check is a single query. Failures here don't block the rest of
+  // the cron — a store with an expired token will just fail its Meta sync
+  // below, but Shopify + Instagram still sync.
+  const tokenRefresh = await refreshMetaTokensNearExpiry().catch((err) => {
+    console.error("[refresh-all] Meta token refresh failed:", err);
+    return null;
+  });
+  if (tokenRefresh && tokenRefresh.refreshed > 0) {
+    console.log(
+      `[refresh-all] refreshed ${tokenRefresh.refreshed} Meta token(s)` +
+        (tokenRefresh.failed.length > 0
+          ? ` (${tokenRefresh.failed.length} failed)`
+          : "")
+    );
+  }
+
   // Find every store with at least a Shopify connection. Meta/Instagram/
   // BixGrow are optional — we skip those when no connection row exists.
   const stores = (await db.store.findMany({
@@ -51,7 +70,8 @@ async function handler() {
     return NextResponse.json({
       ok: true,
       stores: 0,
-      message: "No connected stores."
+      message: "No connected stores.",
+      tokenRefresh
     });
   }
 
@@ -137,6 +157,7 @@ async function handler() {
       allOk: totalOk,
       withFailures: totalFailed
     },
+    tokenRefresh,
     results
   });
 }
