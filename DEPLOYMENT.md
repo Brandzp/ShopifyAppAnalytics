@@ -17,17 +17,56 @@ End-to-end steps to deploy this app to production on **Render** with
      `?pgbouncer=true&connection_limit=1` if not already there.
    - **URI** tab (the one above pooling) → copy → this is your `DIRECT_URL`.
      It ends with `:5432/postgres`.
-4. Push the schema:
+4. Apply the schema — pick one of these paths:
+
+   **Easiest — SQL Editor (recommended):**
+   - Open `prisma/supabase/init.sql` in your editor, copy all 1,368 lines
+   - Supabase dashboard → **SQL Editor** → **New query** → paste → **Run**
+   - Verify in **Table Editor** — all 42 tables should appear
+
+   **Or via Prisma (if you prefer):**
    ```bash
-   # locally, with DIRECT_URL pointing at Supabase's direct connection:
    DIRECT_URL="postgresql://...:5432/postgres" \
    DATABASE_URL="postgresql://...:5432/postgres" \
    npx prisma db push
    ```
-   We point both URLs at the DIRECT endpoint for the one-shot push.
-   Production runtime will use the pooled one.
+
+   Full instructions + safety notes: [prisma/supabase/README.md](prisma/supabase/README.md).
 
 That's it. The schema is now live in Supabase.
+
+> ⚠️ Until you set `DATABASE_URL` to your Supabase pooled URI in
+> **Render**, the running app keeps writing to your local Postgres only.
+> Supabase will sit empty until production traffic starts hitting it.
+
+### 1a. (Optional) Migrate existing local data to Supabase
+
+If you've been developing against the local DB and want to start the
+deployed app with your existing data already loaded, run the one-shot
+migration script:
+
+```powershell
+.\scripts\migrate-to-supabase.ps1 -SupabaseUrl "postgresql://postgres.PROJECT:PASSWORD@aws-0-REGION.pooler.supabase.com:5432/postgres"
+```
+
+⚠️ Use the **DIRECT** Supabase URL (port `5432`), not the pooled `6543`
+one — `pg_dump`/`psql` need the direct connection. The script:
+
+- Reads `DATABASE_URL` from your local `.env`
+- **Preflight-checks** Supabase is empty (refuses to run if any `Store`
+  row already exists, preventing accidental double-loads)
+- Dumps data only (no schema — that's already there from step 4 above)
+- Restores in a single transaction (rolls back cleanly on any error)
+- Reports row counts per table at the end so you can sanity-check
+
+Pass `-DryRun` to generate the dump file without applying it (useful if
+you want to inspect what would be loaded first).
+
+Pass `-SkipPreflight` only if you've intentionally truncated Supabase
+tables and want to re-migrate.
+
+After migration completes, spot-check a few rows in the Supabase **Table
+Editor** before pointing Render at the new URL.
 
 ---
 

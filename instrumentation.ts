@@ -13,8 +13,11 @@
  */
 export async function register() {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
-  const { startShopifySyncCron } = await import("@/lib/server/shopify-sync-cron");
-  startShopifySyncCron();
+  // Unified 2-hour multi-source refresh (Shopify + Meta + Instagram + BixGrow).
+  // Supersedes the old Shopify-only cron; the back-compat enable flag in
+  // data-refresh-cron.ts means existing .env files keep working.
+  const { startDataRefreshCron } = await import("@/lib/server/data-refresh-cron");
+  startDataRefreshCron();
   const { startCreativeJobCron } = await import("@/lib/server/creative-job-cron");
   startCreativeJobCron();
   const { startWeeklyReportCron } = await import("@/lib/server/weekly-report-cron");

@@ -110,6 +110,10 @@ services:
       # ─── Background crons (all ON by default in production via cron-util)
       # Leaving these unset means they run automatically because NODE_ENV=production.
       # Use *_DISABLED=1 in the dashboard if you ever need to kill one quickly.
+      # Data-refresh cron: 2h default. Override here to dial up/down per
+      # store load (e.g. "3600000" for hourly on a high-volume tenant).
+      - key: DATA_REFRESH_CRON_MS
+        value: "7200000"
 
       # ─── Flashy (optional) ─────────────────────────────────────────────
       - key: FLASHY_ACCOUNT_ID

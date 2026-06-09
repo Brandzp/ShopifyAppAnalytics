@@ -2,7 +2,31 @@ import { Prisma } from "@prisma/client";
 import { getDb, withOptionalDb } from "@/lib/server/db";
 import type { ParsedOfflineSalesSheet } from "@/lib/server/offline-sales-excel-parser";
 
+// Cookie name read by resolveActiveStoreId — set by /api/settings/active-store
+// when the operator picks a brand in the StoreSwitcher. httpOnly so it can't
+// be tampered with from client JS.
+export const ACTIVE_STORE_COOKIE = "active_store_id";
+
 export async function resolveActiveStoreId(): Promise<string | null> {
+  // 1. Cookie wins. If the operator picked a brand via the switcher, honor it
+  //    — BUT validate the store actually exists, so a stale cookie pointing
+  //    at a deleted/uninstalled brand falls back to default instead of
+  //    surfacing "store not found" errors everywhere.
+  const { cookies } = await import("next/headers");
+  const cookieStore = await cookies();
+  const fromCookie = cookieStore.get(ACTIVE_STORE_COOKIE)?.value?.trim();
+  if (fromCookie) {
+    const exists = await withOptionalDb<{ id: string } | null>(
+      (db) => db.store.findUnique({ where: { id: fromCookie }, select: { id: true } }),
+      null
+    );
+    if (exists) return exists.id;
+    // Stale cookie — drop through to defaults below. We don't delete the
+    // cookie here (cookies() is read-only in Server Components); the next
+    // POST to /api/settings/active-store will overwrite it.
+  }
+
+  // 2. Default: most recently updated connected store.
   return withOptionalDb(async (db) => {
     const connected = await db.store.findFirst({
       where: { connected: true, connection: { isNot: null } },
@@ -13,6 +37,25 @@ export async function resolveActiveStoreId(): Promise<string | null> {
     const any = await db.store.findFirst({ orderBy: { updatedAt: "desc" }, select: { id: true } });
     return any?.id ?? null;
   }, null);
+}
+
+// Read-only list of every store the operator has installed, used by the
+// StoreSwitcher to render its dropdown. Single-tenant operator mode: no
+// auth filter. Switching to multi-user SaaS mode means scoping this by
+// the authenticated user's memberships.
+export async function listAllStoresForSwitcher(): Promise<
+  Array<{ id: string; name: string; domain: string; connected: boolean }>
+> {
+  return withOptionalDb(
+    async (db) => {
+      const rows = (await db.store.findMany({
+        orderBy: [{ connected: "desc" }, { updatedAt: "desc" }],
+        select: { id: true, name: true, domain: true, connected: true }
+      })) as Array<{ id: string; name: string; domain: string; connected: boolean }>;
+      return rows;
+    },
+    []
+  );
 }
 
 export interface SaveOfflineSalesUploadInput {

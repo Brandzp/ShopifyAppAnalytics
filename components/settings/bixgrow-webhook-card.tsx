@@ -1,0 +1,180 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { Copy, Check, Loader2, AlertTriangle, Webhook } from "lucide-react";
+
+// BixGrow per-brand webhook configuration card. Shows the public webhook
+// URL the merchant pastes into BixGrow ("send order webhook to") for the
+// active brand. Lets them edit the slug if they want it to match their
+// brand name (e.g. /api/webhooks/bixgrow/aftershower instead of a cuid).
+
+export function BixGrowWebhookCard({
+  initialSlug,
+  publicAppUrl,
+  storeName
+}: {
+  initialSlug: string | null;
+  publicAppUrl: string;
+  storeName: string;
+}) {
+  const router = useRouter();
+  const [slug, setSlug] = useState(initialSlug ?? "");
+  const [savedSlug, setSavedSlug] = useState(initialSlug);
+  const [saving, setSaving] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const webhookUrl = savedSlug
+    ? `${publicAppUrl.replace(/\/$/, "")}/api/webhooks/bixgrow/${savedSlug}`
+    : null;
+
+  const handleSave = async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/settings/bixgrow-slug", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ slug })
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok || !body?.ok) {
+        throw new Error(body?.error ?? "Failed to save slug.");
+      }
+      setSavedSlug(body.slug);
+      setSlug(body.slug);
+      router.refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Unexpected error.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCopy = async () => {
+    if (!webhookUrl) return;
+    await navigator.clipboard.writeText(webhookUrl).catch(() => {});
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
+
+  return (
+    <div className="rounded-xl border border-border bg-card p-5">
+      <div className="flex items-start gap-3">
+        <div className="rounded-lg bg-violet-50 p-2 text-violet-700">
+          <Webhook className="h-5 w-5" aria-hidden />
+        </div>
+        <div className="flex-1">
+          <h3 className="text-base font-semibold">BixGrow webhook for {storeName}</h3>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Paste this URL into BixGrow → Webhooks → New conversion to push every
+            attributed order to this brand in real time.
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-4 space-y-3">
+        <label className="block">
+          <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            URL slug
+          </span>
+          <div className="mt-1 flex items-center gap-2">
+            <input
+              type="text"
+              value={slug}
+              onChange={(e) => setSlug(e.target.value)}
+              placeholder="e.g. aftershower, incense, oliere"
+              maxLength={32}
+              className="flex-1 rounded-md border border-border bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-300"
+            />
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={saving || !slug.trim()}
+              className="inline-flex items-center gap-1 rounded-md border border-border bg-card px-3 py-1.5 text-xs font-semibold hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {saving ? (
+                <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
+              ) : null}
+              {saving ? "Saving..." : "Save"}
+            </button>
+          </div>
+          <p className="mt-1 text-[11px] text-muted-foreground">
+            Lowercase letters, digits, and hyphens. Globally unique across all
+            brands.
+          </p>
+        </label>
+
+        {webhookUrl ? (
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Webhook URL
+            </p>
+            <div className="mt-1 flex items-center gap-2">
+              <code className="flex-1 truncate rounded-md border border-border bg-slate-50 px-3 py-1.5 text-xs font-mono text-slate-700">
+                {webhookUrl}
+              </code>
+              <button
+                type="button"
+                onClick={handleCopy}
+                className="inline-flex items-center gap-1 rounded-md border border-border bg-card px-2.5 py-1.5 text-xs font-medium hover:bg-accent"
+              >
+                {copied ? (
+                  <>
+                    <Check className="h-3 w-3 text-emerald-600" aria-hidden />
+                    Copied
+                  </>
+                ) : (
+                  <>
+                    <Copy className="h-3 w-3" aria-hidden />
+                    Copy
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+            <AlertTriangle className="me-1.5 inline h-3.5 w-3.5" aria-hidden />
+            Save a slug first, then the webhook URL appears below.
+          </p>
+        )}
+
+        {error ? (
+          <p className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800">
+            ⚠ {error}
+          </p>
+        ) : null}
+
+        <details className="text-xs text-muted-foreground">
+          <summary className="cursor-pointer font-medium">
+            What payload should BixGrow send?
+          </summary>
+          <pre className="mt-2 overflow-x-auto rounded-md bg-slate-50 p-3 text-[11px] leading-5 text-slate-800">{`POST /api/webhooks/bixgrow/<slug>
+Content-Type: application/json
+
+{
+  "order": {
+    "date": "2026-06-08 10:00:00",
+    "order": "#31701",
+    "affiliate_name": "Dana",
+    "affiliate_email": "dana@example.com",
+    "affiliate_id": "AFF-123",
+    "total": 198.5,
+    "commissionable_sales": 198.5,
+    "commission": 19.85,
+    "coupons": "DANA15",
+    "status": "approved",
+    "tracking_by": "coupon"
+  }
+}`}</pre>
+          <p className="mt-2">
+            Each delivery upserts an <code className="rounded bg-slate-100 px-1">AffiliateAttribution</code>
+            {" "}row. Re-deliveries of the same order are deduplicated.
+          </p>
+        </details>
+      </div>
+    </div>
+  );
+}

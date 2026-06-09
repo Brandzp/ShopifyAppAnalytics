@@ -16,17 +16,31 @@ import { getMetaAdsConnectionSummary } from "@/lib/services/meta-ads-service";
 import { buildSetupHealth } from "@/lib/services/setup-health-service";
 import { getAppLocale, getDictionary } from "@/lib/i18n";
 import { CheckCircle2, AlertTriangle, XCircle } from "lucide-react";
+import { BixGrowWebhookCard } from "@/components/settings/bixgrow-webhook-card";
+import { getDb } from "@/lib/server/db";
 
 export default async function SettingsPage() {
   const locale = await getAppLocale();
   const dictionary = getDictionary(locale);
   const chrome = await getAppChromeData();
-  const [connectionSummary, syncStatus, metaAdsConnection, setupHealth] = await Promise.all([
+  const [connectionSummary, syncStatus, metaAdsConnection, setupHealth, storeRow] = await Promise.all([
     getShopifyConnectionSummary(chrome.store.id),
     getSyncStatus(chrome.store.id),
     getMetaAdsConnectionSummary(chrome.store.id).catch(() => null),
-    buildSetupHealth({ storeId: chrome.store.id }).catch(() => null)
+    buildSetupHealth({ storeId: chrome.store.id }).catch(() => null),
+    getDb()
+      .store.findUnique({
+        where: { id: chrome.store.id },
+        select: { bixgrowSlug: true }
+      })
+      .catch(() => null)
   ]);
+
+  // Public URL the BixGrow webhook URL is built from. APP_URL is set in
+  // production; locally we fall back to the dev origin so the card shows
+  // a working localhost URL during testing.
+  const publicAppUrl =
+    process.env.APP_URL?.replace(/\/$/, "") ?? "http://localhost:3000";
 
   const isConnected = chrome.store.connected;
   const tone = isConnected ? "up" : "neutral";
@@ -67,6 +81,11 @@ export default async function SettingsPage() {
                 labels={dictionary.settings.shopify}
               />
               <MetaAdsConnectionManager storeId={chrome.store.id} initialConnection={metaAdsConnection} />
+              <BixGrowWebhookCard
+                initialSlug={storeRow?.bixgrowSlug ?? null}
+                publicAppUrl={publicAppUrl}
+                storeName={chrome.store.name}
+              />
               <CreatorConnectionsManager labels={dictionary.creator} />
             </div>
 

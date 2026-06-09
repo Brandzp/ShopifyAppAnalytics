@@ -2,6 +2,10 @@ import { Badge } from "@/components/ui/badge";
 import type { Store } from "@/lib/domain/types";
 import type { AppLocale } from "@/lib/i18n";
 import { ReportingPicker } from "@/components/layout/reporting-picker";
+import {
+  StoreSwitcher,
+  type StoreSwitcherStore
+} from "@/components/layout/store-switcher";
 
 export interface TopbarControls {
   dateRangeLabel?: string;
@@ -21,7 +25,8 @@ export interface TopbarControls {
 export function Topbar({
   store,
   controls,
-  labels
+  labels,
+  allStores
 }: {
   store: Store;
   controls?: TopbarControls;
@@ -29,6 +34,10 @@ export function Topbar({
   labels: {
     common: Record<string, string>;
   };
+  // List of every installed brand. When length > 1, the StoreSwitcher
+  // renders as a dropdown next to the brand name. When length <= 1, it
+  // renders as a subtle "+ Connect another brand" link.
+  allStores?: StoreSwitcherStore[];
 }) {
   return (
     <div className="flex flex-col gap-4 border-b border-border/70 pb-5 sm:pb-6 lg:flex-row lg:items-center lg:justify-between">
@@ -36,6 +45,9 @@ export function Topbar({
         <div className="flex flex-wrap items-center gap-3">
           <Badge>{store.connected ? labels.common.connectedStore : labels.common.storeSetup}</Badge>
           <p className="text-sm text-muted-foreground">{store.domain}</p>
+          {allStores ? (
+            <StoreSwitcher currentStoreId={store.id} stores={allStores} />
+          ) : null}
         </div>
         <div>
           <h2 className="text-xl font-semibold tracking-tight sm:text-2xl">{store.name}</h2>

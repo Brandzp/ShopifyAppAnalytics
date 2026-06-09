@@ -26,6 +26,11 @@ model Store {
   dateRangePreset            String                        @default("30d")
   estimatedCostMode          String                        @default("margin_profile")
   defaultCostRatio           Decimal                       @default(0.35) @db.Decimal(5, 4)
+  // Short URL slug used by the per-brand BixGrow webhook
+  // (/api/webhooks/bixgrow/<bixgrowSlug>). Auto-generated from the brand
+  // name on first install, editable from the Settings page. Globally
+  // unique so two brands can't collide on the same webhook URL.
+  bixgrowSlug                String?                       @unique
   connection                 ShopifyConnection?
   bixgrowConnection          BixGrowConnection?
   instagramConnection        InstagramConnection?
