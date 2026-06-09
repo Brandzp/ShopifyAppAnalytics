@@ -174,7 +174,7 @@ export async function POST(request: Request) {
 
     // Single-shot path — synchronous, returns the finished asset.
     try {
-      const asset = await generatePackshotSync(project.id);
+      const asset = await generatePackshotSync(project.id, storeId);
       return NextResponse.json({ ok: true, projectId: project.id, asset });
     } catch (genError) {
       if (genError instanceof GenerationFailedError) {

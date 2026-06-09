@@ -1,0 +1,116 @@
+# Render IaC config — defines the web service for this Next.js + Prisma app.
+#
+# Apply by either:
+#   1. Push this file to the connected GitHub repo. Render auto-detects
+#      render.yaml and creates/updates the service on every push.
+#   2. Render dashboard → New → "Blueprint" → pick this repo.
+#
+# After creation, set the secret env vars in the Render dashboard. The
+# `envVars` block below LISTS them as `sync: false` (must be set in the UI)
+# rather than committing secrets to git.
+#
+# Health check: the homepage. Render polls every 30s; service restarts
+# automatically if the URL stops returning 200s.
+
+services:
+  - type: web
+    name: shopify-analytics
+    runtime: node
+    plan: starter # 0.5 CPU / 512 MB — fine for one tenant; bump to standard for SaaS scale
+    region: frankfurt # closest to Asia/Jerusalem; switch to oregon/ohio for US tenants
+    branch: main
+    # `prisma generate` runs before `next build` so the build sees the
+    # generated client. `npx prisma db push` is intentionally NOT here —
+    # schema migrations belong in a separate step you trigger manually
+    # so a code push can't silently mutate production schema.
+    buildCommand: npm ci && npx prisma generate && npm run build
+    startCommand: npm start
+    healthCheckPath: /
+    autoDeploy: true
+
+    envVars:
+      # ─── Runtime-managed (Render sets these automatically) ─────────────
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "3000"
+
+      # ─── Database (Supabase) ───────────────────────────────────────────
+      # Pooled connection for the app. Use Supabase's POOLED endpoint
+      # (port 6543) with ?pgbouncer=true&connection_limit=1.
+      - key: DATABASE_URL
+        sync: false
+      # Direct connection for migrations only (`prisma db push`). Use the
+      # Supabase DIRECT endpoint (port 5432).
+      - key: DIRECT_URL
+        sync: false
+
+      # ─── App URL — required for OAuth callbacks + cron self-ping ───────
+      # Set this to your Render service URL: https://shopify-analytics.onrender.com
+      # (or your custom domain if you've mapped one).
+      - key: APP_URL
+        sync: false
+
+      # ─── Shopify ───────────────────────────────────────────────────────
+      - key: SHOPIFY_CREDENTIALS_ENCRYPTION_KEY
+        generateValue: true # Render auto-generates a strong random value on first deploy
+      - key: SHOPIFY_ADMIN_API_VERSION
+        value: "2026-01"
+      - key: SHOPIFY_WEBHOOK_SECRET
+        sync: false
+      - key: SHOPIFY_CLIENTID
+        sync: false
+      - key: SHOPIFY_CLIENT_SECRET
+        sync: false
+      - key: SHOPIFY_OAUTH_SCOPES
+        value: "read_products,read_orders,read_customers,read_inventory,read_customer_journey"
+
+      # ─── Meta Ads ──────────────────────────────────────────────────────
+      - key: META_ADS_CLIENT_ID
+        sync: false
+      - key: META_ADS_CLIENT_SECRET
+        sync: false
+      - key: META_ADS_BRAND_RULES
+        sync: false
+
+      # ─── Reports (Resend + OpenAI) ─────────────────────────────────────
+      - key: RESEND_API_KEY
+        sync: false
+      - key: REPORT_FROM_EMAIL
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+
+      # ─── Creative Studio AI providers (optional, set what you use) ─────
+      - key: REPLICATE_API_TOKEN
+        sync: false
+      - key: HIGGSFIELD_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+
+      # ─── Creative Studio storage (R2 / S3 for production) ──────────────
+      # In production the "local" backend won't survive container restarts —
+      # set CREATIVE_STORAGE_BACKEND="s3" (or "r2") and fill in the rest.
+      - key: CREATIVE_STORAGE_BACKEND
+        value: s3
+      - key: CREATIVE_BUCKET
+        sync: false
+      - key: CREATIVE_S3_ENDPOINT
+        sync: false
+      - key: CREATIVE_S3_REGION
+        value: auto
+      - key: CREATIVE_S3_ACCESS_KEY_ID
+        sync: false
+      - key: CREATIVE_S3_SECRET_ACCESS_KEY
+        sync: false
+      - key: CREATIVE_WORKER_SECRET
+        generateValue: true
+
+      # ─── Background crons (all ON by default in production via cron-util)
+      # Leaving these unset means they run automatically because NODE_ENV=production.
+      # Use *_DISABLED=1 in the dashboard if you ever need to kill one quickly.
+
+      # ─── Flashy (optional) ─────────────────────────────────────────────
+      - key: FLASHY_ACCOUNT_ID
+        sync: false

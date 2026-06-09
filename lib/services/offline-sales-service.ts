@@ -124,6 +124,18 @@ export interface OfflineSalesSummaryResponse {
   rows: OfflineSalesPerProduct[];
   storeHeroes: OfflineSalesPerProduct[];
   webHeroes: OfflineSalesPerProduct[];
+  // Top products by ONLINE revenue (Shopify orders only, regardless of
+  // whether the product also has offline sales). Mirrors Shopify
+  // Analytics' "Total sales by product" chart so the founder can sanity-
+  // check the report side-by-side. Computed independently from the
+  // hero classification, so an INTENSE 50 that's 70% online still shows
+  // up here even though it doesn't qualify as a ≥80% web hero.
+  topOnlineProducts: Array<{
+    productId: string;
+    productTitle: string;
+    units: number;
+    revenue: number;
+  }>;
   unmatched: UnmatchedOfflineRow[];
   stockRisk: { count: number; threshold: number };
   narrative: OfflineSalesNarrative;
@@ -742,10 +754,66 @@ export async function getOfflineSalesSummary(
     affiliates: affiliateEntries
   };
 
+  // Top products by ONLINE revenue — directly comparable to Shopify
+  // Analytics' "Total sales by product" chart. Independent of the offline
+  // file scope: even products that aren't in the import file appear here
+  // as long as they sold on Shopify in the window. Filters: only matched
+  // products (productId not null), cancelled + test orders excluded,
+  // revenue = lineSubtotal − lineDiscountAmount (matches Shopify "net per
+  // line" used in their per-product chart).
+  const topOnlineAgg = (await db.orderLineItem.groupBy({
+    by: ["productId"],
+    where: {
+      storeId,
+      productId: { not: null },
+      order: {
+        storeId,
+        createdAt: { gte: start, lt: end },
+        cancelledAt: null,
+        test: false
+      }
+    },
+    _sum: { quantity: true, lineSubtotal: true, lineDiscountAmount: true }
+  })) as any[];
+  const topProductIds = topOnlineAgg
+    .map((row: any) => row.productId as string)
+    .filter(Boolean);
+  const topProductRows = topProductIds.length
+    ? ((await db.product.findMany({
+        where: { id: { in: topProductIds } },
+        select: { id: true, title: true }
+      })) as Array<{ id: string; title: string }>)
+    : [];
+  const productTitleById = new Map<string, string>(
+    topProductRows.map((p) => [p.id, p.title])
+  );
+  const topOnlineProducts = topOnlineAgg
+    .map((row: any) => {
+      const productId = row.productId as string;
+      const units = Number(row._sum.quantity ?? 0);
+      const gross = decimalToNumber(row._sum.lineSubtotal);
+      const discount = decimalToNumber(row._sum.lineDiscountAmount);
+      const revenue = gross - discount;
+      return {
+        productId,
+        productTitle: productTitleById.get(productId) ?? "Unknown",
+        units,
+        revenue
+      };
+    })
+    .filter((p) => p.revenue > 0)
+    .sort((a, b) => b.revenue - a.revenue)
+    .slice(0, 10);
+
   // Narrative.
   const totalSales = offlineTotalSales + onlineTotalSales;
   const offlineShare = totalSales > 0 ? (offlineTotalSales / totalSales) * 100 : 0;
   const onlineShare = totalSales > 0 ? (onlineTotalSales / totalSales) * 100 : 0;
+  // Top 3 at-risk SKUs (already sorted asc by daysOfStock during the rows
+  // sort upstream). We pass the actual rows — not just a count — so the
+  // narrative can name them and give the CEO specifics.
+  const stockRiskRows = rows.filter((r) => r.stockRisk).slice(0, 3);
+
   const narrative = buildNarrative({
     locale,
     offlineShare,
@@ -753,6 +821,7 @@ export async function getOfflineSalesSummary(
     storeHeroes,
     webHeroes,
     stockRiskCount,
+    stockRiskRows,
     stockRiskThreshold: STOCK_RISK_THRESHOLD,
     unmatchedCount: unmatched.length,
     unmatchedSales: unmatched.reduce((sum, r) => sum + r.sales, 0),
@@ -776,6 +845,7 @@ export async function getOfflineSalesSummary(
     rows,
     storeHeroes,
     webHeroes,
+    topOnlineProducts,
     unmatched,
     stockRisk: { count: stockRiskCount, threshold: STOCK_RISK_THRESHOLD },
     narrative,
@@ -790,13 +860,26 @@ function buildNarrative(input: {
   storeHeroes: OfflineSalesPerProduct[];
   webHeroes: OfflineSalesPerProduct[];
   stockRiskCount: number;
+  // Named at-risk SKUs (top 3 by urgency). When present, the narrative
+  // calls them out by product name + specific daysOfStock + revenue size,
+  // instead of the generic "N SKUs projected to run out" line.
+  stockRiskRows?: OfflineSalesPerProduct[];
   stockRiskThreshold: number;
   unmatchedCount: number;
   affiliateHalo?: AffiliateHaloSummary;
   unmatchedSales: number;
 }): OfflineSalesNarrative {
-  const { locale, offlineShare, onlineShare, storeHeroes, webHeroes, stockRiskCount, stockRiskThreshold, unmatchedCount } =
-    input;
+  const {
+    locale,
+    offlineShare,
+    onlineShare,
+    storeHeroes,
+    webHeroes,
+    stockRiskCount,
+    stockRiskRows,
+    stockRiskThreshold,
+    unmatchedCount
+  } = input;
   const isHe = locale === "he";
 
   if (offlineShare === 0 && onlineShare === 0) {
@@ -836,37 +919,73 @@ function buildNarrative(input: {
   // both Hebrew and English.
   const bodyParts: string[] = [];
 
+  // CEO-grade stock-risk callout — name the products with their actual
+  // daysOfStock + revenue size. Falls back to the generic count line if
+  // for some reason the rows weren't passed (preserves backward compat).
   if (stockRiskCount > 0) {
+    const named = (stockRiskRows ?? []).filter(
+      (r) => r.daysOfStock != null && (r.matchedProductTitle || r.itemName)
+    );
+    if (named.length > 0) {
+      // Build "RECETTE 702 (8 ימים · ₪13.3k), AUREA (10 ימים · ₪4.9k)"
+      const parts = named.map((r) => {
+        const title = r.matchedProductTitle ?? r.itemName;
+        const days = r.daysOfStock!;
+        const rev = formatMoneyish(r.totalSales);
+        return isHe ? `${title} (${heDays(days)} · ₪${rev})` : `${title} (${days}d · ₪${rev})`;
+      });
+      const listed = parts.join(isHe ? " · " : " · ");
+      const overflow = Math.max(0, stockRiskCount - named.length);
+      const overflowSuffix =
+        overflow > 0
+          ? isHe
+            ? ` ועוד ${overflow}`
+            : ` and ${overflow} more`
+          : "";
+      bodyParts.push(
+        isHe
+          ? `🚩 דחוף — לבצע הזמנה השבוע: ${listed}${overflowSuffix}. בקצב הנוכחי, ההכנסה החודשית בסיכון.`
+          : `🚩 Urgent — reorder this week: ${listed}${overflowSuffix}. At current burn, monthly revenue is at risk.`
+      );
+    } else {
+      bodyParts.push(
+        isHe
+          ? `דחוף: ${heSkus(stockRiskCount)} ${heProjectedVerb(stockRiskCount)} תוך ${heDays(stockRiskThreshold)} בקצב המכירות המשולב — בדקו זמינות לפני הקופה הבאה.`
+          : `Urgent: ${stockRiskCount} SKU${stockRiskCount === 1 ? "" : "s"} ${stockRiskCount === 1 ? "is" : "are"} projected to stock out within ${stockRiskThreshold} days at the combined burn rate — check availability before the next cycle.`
+      );
+    }
+  }
+
+  // Web hero — moved BEFORE store hero in body because "push ad budget" is
+  // higher-leverage for a CEO than "confirm POS stock". Include the revenue
+  // size so the CEO knows whether scaling the SKU is worth their attention.
+  if (webHeroes[0]) {
+    const r = webHeroes[0];
+    const rev = formatMoneyish(r.onlineSales);
     bodyParts.push(
       isHe
-        ? `דחוף: ${heSkus(stockRiskCount)} ${heProjectedVerb(stockRiskCount)} תוך ${heDays(stockRiskThreshold)} בקצב המכירות המשולב — בדקו זמינות לפני הקופה הבאה.`
-        : `Urgent: ${stockRiskCount} SKU${stockRiskCount === 1 ? "" : "s"} ${stockRiskCount === 1 ? "is" : "are"} projected to stock out within ${stockRiskThreshold} days at the combined burn rate — check availability before the next cycle.`
+        ? `🚀 הזדמנות אונליין: ${r.matchedProductTitle ?? r.itemName} עם ₪${rev} ב-Shopify (${r.onlinePct.toFixed(0)}% מהנפח שלו) — להגדיל תקציב Meta ב-20%+ השבוע.`
+        : `🚀 Online opportunity: ${r.matchedProductTitle ?? r.itemName} drove ₪${rev} on Shopify (${r.onlinePct.toFixed(0)}% of its volume) — scale Meta budget +20% this week.`
     );
   }
 
   if (storeHeroes[0]) {
     const r = storeHeroes[0];
+    const rev = formatMoneyish(r.offlineSales);
     bodyParts.push(
       isHe
-        ? `${r.itemName} מנצח באופליין: ${r.offlinePct.toFixed(0)}% מהמכירות שלו מגיע מהחנות הפיזית — שווה לוודא שיש מלאי מספיק בנקודות המכירה.`
-        : `${r.itemName} is a store-only hero — ${r.offlinePct.toFixed(0)}% of its volume comes from offline. Make sure POS stock is healthy.`
+        ? `🏬 חנות פיזית: ${r.matchedProductTitle ?? r.itemName} מוביל אופליין עם ₪${rev} (${r.offlinePct.toFixed(0)}% מהנפח) — לוודא מלאי לקופה הבאה.`
+        : `🏬 In-store: ${r.matchedProductTitle ?? r.itemName} leads offline at ₪${rev} (${r.offlinePct.toFixed(0)}% of its volume) — confirm POS stock for next cycle.`
     );
   }
 
-  if (webHeroes[0]) {
-    const r = webHeroes[0];
+  // Data hygiene — only flag if it's material (more than 1 row or large
+  // dollar value), otherwise it adds noise to a CEO report.
+  if (unmatchedCount > 1 || (unmatchedCount > 0 && input.unmatchedSales > 500)) {
     bodyParts.push(
       isHe
-        ? `${r.itemName} מנצח באונליין: ${r.onlinePct.toFixed(0)}% מהמכירות שלו ב־Shopify — כדאי לבחון הגברת תקציב למוצר הזה.`
-        : `${r.itemName} is a web-only winner at ${r.onlinePct.toFixed(0)}% online — worth scaling ad budget on this SKU.`
-    );
-  }
-
-  if (unmatchedCount > 0) {
-    bodyParts.push(
-      isHe
-        ? `${heRows(unmatchedCount)} מקובץ האופליין ${heFoundVerb(unmatchedCount)} ב־Shopify — עדכנו ברקוד בכרטיס המוצר כדי לקבל תובנות ברמת SKU.`
-        : `${unmatchedCount} offline row${unmatchedCount === 1 ? "" : "s"} couldn't be matched to a Shopify product — update the barcode on the product card to unlock per-SKU insights.`
+        ? `📋 ניקיון נתונים: ${heRows(unmatchedCount)} (₪${formatMoneyish(input.unmatchedSales)}) ${heFoundVerb(unmatchedCount)} ב-Shopify — עדכנו ברקודים לתובנות ברמת SKU.`
+        : `📋 Data hygiene: ${unmatchedCount} unmatched row${unmatchedCount === 1 ? "" : "s"} (₪${formatMoneyish(input.unmatchedSales)}) — fix barcodes for per-SKU insights.`
     );
   }
   const halo = input.affiliateHalo;

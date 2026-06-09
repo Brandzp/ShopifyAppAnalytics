@@ -3,6 +3,10 @@ import {
   getOfflineSalesSummary,
   resolveActiveStoreId
 } from "@/lib/services/offline-sales-service";
+import {
+  measureOutcomesForResolvedAlerts,
+  getRecentlyResolvedWithOutcomes
+} from "@/lib/services/alert-outcome-service";
 import { getAppLocale } from "@/lib/i18n";
 
 // Standalone print page for the Offline Status report. Same architecture as
@@ -54,6 +58,16 @@ export default async function OfflineStatusPrintPage({
   const summary = await getOfflineSalesSummary(importId, storeId, locale);
   if (!summary) return notFound();
 
+  // Closed-loop: measure any pending outcomes, then pull recently-resolved
+  // alerts with outcomes so we can show "what happened after you acted"
+  // right at the top of the report.
+  await measureOutcomesForResolvedAlerts({ storeId }).catch(() => null);
+  const closedLoop = await getRecentlyResolvedWithOutcomes({
+    storeId,
+    lookbackDays: 14,
+    limit: 5
+  }).catch(() => []);
+
   const months = isHe ? MONTHS_HE : MONTHS_EN;
   const periodLabel = `${months[summary.import.periodMonth - 1] ?? summary.import.periodMonth} ${summary.import.periodYear}`;
   const currency = summary.import.currency ?? "ILS";
@@ -65,6 +79,9 @@ export default async function OfflineStatusPrintPage({
         subtitle: `${periodLabel} · ${summary.import.fileName}`,
         bottomLine: "השורה התחתונה",
         agentEyebrow: "מה הסוכן רואה בתקופה הזו",
+        closedLoopEyebrow: "מה קרה אחרי הפעולה שלך",
+        closedLoopHint: (wins: number, misses: number) =>
+          `${wins} פעולות עבדו · ${misses} לא — המקום הכי שווה ללמוד ממנו.`,
         onlineSales: "מכירות אונליין",
         offlineSales: "מכירות אופליין",
         combined: "סה״כ",
@@ -75,10 +92,12 @@ export default async function OfflineStatusPrintPage({
         matched: "שורות שהתאמו",
         unmatched: "שורות ללא ברקוד",
         stockRisk: (n: number, days: number) => `${n} SKU בסיכון אזילה (≤ ${days} ימים)`,
-        storeHeroes: "מוצרים מנצחים ב- offline",
-        storeHeroesHint: "≥80% מההכנסה מגיעה מהמכירה האופליין.",
-        webHeroes: "מוצרים מנצחים ב- online",
-        webHeroesHint: "≥80% מההכנסה מגיעה מ־Shopify.",
+        storeHeroes: "מוצרי חנות פיזית — דומיננטיים אופליין",
+        storeHeroesHint: "מוצרים שבהם ≥80% מההכנסה הגיעה מהמכירה בחנות הפיזית. לרוב לא יופיעו בדוחות Shopify Analytics.",
+        webHeroes: "מוצרי e-commerce — דומיננטיים אונליין",
+        webHeroesHint: "מוצרים שבהם ≥80% מההכנסה הגיעה מ-Shopify. רוב המוצרים נמכרים בשני הערוצים ולא יופיעו כאן.",
+        topOnline: "10 המוצרים המובילים באונליין (Shopify)",
+        topOnlineHint: "תואם ל-Total sales by product ב-Shopify Analytics. ללא קשר לחלוקת ערוצים — כל מוצר שנמכר ב-Shopify מופיע כאן לפי הכנסה.",
         breakdown: "פירוט לפי מוצר",
         breakdownHint: "השוואה בין מכירות אונליין ואופליין לכל מוצר. SKU בסיכון אזילה (≤14 ימים) מוצגים בראש.",
         barcode: "ברקוד",
@@ -113,6 +132,9 @@ export default async function OfflineStatusPrintPage({
         subtitle: `${periodLabel} · ${summary.import.fileName}`,
         bottomLine: "Bottom line",
         agentEyebrow: "What the agent sees this period",
+        closedLoopEyebrow: "What happened after you acted",
+        closedLoopHint: (wins: number, misses: number) =>
+          `${wins} actions worked · ${misses} didn't — failures are where the learning is.`,
         onlineSales: "Online sales",
         offlineSales: "Offline sales",
         combined: "Combined",
@@ -123,10 +145,12 @@ export default async function OfflineStatusPrintPage({
         matched: "rows matched",
         unmatched: "rows without barcode match",
         stockRisk: (n: number, days: number) => `${n} SKUs at stock-out risk (≤ ${days} days)`,
-        storeHeroes: "Winning products — offline",
-        storeHeroesHint: "≥80% of revenue comes from offline.",
-        webHeroes: "Winning products — online",
-        webHeroesHint: "≥80% of revenue comes from Shopify.",
+        storeHeroes: "Brick-and-mortar dominant — ≥80% offline",
+        storeHeroesHint: "Products where ≥80% of revenue came from in-store sales. These won't appear in Shopify Analytics.",
+        webHeroes: "E-commerce dominant — ≥80% online",
+        webHeroesHint: "Products where ≥80% of revenue came from Shopify. Most products sell on both channels and won't qualify.",
+        topOnline: "Top 10 products online (matches Shopify)",
+        topOnlineHint: "Mirrors Shopify Analytics' 'Total sales by product' chart. Every product with Shopify sales appears here ranked by revenue — channel-mix independent.",
         breakdown: "Per-product breakdown",
         breakdownHint: "Online vs offline comparison per product. Stock-risk SKUs (≤14 days) are pinned to the top.",
         barcode: "Barcode",
@@ -277,6 +301,59 @@ export default async function OfflineStatusPrintPage({
                   </ul>
                 );
               })()}
+            </div>
+          ) : null}
+
+          {/* Closed-loop block — "you acted last week, here's what happened." */}
+          {closedLoop.length > 0 ? (
+            <div
+              className="ofp-callout"
+              style={{
+                background: "#f8fafc",
+                borderInlineStart: "3px solid #475569",
+                marginTop: 12
+              }}
+            >
+              <p className="ofp-callout-eyebrow">{t.closedLoopEyebrow}</p>
+              <p style={{ marginBottom: 8, fontSize: 11, color: "#64748b" }}>
+                {t.closedLoopHint(
+                  closedLoop.filter((c) => c.outcome.verdict === "win").length,
+                  closedLoop.filter((c) => c.outcome.verdict === "miss").length
+                )}
+              </p>
+              <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
+                {closedLoop.map((c, i) => {
+                  const v = c.outcome.verdict;
+                  const marker = v === "win" ? "✅" : v === "miss" ? "❌" : "•";
+                  const color = v === "win" ? "#047857" : v === "miss" ? "#b91c1c" : "#475569";
+                  return (
+                    <li
+                      key={c.id}
+                      style={{
+                        position: "relative",
+                        paddingInlineStart: 18,
+                        marginTop: i === 0 ? 0 : 6,
+                        fontSize: 12,
+                        lineHeight: 1.6,
+                        color: "#0f172a"
+                      }}
+                    >
+                      <span
+                        style={{
+                          position: "absolute",
+                          insetInlineStart: 0,
+                          top: 0,
+                          color,
+                          fontWeight: 700
+                        }}
+                      >
+                        {marker}
+                      </span>
+                      {isHe ? c.outcome.summary.he : c.outcome.summary.en}
+                    </li>
+                  );
+                })}
+              </ul>
             </div>
           ) : null}
 
@@ -442,7 +519,7 @@ export default async function OfflineStatusPrintPage({
                     <tr key={`store-${i}`}>
                       <td>{row.matchedProductTitle ?? row.itemName}</td>
                       <td>{fmtCurrency(row.totalSales, currency)}</td>
-                      <td>{fmtPct(row.offlinePct * 100)} {t.viaOffline}</td>
+                      <td>{fmtPct(row.offlinePct)} {t.viaOffline}</td>
                       <td>{fmtNumber(row.offlineQuantity)}</td>
                     </tr>
                   ))}
@@ -451,7 +528,36 @@ export default async function OfflineStatusPrintPage({
             </section>
           ) : null}
 
-          {/* Web heroes */}
+          {/* Top 10 products by online revenue — matches Shopify Analytics
+              "Total sales by product" chart, regardless of channel mix.
+              This is the sanity-check section the founder uses to verify
+              our numbers reconcile with Shopify directly. */}
+          {summary.topOnlineProducts.length > 0 ? (
+            <section className="ofp-section">
+              <h2 className="ofp-section-title">{t.topOnline}</h2>
+              <p style={{ margin: "0 0 6px", fontSize: 11, color: "#64748b" }}>{t.topOnlineHint}</p>
+              <table className="ofp-table">
+                <thead>
+                  <tr>
+                    <th>{t.product}</th>
+                    <th>{t.revenue}</th>
+                    <th>{t.quantity}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {summary.topOnlineProducts.map((row, i) => (
+                    <tr key={`top-online-${i}`}>
+                      <td>{row.productTitle}</td>
+                      <td>{fmtCurrency(row.revenue, currency)}</td>
+                      <td>{fmtNumber(row.units)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </section>
+          ) : null}
+
+          {/* Web heroes — channel-mix dominant only */}
           {summary.webHeroes.length > 0 ? (
             <section className="ofp-section">
               <h2 className="ofp-section-title">{t.webHeroes}</h2>
@@ -470,7 +576,7 @@ export default async function OfflineStatusPrintPage({
                     <tr key={`web-${i}`}>
                       <td>{row.matchedProductTitle ?? row.itemName}</td>
                       <td>{fmtCurrency(row.totalSales, currency)}</td>
-                      <td>{fmtPct(row.onlinePct * 100)} {t.viaOnline}</td>
+                      <td>{fmtPct(row.onlinePct)} {t.viaOnline}</td>
                       <td>{fmtNumber(row.onlineQuantity)}</td>
                     </tr>
                   ))}

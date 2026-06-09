@@ -18,6 +18,12 @@ import { buildRoasCollapseReport } from "@/lib/services/roas-collapse-service";
 import { buildContributionMargin } from "@/lib/services/contribution-margin-service";
 import { buildSetupHealth } from "@/lib/services/setup-health-service";
 import { SetupHealthBadge } from "@/components/setup-health/setup-health-badge";
+import {
+  measureOutcomesForResolvedAlerts,
+  getRecentlyResolvedWithOutcomes,
+  type ResolvedAlertWithOutcome
+} from "@/lib/services/alert-outcome-service";
+import { CheckCircle2, XCircle, MinusCircle } from "lucide-react";
 import { resolveActiveStoreId } from "@/lib/services/offline-sales-service";
 import { formatCurrency, formatNumber } from "@/lib/utils";
 import { getAppLocale } from "@/lib/i18n";
@@ -46,6 +52,9 @@ export default async function CommandCenterPage() {
   // fingerprint) and cheap — a single groupBy + product fetch each.
   // ROAS-collapse uses the report's date window so it tracks the same
   // period the founder is currently looking at.
+  //
+  // ALSO measure outcomes for previously-resolved alerts so the closed
+  // loop has fresh data ("you did X last week → here's what happened").
   if (storeId) {
     const roasWindow = {
       start: new Date(`${chrome.controls.startDate}T00:00:00Z`),
@@ -63,9 +72,19 @@ export default async function CommandCenterPage() {
       }).catch((e) => {
         console.error("[command-center] roas engine failed:", e);
         return null;
+      }),
+      measureOutcomesForResolvedAlerts({ storeId }).catch((e) => {
+        console.error("[command-center] outcome measurement failed:", e);
+        return null;
       })
     ]);
   }
+
+  // Read closed-loop outcomes (last 14 days of resolved alerts that have
+  // been measured). Surfaces "you did X → result Y" on the Command Center.
+  const closedLoop = storeId
+    ? await getRecentlyResolvedWithOutcomes({ storeId, lookbackDays: 14, limit: 8 }).catch(() => [])
+    : [];
 
   // Setup health — drives the SaaS "Data confidence" badge next to the
   // headline. Built once, used in two surfaces.
@@ -150,6 +169,11 @@ export default async function CommandCenterPage() {
           </div>
           {setupHealth ? <SetupHealthBadge report={setupHealth} locale={locale} /> : null}
         </div>
+
+        {/* ── CLOSED LOOP — "you did X last week → result Y" ──────────── */}
+        {closedLoop.length > 0 ? (
+          <ClosedLoopSection items={closedLoop} isHe={isHe} />
+        ) : null}
 
         {/* ── SECTION 1 — Critical + High alerts as full cards ────────── */}
         {criticalAndHigh.length > 0 ? (
@@ -299,6 +323,69 @@ export default async function CommandCenterPage() {
         </section>
       </div>
     </AppShell>
+  );
+}
+
+function ClosedLoopSection({
+  items,
+  isHe
+}: {
+  items: ResolvedAlertWithOutcome[];
+  isHe: boolean;
+}) {
+  const lang = (he: string, en: string) => (isHe ? he : en);
+  const wins = items.filter((i) => i.outcome.verdict === "win").length;
+  const misses = items.filter((i) => i.outcome.verdict === "miss").length;
+
+  return (
+    <section className="space-y-3">
+      <SectionHead
+        eyebrow={lang("הלולאה נסגרת", "Closed loop")}
+        title={lang("מה קרה אחרי הפעולה שלך", "What happened after you acted")}
+        hint={lang(
+          `מעקב על ההמלצות שביצעת לאחרונה. ${wins} הצליחו · ${misses} לא — שווה ללמוד מהכישלונות.`,
+          `Tracking recent recommendations you actioned. ${wins} worked · ${misses} didn't — failures are where the learning is.`
+        )}
+      />
+      <ul className="space-y-2">
+        {items.map((item) => {
+          const v = item.outcome.verdict;
+          const Icon = v === "win" ? CheckCircle2 : v === "miss" ? XCircle : MinusCircle;
+          const tone =
+            v === "win"
+              ? "border-emerald-200 bg-emerald-50"
+              : v === "miss"
+                ? "border-rose-200 bg-rose-50"
+                : "border-slate-200 bg-slate-50";
+          const iconColor =
+            v === "win"
+              ? "text-emerald-700"
+              : v === "miss"
+                ? "text-rose-700"
+                : "text-slate-500";
+          return (
+            <li
+              key={item.id}
+              className={`flex items-start gap-3 rounded-lg border ${tone} p-3`}
+            >
+              <Icon className={`mt-0.5 h-4 w-4 flex-shrink-0 ${iconColor}`} aria-hidden />
+              <div className="flex-1 min-w-0">
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                  {new Date(item.resolvedAt).toLocaleDateString(isHe ? "he-IL" : "en-US", {
+                    month: "short",
+                    day: "numeric"
+                  })}{" "}
+                  · {item.type.replace(/_/g, " ")}
+                </p>
+                <p className="text-sm font-medium leading-snug">
+                  {isHe ? item.outcome.summary.he : item.outcome.summary.en}
+                </p>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
   );
 }
 

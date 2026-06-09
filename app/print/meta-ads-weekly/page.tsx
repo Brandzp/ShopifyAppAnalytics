@@ -36,6 +36,11 @@ import {
   type RestockHeroAlertReport
 } from "@/lib/services/restock-hero-alert-service";
 import {
+  measureOutcomesForResolvedAlerts,
+  getRecentlyResolvedWithOutcomes,
+  type ResolvedAlertWithOutcome
+} from "@/lib/services/alert-outcome-service";
+import {
   buildRecommendation,
   DEFAULT_TARGETS,
   type Recommendation
@@ -161,7 +166,14 @@ export default async function MetaAdsWeeklyPrintPage({
       buildRestockHeroAlerts({ storeId, start, end }).catch(() => null)
     ]);
     if (!report) diagnostic = "no_meta_connection";
+    // Closed-loop: refresh outcome measurements + read for the report. Lives
+    // here so the PDF shows the same loop the founder sees on the Command
+    // Center. Measurement is cheap + idempotent; safe on every PDF render.
+    await measureOutcomesForResolvedAlerts({ storeId }).catch(() => null);
   }
+  const closedLoop = storeId
+    ? await getRecentlyResolvedWithOutcomes({ storeId, lookbackDays: 14, limit: 8 }).catch(() => [])
+    : [];
 
   // Build a prior-week snapshot per brand so the insights service can frame
   // observations as trends, not snapshots. The prior window is the same
@@ -894,7 +906,15 @@ export default async function MetaAdsWeeklyPrintPage({
             />
           ) : null}
 
-          {/* Hot Restocks — dedicated action page right after the exec summary. */}
+          {/* Closed Loop — what happened after the founder acted on prior
+              recommendations. Lives between Exec Summary and Hot Restocks
+              so the founder reads "what worked / what didn't" BEFORE
+              triaging this week's new asks. */}
+          {closedLoop.length > 0 ? (
+            <ClosedLoopPage items={closedLoop} isHe={isHe} />
+          ) : null}
+
+          {/* Hot Restocks — dedicated action page right after the closed loop. */}
           {restockAlerts && restockAlerts.flags.length > 0 ? (
             <RestockHeroActionPage alerts={restockAlerts} isHe={isHe} />
           ) : null}
@@ -1770,6 +1790,129 @@ function CampaignPerformancePage({
           })}
         </tbody>
       </table>
+    </section>
+  );
+}
+
+function ClosedLoopPage({
+  items,
+  isHe
+}: {
+  items: ResolvedAlertWithOutcome[];
+  isHe: boolean;
+}) {
+  const lang = (he: string, en: string) => (isHe ? he : en);
+  const wins = items.filter((i) => i.outcome.verdict === "win").length;
+  const misses = items.filter((i) => i.outcome.verdict === "miss").length;
+  const neutral = items.filter((i) => i.outcome.verdict === "neutral").length;
+
+  // Group by type so the page reads "restock actions" / "campaign actions" /
+  // "stockout actions" — easier to skim on a CEO report.
+  const TYPE_LABEL_HE: Record<string, string> = {
+    restock_hero: "מוצרים שחזרו למלאי",
+    stockout_imminent: "אזהרות אזילה",
+    roas_collapse: "קמפיינים בעייתיים"
+  };
+  const TYPE_LABEL_EN: Record<string, string> = {
+    restock_hero: "Restock heroes",
+    stockout_imminent: "Stockout warnings",
+    roas_collapse: "Problem campaigns"
+  };
+  const grouped = new Map<string, ResolvedAlertWithOutcome[]>();
+  for (const item of items) {
+    const list = grouped.get(item.type) ?? [];
+    list.push(item);
+    grouped.set(item.type, list);
+  }
+
+  return (
+    <section className="pwr-exec-page">
+      <p className="pwr-exec-page-tag" style={{ color: "#475569" }}>
+        {lang("הלולאה נסגרת", "CLOSED LOOP")}
+      </p>
+      <h2 className="pwr-exec-page-title">
+        {lang("מה קרה אחרי הפעולה שלך", "What happened after you acted")}
+      </h2>
+      <p className="pwr-exec-page-sub">
+        {lang(
+          `מעקב על ההמלצות מהשבועות האחרונים. ${wins} עבדו · ${misses} לא · ${neutral} ניטרליות — הכישלונות הם הלמידה היקרה ביותר.`,
+          `Tracking recommendations from the last 2 weeks. ${wins} worked · ${misses} didn't · ${neutral} neutral — failures are the most valuable learning.`
+        )}
+      </p>
+
+      {Array.from(grouped.entries()).map(([type, list]) => (
+        <div key={type} style={{ marginBottom: 16 }}>
+          <h3
+            style={{
+              fontSize: 11,
+              fontWeight: 700,
+              textTransform: "uppercase",
+              letterSpacing: "0.06em",
+              color: "#64748b",
+              margin: "0 0 6px 0"
+            }}
+          >
+            {isHe ? TYPE_LABEL_HE[type] ?? type : TYPE_LABEL_EN[type] ?? type}
+          </h3>
+          <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
+            {list.map((item, idx) => {
+              const v = item.outcome.verdict;
+              const marker = v === "win" ? "✅" : v === "miss" ? "❌" : "➖";
+              const color = v === "win" ? "#047857" : v === "miss" ? "#b91c1c" : "#64748b";
+              const tone =
+                v === "win"
+                  ? "#ecfdf5"
+                  : v === "miss"
+                    ? "#fef2f2"
+                    : "#f8fafc";
+              const border =
+                v === "win"
+                  ? "#a7f3d0"
+                  : v === "miss"
+                    ? "#fecaca"
+                    : "#e2e8f0";
+              return (
+                <li
+                  key={item.id}
+                  style={{
+                    background: tone,
+                    border: `1px solid ${border}`,
+                    borderRadius: 4,
+                    padding: "8px 10px",
+                    marginTop: idx === 0 ? 0 : 4,
+                    fontSize: 11.5,
+                    lineHeight: 1.55,
+                    display: "flex",
+                    gap: 8
+                  }}
+                >
+                  <span style={{ color, fontWeight: 700, flexShrink: 0 }}>{marker}</span>
+                  <div style={{ flex: 1 }}>
+                    <p style={{ margin: 0, color: "#0f172a" }}>
+                      {isHe ? item.outcome.summary.he : item.outcome.summary.en}
+                    </p>
+                    <p
+                      style={{
+                        margin: "2px 0 0",
+                        fontSize: 9,
+                        color: "#64748b",
+                        textTransform: "uppercase",
+                        letterSpacing: "0.04em"
+                      }}
+                    >
+                      {lang("נסגר", "Closed")}:{" "}
+                      {new Date(item.resolvedAt).toLocaleDateString(isHe ? "he-IL" : "en-US", {
+                        month: "short",
+                        day: "numeric"
+                      })}
+                    </p>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ))}
     </section>
   );
 }

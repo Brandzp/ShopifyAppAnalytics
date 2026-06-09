@@ -155,7 +155,9 @@ export async function buildContributionMargin(
   const costCoverage = parity.grossSales > 0 ? revenueWithCost / parity.grossSales : 0;
 
   // Distinct products that sold but had at least one zero-cost line item.
-  // Best-effort — counts product ids appearing on line items with cost=0.
+  // Best-effort — counts product ids appearing on line items with cost <= 0.
+  // (estimatedCostAmount is a non-nullable Decimal that defaults to 0 when
+  // unset, so checking <= 0 catches both "explicitly zero" and "unset".)
   const missingCostRows = (await db.orderLineItem.findMany({
     where: {
       storeId: input.storeId,
@@ -165,7 +167,7 @@ export async function buildContributionMargin(
         cancelledAt: null,
         test: false
       },
-      OR: [{ estimatedCostAmount: 0 }, { estimatedCostAmount: { equals: null as any } }],
+      estimatedCostAmount: { lte: 0 },
       productId: { not: null }
     },
     select: { productId: true },

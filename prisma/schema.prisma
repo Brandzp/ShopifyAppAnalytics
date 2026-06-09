@@ -4,7 +4,14 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+  // DATABASE_URL → runtime connection. In production point this at the
+  // Supabase POOLED endpoint (port 6543, ?pgbouncer=true&connection_limit=1).
+  url       = env("DATABASE_URL")
+  // DIRECT_URL → migrations only (`prisma migrate` / `prisma db push`).
+  // PgBouncer's transaction pooling doesn't support prepared statements,
+  // so migrations need a direct (port 5432) connection. Falls back to
+  // DATABASE_URL when unset (local dev).
+  directUrl = env("DIRECT_URL")
 }
 
 model Store {
@@ -686,7 +693,10 @@ model AffiliateMember {
   status              String                      @default("pending")
   source              String?
   country             String?
-  affiliateCode       String                      @unique
+  // Multi-tenant: was @unique globally — that was a tenant leak (Store A
+  // could enumerate Store B's codes, and a code collision across stores
+  // would falsely block creation). Scoped uniqueness via @@unique below.
+  affiliateCode       String
   couponCode          String?
   referralLink        String?
   shortLink           String?
@@ -709,6 +719,7 @@ model AffiliateMember {
   attributionSessions AttributionSession[]
 
   @@unique([storeId, email])
+  @@unique([storeId, affiliateCode])
   @@index([storeId, status])
 }
 

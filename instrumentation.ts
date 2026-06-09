@@ -6,9 +6,10 @@
  * Each start* function self-gates on its enable flag (see lib/server/cron-util
  * isCronEnabled): crons are OFF by default in development and must be turned on
  * with ENABLE_SHOPIFY_SYNC_CRON / ENABLE_CREATIVE_JOB_CRON /
- * ENABLE_WEEKLY_REPORT_CRON. In production they default ON. They each apply an
- * AbortController fetch timeout and exponential backoff on failure so a flaky
- * tick can't tight-loop or crash the process.
+ * ENABLE_WEEKLY_REPORT_CRON / ENABLE_OUTCOME_MEASUREMENT_CRON. In production
+ * they default ON. They each apply an AbortController fetch timeout and
+ * exponential backoff on failure so a flaky tick can't tight-loop or crash
+ * the process.
  */
 export async function register() {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
@@ -18,4 +19,6 @@ export async function register() {
   startCreativeJobCron();
   const { startWeeklyReportCron } = await import("@/lib/server/weekly-report-cron");
   startWeeklyReportCron();
+  const { startOutcomeMeasurementCron } = await import("@/lib/server/outcome-measurement-cron");
+  startOutcomeMeasurementCron();
 }

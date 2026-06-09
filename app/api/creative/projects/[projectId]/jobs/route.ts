@@ -27,7 +27,7 @@ export async function GET(
     if (!project) {
       return NextResponse.json({ ok: false, error: "Project not found." }, { status: 404 });
     }
-    const jobs = await listJobsForProject(projectId);
+    const jobs = await listJobsForProject(projectId, storeId);
     return NextResponse.json({ ok: true, jobs });
   } catch (error) {
     return NextResponse.json({ ok: false, error: toErrorMessage(error) }, { status: 500 });

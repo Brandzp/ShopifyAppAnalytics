@@ -120,10 +120,15 @@ export async function createProject(input: CreateProjectInput): Promise<{ id: st
  * caller awaits the whole thing — fine for one image, will be replaced by the
  * job queue in M2.
  */
-export async function generatePackshotSync(projectId: string): Promise<CreativeAssetSummary> {
+export async function generatePackshotSync(
+  projectId: string,
+  storeId: string
+): Promise<CreativeAssetSummary> {
   const db = getDb();
-  const project = await db.creativeProject.findUnique({
-    where: { id: projectId },
+  // Multi-tenant safety: lookup must be scoped to the caller's store.
+  // findFirst (not findUnique) so the storeId filter actually applies.
+  const project = await db.creativeProject.findFirst({
+    where: { id: projectId, storeId },
     include: { sources: true }
   });
   if (!project) throw new Error(`Project ${projectId} not found.`);

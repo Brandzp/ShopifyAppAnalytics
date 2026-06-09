@@ -316,7 +316,12 @@ async function ensureUniqueAffiliateCode(context: DirectoryContext, preferredCod
   let candidate = base;
 
   for (let attempt = 0; attempt < 50; attempt += 1) {
-    const existing = await context.db.affiliateMember.findUnique({ where: { affiliateCode: candidate } }).catch(() => null);
+    // Scoped lookup: codes are unique PER STORE, not globally. Without
+    // this scope another tenant's code would block ours AND we'd leak the
+    // existence of their members by trial-and-error.
+    const existing = await context.db.affiliateMember.findFirst({
+      where: { storeId: context.store.id, affiliateCode: candidate }
+    }).catch(() => null);
     if (!existing || existing.id === currentAffiliateId) {
       return candidate;
     }

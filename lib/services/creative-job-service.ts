@@ -54,10 +54,15 @@ export interface JobProgress {
   errorMessage: string | null;
 }
 
-export async function listJobsForProject(projectId: string): Promise<JobProgress[]> {
+export async function listJobsForProject(
+  projectId: string,
+  storeId: string
+): Promise<JobProgress[]> {
   const db = getDb();
+  // Multi-tenant safety: filter via the project's storeId so an attacker
+  // with a stale projectId from another store can't read its jobs.
   const rows = await db.creativeGenerationJob.findMany({
-    where: { projectId },
+    where: { projectId, project: { storeId } },
     orderBy: { createdAt: "desc" }
   });
   return rows.map((r: any) => ({
