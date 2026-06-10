@@ -39,6 +39,18 @@ export default async function ConversionsPage() {
           { key: "orderNumber", label: "Order" },
           { key: "date", label: "Date", render: (row) => new Date(row.date).toLocaleString("en-US") },
           { key: "affiliateName", label: "Affiliate" },
+          {
+            key: "couponCode",
+            label: "Coupon",
+            render: (row) =>
+              row.couponCode ? (
+                <span className="inline-flex items-center rounded-md border border-border bg-muted/40 px-1.5 py-0.5 text-xs font-mono font-medium">
+                  {row.couponCode}
+                </span>
+              ) : (
+                <span className="text-muted-foreground">—</span>
+              )
+          },
           { key: "total", label: "Total", render: (row) => formatCurrency(row.total, chrome.store.currency) },
           { key: "commission", label: "Commission", render: (row) => formatCurrency(row.commission, chrome.store.currency) },
           { key: "status", label: "Status" },

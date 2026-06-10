@@ -29,7 +29,12 @@ services:
     # outdated client (db.systemConfig undefined etc.). Small extra cost
     # (~5s per build) but eliminates an entire class of "deployed code
     # references a model the client doesn't know about" bugs.
-    buildCommand: rm -rf node_modules/.prisma && npm ci && npx prisma generate && npm run build
+    #
+    # `playwright install chromium` downloads the headless Chromium binary
+    # used by the PDF renderer. Render's Node image doesn't ship with it.
+    # Without this, every PDF export fails with "Executable doesn't exist
+    # at /opt/render/.cache/ms-playwright/...".
+    buildCommand: rm -rf node_modules/.prisma && npm ci && npx prisma generate && npx playwright install --with-deps chromium && npm run build
     startCommand: npm start
     healthCheckPath: /
     autoDeploy: true

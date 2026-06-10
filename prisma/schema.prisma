@@ -795,6 +795,15 @@ model AffiliateAttribution {
   commissionAmount  Decimal         @default(0) @db.Decimal(12, 2)
   clicks            Int             @default(0)
   ordersCount       Int             @default(1)
+  // External (BixGrow / CSV) order number — kept so the conversions
+  // page can still show the order # even when Shopify hasn't synced
+  // the order yet (or never will, e.g. for cancelled orders BixGrow
+  // still reports). Format normalized to leading "#" (e.g. "#33024").
+  externalOrderNumber String?
+  // The discount/coupon code BixGrow attributed to this conversion.
+  // Mirrors what the merchant sees on the BixGrow side, and unlocks
+  // a "Coupon" column on the conversions table.
+  couponCode        String?
   occurredAt        DateTime        @default(now())
   createdAt         DateTime        @default(now())
   updatedAt         DateTime        @updatedAt

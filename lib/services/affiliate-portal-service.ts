@@ -332,7 +332,14 @@ async function loadConversionsFromDb(): Promise<AffiliateConversion[]> {
 
     return rows.map((row: any) => ({
       id: row.id,
-      orderNumber: row.order?.displayName ?? row.order?.orderNumber ?? row.orderId ?? "-",
+      // Priority: Shopify-matched order number > externalOrderNumber (BixGrow
+      // sends this even when the Shopify order hasn't synced) > raw orderId.
+      orderNumber:
+        row.order?.displayName ??
+        row.order?.orderNumber ??
+        row.externalOrderNumber ??
+        row.orderId ??
+        "-",
       date: row.occurredAt.toISOString(),
       affiliateId: row.affiliateMemberId,
       affiliateName: row.affiliateMember ? `${row.affiliateMember.firstName} ${row.affiliateMember.lastName}` : "-",
@@ -341,7 +348,8 @@ async function loadConversionsFromDb(): Promise<AffiliateConversion[]> {
       status: "approved",
       trackingBy: row.trackingMethod ? String(row.trackingMethod).replaceAll("_", " ") : row.sourceType ?? "Link",
       sourceUrl: normalizeSourceLabel(row.sourceUrl, null, row.trackingMethod),
-      contentTitle: row.contentTitle ?? null
+      contentTitle: row.contentTitle ?? null,
+      couponCode: row.couponCode ?? row.affiliateMember?.couponCode ?? null
     })) as AffiliateConversion[];
   } catch {
     return [];

@@ -195,6 +195,8 @@ export async function POST(
         storeId: store.id,
         affiliateMemberId: member.id,
         orderId: null,
+        externalOrderNumber: `#${orderNumber}`,
+        couponCode,
         sourceType,
         trackingMethod,
         salesAmount: total,
@@ -215,6 +217,8 @@ export async function POST(
       }
     },
     update: {
+      externalOrderNumber: `#${orderNumber}`,
+      couponCode,
       sourceType,
       trackingMethod,
       salesAmount: total,
@@ -225,6 +229,8 @@ export async function POST(
       storeId: store.id,
       affiliateMemberId: member.id,
       orderId: orderRow.id,
+      externalOrderNumber: `#${orderNumber}`,
+      couponCode,
       sourceType,
       trackingMethod,
       salesAmount: total,

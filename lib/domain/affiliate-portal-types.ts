@@ -82,6 +82,7 @@ export interface AffiliateConversion {
   trackingBy: string;
   sourceUrl: string;
   contentTitle?: string | null;
+  couponCode?: string | null;
 }
 
 export interface AffiliatePayout {

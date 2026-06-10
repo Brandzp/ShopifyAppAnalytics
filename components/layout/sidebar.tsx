@@ -26,7 +26,8 @@ function getNavigation(labels: { nav: Record<string, string> }, locale: AppLocal
     { href: "/affiliate-portal", label: locale === "he" ? "פורטל שותפים" : "Affiliate Portal", icon: Megaphone },
     { href: "/creative", label: locale === "he" ? "סטודיו קריאייטיב" : "Creative", icon: Sparkles },
     { href: "/weekly-summary", label: labels.nav.weeklySummary, icon: Sparkles },
-    { href: "/growth-agent", label: "Growth Agent", icon: Bot },
+    // Growth Agent — hidden from nav until the automation loop is shipped.
+    // Routes still exist at /growth-agent/* for direct access if needed.
     { href: "/marketing-planner", label: locale === "he" ? "גאנט שיווקי" : "Marketing Planner", icon: CalendarRange },
     { href: "/alerts", label: labels.nav.alerts, icon: Bell },
     { href: "/settings", label: labels.nav.settings, icon: Settings2 }
