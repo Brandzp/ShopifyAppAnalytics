@@ -28,7 +28,7 @@ export default async function GrowthAgentRulesPage() {
 
       <GrowthAgentManualControls storeId={store.id} />
 
-      <section className="grid gap-4 xl:grid-cols-3">
+      <section className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         <Card>
           <CardHeader><CardTitle className="text-base">Operating mode</CardTitle></CardHeader>
           <CardContent className="space-y-2 text-sm text-muted-foreground">
@@ -56,7 +56,7 @@ export default async function GrowthAgentRulesPage() {
         </Card>
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-3">
+      <section className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         <DataTable title="Thresholds" columns={[{ key: "metric", label: "Metric" }, { key: "value", label: "Threshold" }]} rows={thresholdRows} />
         <DataTable title="Allowed actions" columns={[{ key: "action", label: "Action" }, { key: "enabled", label: "Status" }]} rows={allowedRows} />
         <DataTable title="Approval rules" columns={[{ key: "rule", label: "Rule" }, { key: "value", label: "Value" }]} rows={approvalRows} />

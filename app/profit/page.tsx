@@ -76,7 +76,7 @@ export default async function ProfitPage() {
             title="Where revenue and margin live"
             hint="Left chart = which products bring in the money. Right chart = which collections keep the most after costs."
           />
-          <div className="grid items-start gap-4 xl:grid-cols-2">
+          <div className="grid items-start gap-4 lg:grid-cols-2">
             <Card>
               <CardHeader className="pb-2">
                 <div className="flex items-center gap-1.5">
@@ -149,7 +149,7 @@ export default async function ProfitPage() {
             title="The full breakdown"
             hint="Sortable, paginated tables. Use the page-size toggle if you want to see more rows at once."
           />
-          <div className="grid items-start gap-4 xl:grid-cols-2">
+          <div className="grid items-start gap-4 lg:grid-cols-2">
             <DataTable
               title={dictionary.profit.productTable}
               description={dictionary.profit.productTableDescription}
@@ -258,7 +258,7 @@ export default async function ProfitPage() {
             title="Heroes & watchlist"
             hint="Heroes drove margin this period. Watchlist needs your attention next — pricing, bundles, or refund review."
           />
-          <div className="grid items-start gap-4 xl:grid-cols-2">
+          <div className="grid items-start gap-4 lg:grid-cols-2">
             <StyledTable
               numbered
               rowKey={(row) => row.productId}
@@ -401,7 +401,7 @@ function ChannelCacTable({
   };
 
   return (
-    <div className="overflow-x-auto rounded-lg border border-border">
+    <div className="overflow-x-auto rounded-lg border border-border table-scroll scroll-fade-end">
       <table className="w-full border-collapse text-xs">
         <thead className="bg-slate-50">
           <tr>

@@ -70,7 +70,7 @@ export default async function RetentionPage() {
             title="Customer mix this period"
             hint="Five numbers that tell you if buyers come back. Hover any ? for the calculation."
           />
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          <div className="grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
             <StatTile
               label={dictionary.retention.newCustomers}
               value={formatNumber(snap.newCustomers)}
@@ -131,7 +131,7 @@ export default async function RetentionPage() {
             title="What customers buy first vs. what brings them back"
             hint="Left = best acquisition products. Right = best retention products. Different SKUs are normal — and often very revealing."
           />
-          <div className="grid items-start gap-4 xl:grid-cols-2">
+          <div className="grid items-start gap-4 lg:grid-cols-2">
             <Card>
               <CardHeader className="pb-2">
                 <div className="flex items-center gap-1.5">

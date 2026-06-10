@@ -111,3 +111,34 @@ body {
   color: hsl(var(--foreground)) !important;
   box-shadow: 0 18px 45px -24px rgba(15, 23, 42, 0.28) !important;
 }
+
+/* ─── Mobile responsiveness helpers ─────────────────────────────────────
+   `.scroll-fade-end` gives a subtle right-edge fade on horizontally
+   scrollable containers (tables, tab strips). Touch users get a visual
+   hint that there's more content off-screen. */
+.scroll-fade-end {
+  -webkit-mask-image: linear-gradient(to right, black 0, black calc(100% - 24px), transparent 100%);
+  mask-image: linear-gradient(to right, black 0, black calc(100% - 24px), transparent 100%);
+}
+@media (min-width: 640px) {
+  /* On larger screens we don't need the hint because the table usually
+     fits, and the fade can make actual content look cut off. */
+  .scroll-fade-end {
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+}
+
+/* Mobile-only momentum scrolling for tables nested in cards. iOS Safari
+   default is fine but Android needs this for smoother feel. */
+.table-scroll {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+}
+
+/* Prevent the date <input> on iOS from rendering a tiny tappable area. */
+@supports (-webkit-touch-callout: none) {
+  input[type="date"] {
+    min-height: 40px;
+  }
+}

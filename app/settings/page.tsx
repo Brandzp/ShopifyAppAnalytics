@@ -227,7 +227,7 @@ function SetupHealthChecklist({
           <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
             {lang("ביטחון בנתונים", "Data confidence")}
           </p>
-          <p className={`text-3xl font-bold ${scoreColor}`}>
+          <p className={`text-2xl sm:text-3xl font-bold ${scoreColor}`}>
             {report.score}%{" "}
             <span className="text-sm font-normal text-muted-foreground">
               ({report.passed}/{report.checks.length} {lang("עברו", "passing")})

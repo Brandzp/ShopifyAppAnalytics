@@ -62,7 +62,7 @@ export default async function GrowthAgentOverviewPage() {
             title="Agent at a glance"
             hint="Six metrics that tell you if the agent is healthy and connected."
           />
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+          <div className="grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-6">
             <StatTile
               label="Agent status"
               value={
@@ -114,8 +114,8 @@ export default async function GrowthAgentOverviewPage() {
             title="Live status and evidence"
             hint="What the agent did most recently, which store it is reading, and which data sources are feeding it."
           />
-          <div className="grid items-start gap-4 xl:grid-cols-[1.1fr_0.9fr]">
-            <Card>
+          <div className="grid items-start gap-4 lg:grid-cols-2 xl:grid-cols-[1.1fr_0.9fr]">
+            <Card className="min-w-0">
               <CardHeader className="pb-2">
                 <CardTitle className="text-base">Latest agent activity</CardTitle>
               </CardHeader>
@@ -199,7 +199,7 @@ export default async function GrowthAgentOverviewPage() {
             title="Recent findings and action queue"
             hint="Left is what the agent flagged. Right is what is waiting for approval or already executed."
           />
-          <div className="grid items-start gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+          <div className="grid items-start gap-4 lg:grid-cols-2 xl:grid-cols-[1.1fr_0.9fr]">
             <GrowthFindingsList findings={overview.findings.slice(0, 6)} title="Recent findings" />
             <GrowthActionCenter actions={overview.actions.slice(0, 6)} storeId={store.id} title="Action center preview" />
           </div>

@@ -32,7 +32,7 @@ export default async function AffiliateDetailPage({ params }: { params: Promise<
 
       <section className="grid gap-4 xl:grid-cols-[1.4fr_1fr]">
         <div className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-4">
+          <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4">
             <Card>
               <CardContent className="p-4">
                 <p className="text-sm text-muted-foreground">Sales</p>

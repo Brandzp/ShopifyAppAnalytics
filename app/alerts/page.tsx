@@ -56,7 +56,7 @@ export default async function AlertsPage() {
               title="Today's must-do alerts"
               hint="Something material moved. Read the suggested action and execute today if possible."
             />
-            <div className="grid gap-3 lg:grid-cols-2">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-2">
               {high.map((alert) => (
                 <AlertCard
                   key={alert.id}
@@ -75,7 +75,7 @@ export default async function AlertsPage() {
               title="This week's review queue"
               hint="Worth investigating during weekly planning. Won't blow up overnight."
             />
-            <div className="grid gap-3 lg:grid-cols-2">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-2">
               {medium.map((alert) => (
                 <AlertCard
                   key={alert.id}
@@ -94,7 +94,7 @@ export default async function AlertsPage() {
               title="FYI — informational"
               hint="Background context. Read when you have time, or skip during a busy week."
             />
-            <div className="grid gap-3 lg:grid-cols-2">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-2">
               {low.map((alert) => (
                 <AlertCard
                   key={alert.id}

@@ -106,7 +106,7 @@ export default async function AffiliatePortalDashboardPage() {
             hint="Left chart = daily sales + clicks, watch the gap (widening = funnel issue). Right card = your live program details."
           />
           <div className="grid items-start gap-4 xl:grid-cols-[1.5fr_1fr]">
-            <Card>
+            <Card className="min-w-0">
               <CardHeader className="pb-2">
                 <div className="flex items-center gap-1.5">
                   <CardTitle className="text-base">Affiliate sales trend</CardTitle>

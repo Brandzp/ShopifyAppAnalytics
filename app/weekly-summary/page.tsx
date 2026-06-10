@@ -49,7 +49,7 @@ function InfluencerWeeklyEvidence({
       <CardContent className="space-y-4">
         {influencer ? (
           <>
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+            <div className="grid gap-3 grid-cols-2 md:grid-cols-3 xl:grid-cols-5">
               <div className="rounded-xl border border-border/70 bg-background/70 p-3">
                 <p className="text-xs text-muted-foreground">Period</p>
                 <p className="mt-1 font-semibold">{influencer.periodLabel}</p>
@@ -72,7 +72,7 @@ function InfluencerWeeklyEvidence({
               </div>
             </div>
 
-            <div className="grid gap-4 xl:grid-cols-2">
+            <div className="grid gap-4 lg:grid-cols-2">
               <div className="rounded-2xl border border-border/70 bg-background/70 p-4">
                 <p className="text-sm font-semibold text-foreground">Creators to scale</p>
                 {influencer.topCreators.length ? (

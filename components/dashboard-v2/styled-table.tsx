@@ -35,7 +35,7 @@ export function StyledTable<T extends object>({
   return (
     <Card>
       <CardContent className="p-0">
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto table-scroll scroll-fade-end">
           <table className="min-w-full divide-y divide-border text-sm">
             <thead className="bg-muted/40 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
               <tr>

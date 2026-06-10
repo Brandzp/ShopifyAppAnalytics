@@ -51,8 +51,8 @@ export default async function AffiliateProgramsPage() {
             <div className="rounded-2xl border border-border/70 bg-background/70 p-4">
               <p className="text-sm text-muted-foreground">Affiliate sign-up link</p>
               <div className="mt-3 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                <p className="break-all text-sm">{program.signUpLink}</p>
-                <Button variant="secondary">Copy</Button>
+                <p className="min-w-0 break-all text-sm">{program.signUpLink}</p>
+                <Button variant="secondary" className="w-full md:w-auto">Copy</Button>
               </div>
             </div>
           </CardContent>

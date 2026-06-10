@@ -75,7 +75,7 @@ export function DataTable<T extends object>({
         </div>
         {description ? <p className="text-sm text-muted-foreground">{description}</p> : null}
       </CardHeader>
-      <CardContent className="overflow-x-auto">
+      <CardContent className="overflow-x-auto table-scroll scroll-fade-end">
         <table className="min-w-full divide-y divide-border text-start text-sm">
           <thead>
             <tr>

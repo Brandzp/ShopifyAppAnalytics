@@ -211,7 +211,7 @@ export default async function CommandCenterPage() {
               isHe={isHe}
             />
           ) : null}
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-3 grid-cols-2 lg:grid-cols-3">
             {overview.kpis.map((kpi) => (
               <KpiTile key={kpi.label} kpi={kpi} currency={overview.store.currency} />
             ))}
@@ -425,7 +425,9 @@ function ContributionMarginPanel({
 
   return (
     <div className={`rounded-xl border ${confBg} p-4`}>
-      <div className="flex flex-wrap items-start justify-between gap-3">
+      {/* Mobile: stacked layout (headline on top, breakdown below in 2-col grid).
+          sm+: side-by-side with breakdown growing to fill remaining space. */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
         <div className="min-w-0">
           <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
             {lang("רווח תרומה", "Contribution margin")}{" "}
@@ -435,12 +437,12 @@ function ContributionMarginPanel({
               {q.accuracy}
             </span>
           </p>
-          <p className={`mt-1 text-2xl font-bold ${confText}`}>
+          <p className={`mt-1 text-xl sm:text-2xl font-bold ${confText}`}>
             {fmt(t.contributionMargin)}{" "}
             <span className="text-sm font-semibold">({ratePct}%)</span>
           </p>
         </div>
-        <div className="grid flex-1 grid-cols-2 gap-2 text-[11px] sm:grid-cols-4">
+        <div className="grid w-full grid-cols-2 gap-2 text-[11px] sm:w-auto sm:flex-1 sm:grid-cols-4">
           <BreakdownTile label={lang("הכנסה", "Revenue")} value={fmt(t.revenue)} />
           <BreakdownTile label={lang("הנחות", "Discounts")} value={`-${fmt(t.discounts)}`} />
           <BreakdownTile label={lang("החזרים", "Refunds")} value={`-${fmt(t.refunds)}`} />

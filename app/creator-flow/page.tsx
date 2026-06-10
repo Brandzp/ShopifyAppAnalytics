@@ -60,7 +60,7 @@ export default async function CreatorFlowPage() {
             title="Reach & engagement at a glance"
             hint="Six numbers that tell you which creator content actually moves product."
           />
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+          <div className="grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
             <StatTile
               label={dictionary.creator.postsAnalyzed}
               value={formatNumber(payload.totalPosts)}

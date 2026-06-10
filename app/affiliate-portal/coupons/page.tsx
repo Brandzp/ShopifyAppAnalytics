@@ -54,7 +54,7 @@ export default async function CouponsPage() {
           {
             key: "applyLink",
             label: "Apply link",
-            render: (row) => <span className="block max-w-[28rem] break-all text-xs text-muted-foreground">{row.applyLink}</span>
+            render: (row) => <span className="block w-full max-w-full sm:max-w-[28rem] break-all text-xs text-muted-foreground">{row.applyLink}</span>
           }
         ]}
         rows={coupons}

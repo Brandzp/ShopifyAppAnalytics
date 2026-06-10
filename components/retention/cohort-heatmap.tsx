@@ -63,7 +63,7 @@ export function CohortHeatmap({
   for (let i = 0; i <= report.monthsOut; i += 1) cols.push(i);
 
   return (
-    <div className="overflow-x-auto">
+    <div className="overflow-x-auto table-scroll scroll-fade-end">
       <table className="w-full border-collapse text-xs">
         <thead>
           <tr>

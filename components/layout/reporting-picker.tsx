@@ -117,25 +117,45 @@ function Popover({ open, onClose, children, className, align = "end" }: PopoverP
     }
     document.addEventListener("mousedown", onDocClick);
     document.addEventListener("keydown", onKey);
+    // Lock body scroll while the bottom-sheet variant is open on mobile —
+    // otherwise the user's tap can scroll the page underneath instead of
+    // hitting the calendar.
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
     return () => {
       document.removeEventListener("mousedown", onDocClick);
       document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prevOverflow;
     };
   }, [open, onClose]);
 
   if (!open) return null;
   return (
-    <div
-      ref={ref}
-      role="dialog"
-      className={cn(
-        "absolute z-50 mt-2 rounded-2xl border border-border/70 bg-card text-card-foreground shadow-xl",
-        align === "end" ? "end-0" : "start-0",
-        className
-      )}
-    >
-      {children}
-    </div>
+    <>
+      {/* Mobile-only backdrop. Dimmed overlay makes the bottom sheet feel
+          like a modal and provides a tap target to close. Hidden on sm+ */}
+      <div
+        className="fixed inset-0 z-40 bg-slate-900/40 sm:hidden"
+        onClick={onClose}
+        aria-hidden
+      />
+      <div
+        ref={ref}
+        role="dialog"
+        className={cn(
+          // Mobile: bottom-anchored sheet, full width minus 16px gutters,
+          // capped height with internal scroll. Lives in fixed coordinates
+          // so it doesn't get clipped by parent overflow.
+          "fixed bottom-2 start-2 end-2 z-50 max-h-[calc(100vh-1rem)] overflow-y-auto rounded-2xl border border-border/70 bg-card text-card-foreground shadow-xl",
+          // Desktop: restore the original anchored popover behavior.
+          "sm:absolute sm:bottom-auto sm:start-auto sm:end-auto sm:mt-2 sm:max-h-none sm:overflow-visible",
+          align === "end" ? "sm:end-0" : "sm:start-0",
+          className
+        )}
+      >
+        {children}
+      </div>
+    </>
   );
 }
 
@@ -337,7 +357,8 @@ export function ReportingPicker(props: ReportingPickerProps) {
       : "";
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    // Mobile: items wrap and each goes full-width if needed. Desktop: row of pills.
+    <div className="flex flex-wrap items-stretch gap-2 sm:items-center">
       {/* Top-of-page progress bar — pinned, always visible while any apply/sync
           is in flight. Indeterminate animation because the underlying page
           refresh has no real progress to measure. Inline keyframes so we
@@ -380,7 +401,7 @@ export function ReportingPicker(props: ReportingPickerProps) {
       ) : null}
 
       {/* RANGE BUTTON */}
-      <div className="relative">
+      <div className="relative flex-1 sm:flex-none">
         <button
           type="button"
           disabled={syncing}
@@ -391,14 +412,14 @@ export function ReportingPicker(props: ReportingPickerProps) {
           aria-expanded={rangeOpen}
           aria-haspopup="dialog"
           className={cn(
-            "inline-flex items-center gap-2 rounded-full border border-border bg-card px-3.5 py-2 text-sm font-medium shadow-sm transition-colors",
+            "inline-flex w-full items-center justify-center gap-2 rounded-full border border-border bg-card px-3.5 py-2 text-sm font-medium shadow-sm transition-colors sm:w-auto sm:justify-start",
             "hover:bg-muted/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/60",
             "disabled:cursor-not-allowed disabled:opacity-60",
             rangeOpen && "bg-muted/60"
           )}
         >
           <Calendar className="h-4 w-4 text-muted-foreground" aria-hidden />
-          <span className="max-w-[260px] truncate">{rangeButtonLabel}</span>
+          <span className="max-w-[200px] truncate sm:max-w-[260px]">{rangeButtonLabel}</span>
           <ChevronDown
             className={cn("h-4 w-4 text-muted-foreground transition-transform", rangeOpen && "rotate-180")}
             aria-hidden
@@ -409,7 +430,7 @@ export function ReportingPicker(props: ReportingPickerProps) {
           open={rangeOpen}
           onClose={() => setRangeOpen(false)}
           align="end"
-          className="w-[min(820px,calc(100vw-2rem))]"
+          className="w-auto sm:w-[min(820px,calc(100vw-2rem))]"
         >
           <div className="grid grid-cols-1 sm:grid-cols-[180px_1fr]">
             {/* PRESETS SIDEBAR */}
@@ -458,14 +479,14 @@ export function ReportingPicker(props: ReportingPickerProps) {
             </div>
 
             {/* CALENDAR */}
-            <div className="p-4 sm:p-5">
+            <div className="p-3 sm:p-5">
               <div className="mb-4 flex flex-wrap items-center gap-2">
                 <input
                   type="date"
                   value={startText}
                   onChange={(e) => handleStartTextChange(e.target.value)}
                   max={endText || undefined}
-                  className="w-[150px] rounded-lg border border-border bg-background px-3 py-2 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-ring/40"
+                  className="min-w-0 flex-1 sm:flex-none sm:w-[150px] rounded-lg border border-border bg-background px-3 py-2 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-ring/40"
                   aria-label="Start date"
                 />
                 <span className="text-muted-foreground" aria-hidden>
@@ -476,7 +497,7 @@ export function ReportingPicker(props: ReportingPickerProps) {
                   value={endText}
                   onChange={(e) => handleEndTextChange(e.target.value)}
                   min={startText || undefined}
-                  className="w-[150px] rounded-lg border border-border bg-background px-3 py-2 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-ring/40"
+                  className="min-w-0 flex-1 sm:flex-none sm:w-[150px] rounded-lg border border-border bg-background px-3 py-2 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-ring/40"
                   aria-label="End date"
                 />
               </div>
@@ -508,7 +529,7 @@ export function ReportingPicker(props: ReportingPickerProps) {
       </div>
 
       {/* COMPARISON BUTTON */}
-      <div className="relative">
+      <div className="relative flex-1 sm:flex-none">
         <button
           type="button"
           disabled={syncing}
@@ -519,21 +540,21 @@ export function ReportingPicker(props: ReportingPickerProps) {
           aria-expanded={compareOpen}
           aria-haspopup="menu"
           className={cn(
-            "inline-flex items-center gap-2 rounded-full border border-border bg-card px-3.5 py-2 text-sm font-medium shadow-sm transition-colors",
+            "inline-flex w-full items-center justify-center gap-2 rounded-full border border-border bg-card px-3.5 py-2 text-sm font-medium shadow-sm transition-colors sm:w-auto sm:justify-start",
             "hover:bg-muted/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/60",
             "disabled:cursor-not-allowed disabled:opacity-60",
             compareOpen && "bg-muted/60"
           )}
         >
           <GitCompareArrows className="h-4 w-4 text-muted-foreground" aria-hidden />
-          <span className="max-w-[220px] truncate">{props.initialComparisonLabel}</span>
+          <span className="max-w-[180px] truncate sm:max-w-[220px]">{props.initialComparisonLabel}</span>
           <ChevronDown
             className={cn("h-4 w-4 text-muted-foreground transition-transform", compareOpen && "rotate-180")}
             aria-hidden
           />
         </button>
 
-        <Popover open={compareOpen} onClose={() => setCompareOpen(false)} align="end" className="w-[320px]">
+        <Popover open={compareOpen} onClose={() => setCompareOpen(false)} align="end" className="w-[min(320px,calc(100vw-1rem))]">
           <div className="p-2">
             {COMPARISON_OPTIONS.map((option) => {
               const active = pendingComparisonMode === option.value;

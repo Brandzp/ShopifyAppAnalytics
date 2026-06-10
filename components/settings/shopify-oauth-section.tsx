@@ -133,13 +133,16 @@ export function ShopifyOauthSection() {
           placeholder="yourstore.myshopify.com"
           value={shopDomain}
           onChange={(e) => setShopDomain(e.target.value)}
-          className="flex-1 rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-300"
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
+          className="w-full sm:flex-1 min-w-0 rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-300"
         />
         <button
           type="button"
           onClick={handleInstall}
           disabled={!credentialsReady}
-          className="inline-flex items-center gap-1.5 rounded-md bg-violet-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-violet-800 disabled:cursor-not-allowed disabled:opacity-60"
+          className="inline-flex w-full sm:w-auto items-center justify-center gap-1.5 rounded-md bg-violet-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-violet-800 disabled:cursor-not-allowed disabled:opacity-60"
         >
           Install via Shopify
           <ExternalLink className="h-3.5 w-3.5" aria-hidden />

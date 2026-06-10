@@ -41,16 +41,18 @@ export function Topbar({
 }) {
   return (
     <div className="flex flex-col gap-4 border-b border-border/70 pb-5 sm:pb-6 lg:flex-row lg:items-center lg:justify-between">
-      <div className="space-y-2">
-        <div className="flex flex-wrap items-center gap-3">
-          <Badge>{store.connected ? labels.common.connectedStore : labels.common.storeSetup}</Badge>
-          <p className="text-sm text-muted-foreground">{store.domain}</p>
+      <div className="space-y-2 min-w-0">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+          <Badge className="whitespace-nowrap">
+            {store.connected ? labels.common.connectedStore : labels.common.storeSetup}
+          </Badge>
+          <p className="text-sm text-muted-foreground truncate max-w-full">{store.domain}</p>
           {allStores ? (
             <StoreSwitcher currentStoreId={store.id} stores={allStores} />
           ) : null}
         </div>
-        <div>
-          <h2 className="text-xl font-semibold tracking-tight sm:text-2xl">{store.name}</h2>
+        <div className="min-w-0">
+          <h2 className="text-xl font-semibold tracking-tight sm:text-2xl break-words">{store.name}</h2>
           <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
             {labels.common.founderAnalyticsCopy}
           </p>

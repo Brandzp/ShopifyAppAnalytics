@@ -79,20 +79,23 @@ export function BixGrowWebhookCard({
           <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             URL slug
           </span>
-          <div className="mt-1 flex items-center gap-2">
+          <div className="mt-1 flex flex-col gap-2 sm:flex-row sm:items-center">
             <input
               type="text"
               value={slug}
               onChange={(e) => setSlug(e.target.value)}
               placeholder="e.g. aftershower, incense, oliere"
               maxLength={32}
-              className="flex-1 rounded-md border border-border bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-300"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+              className="min-w-0 w-full sm:flex-1 rounded-md border border-border bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-300"
             />
             <button
               type="button"
               onClick={handleSave}
               disabled={saving || !slug.trim()}
-              className="inline-flex items-center gap-1 rounded-md border border-border bg-card px-3 py-1.5 text-xs font-semibold hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex w-full sm:w-auto items-center justify-center gap-1 rounded-md border border-border bg-card px-3 py-1.5 text-xs font-semibold hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60"
             >
               {saving ? (
                 <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
@@ -111,8 +114,8 @@ export function BixGrowWebhookCard({
             <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               Webhook URL
             </p>
-            <div className="mt-1 flex items-center gap-2">
-              <code className="flex-1 truncate rounded-md border border-border bg-slate-50 px-3 py-1.5 text-xs font-mono text-slate-700">
+            <div className="mt-1 flex flex-col gap-2 sm:flex-row sm:items-center">
+              <code className="min-w-0 w-full sm:flex-1 truncate rounded-md border border-border bg-slate-50 px-3 py-1.5 text-xs font-mono text-slate-700">
                 {webhookUrl}
               </code>
               <button
