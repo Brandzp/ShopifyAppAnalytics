@@ -23,7 +23,13 @@ services:
     # generated client. `npx prisma db push` is intentionally NOT here —
     # schema migrations belong in a separate step you trigger manually
     # so a code push can't silently mutate production schema.
-    buildCommand: npm ci && npx prisma generate && npm run build
+    # rm -rf the cached Prisma client forces a fresh generation on every
+    # deploy. Without this, Render reuses the previous build's
+    # node_modules/.prisma and a schema change can silently ship an
+    # outdated client (db.systemConfig undefined etc.). Small extra cost
+    # (~5s per build) but eliminates an entire class of "deployed code
+    # references a model the client doesn't know about" bugs.
+    buildCommand: rm -rf node_modules/.prisma && npm ci && npx prisma generate && npm run build
     startCommand: npm start
     healthCheckPath: /
     autoDeploy: true

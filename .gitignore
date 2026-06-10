@@ -9,3 +9,15 @@ prisma/dev.db-journal
 .creative-storage
 .next-dev-current.out.log
 .next-dev-current.err.log
+
+# Alternative package manager artifacts — this project uses npm
+pnpm-lock.yaml
+pnpm-workspace.yaml
+yarn.lock
+bun.lockb
+
+# Stray scripts from other projects that occasionally land here
+bi14append.js
+
+# TypeScript incremental build cache — never useful in source control
+tsconfig.tsbuildinfo
