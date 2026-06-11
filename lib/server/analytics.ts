@@ -26,15 +26,27 @@ export function toDayLabel(date: Date) {
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
+function toIsoDay(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
 export function buildDailyMetrics(
   orders: Order[],
   customerOrderHistory: Map<string, string[]>
 ): DailyMetric[] {
-  const grouped = new Map<string, { revenue: number; profit: number; returningOrders: number; orders: number; totalPrice: number; discounts: number; refunds: number }>();
+  // Track both the human-readable label and the ISO key per day so
+  // downstream code (the enriched chart) can look up context by ISO date.
+  const grouped = new Map<string, { isoDate: string; revenue: number; profit: number; returningOrders: number; orders: number; totalPrice: number; discounts: number; refunds: number }>();
 
   for (const order of orders) {
-    const key = toDayLabel(new Date(order.createdAt));
+    const orderDate = new Date(order.createdAt);
+    const key = toDayLabel(orderDate);
+    const iso = toIsoDay(orderDate);
     const current = grouped.get(key) ?? {
+      isoDate: iso,
       revenue: 0,
       profit: 0,
       returningOrders: 0,
@@ -64,6 +76,7 @@ export function buildDailyMetrics(
 
   return Array.from(grouped.entries()).map(([date, value]) => ({
     date,
+    isoDate: value.isoDate,
     revenue: value.revenue,
     estimatedProfit: value.profit,
     returningCustomerRate: value.orders ? (value.returningOrders / value.orders) * 100 : 0,

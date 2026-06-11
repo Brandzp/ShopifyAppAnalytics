@@ -96,6 +96,10 @@ export interface DiscountUsage {
 
 export interface DailyMetric {
   date: string;
+  // ISO YYYY-MM-DD form of `date`. Used as a join key when overlaying
+  // per-day context (top products, campaigns, posts, discounts) onto
+  // the revenue chart. Optional for back-compat with existing builders.
+  isoDate?: string;
   revenue: number;
   estimatedProfit: number;
   returningCustomerRate: number;

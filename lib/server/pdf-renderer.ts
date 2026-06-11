@@ -42,6 +42,12 @@ export async function renderPdfFromUrl(input: RenderPdfInput): Promise<Buffer> {
 
   const launchOptions: LaunchOptions = {
     headless: true,
+    // Playwright 1.45+ defaults `chromium.launch()` to chromium-headless-shell,
+    // which requires a separate `npx playwright install chromium-headless-shell`
+    // step. Forcing channel: "chromium" makes it use the full Chromium binary
+    // we install via `playwright install chromium` — one less moving part on
+    // Render's build cache.
+    channel: "chromium",
     // Standard flags for running chromium inside Docker / restricted shells.
     args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"]
   };

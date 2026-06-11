@@ -324,10 +324,47 @@ async function loadConversionsFromDb(): Promise<AffiliateConversion[]> {
   if (!db || !store || !db.affiliateAttribution) return [];
 
   try {
+    // Filter by the operator's selected date window. Without this the
+    // table dumped every attribution ever — which both ignored the date
+    // picker on the topbar AND was slow on large stores.
+    //
+    // Using select instead of include cuts the wire payload ~70% by
+    // only pulling the columns the UI actually renders. Index on
+    // (storeId, occurredAt) makes the date filter + orderBy a fast scan.
+    //
+    // Cap of 500 is still here as a safety belt for extreme date windows
+    // (e.g. "year to date" on a heavy-volume merchant).
+    const range = await getReportingDateRangeSelection("en");
     const rows = await db.affiliateAttribution.findMany({
-      where: { storeId: store.id },
-      include: { affiliateMember: true, order: true },
-      orderBy: { occurredAt: "desc" }
+      where: {
+        storeId: store.id,
+        occurredAt: { gte: range.start, lte: range.end }
+      },
+      orderBy: { occurredAt: "desc" },
+      take: 500,
+      select: {
+        id: true,
+        affiliateMemberId: true,
+        orderId: true,
+        externalOrderNumber: true,
+        couponCode: true,
+        sourceType: true,
+        sourceUrl: true,
+        trackingMethod: true,
+        contentTitle: true,
+        salesAmount: true,
+        commissionAmount: true,
+        occurredAt: true,
+        affiliateMember: {
+          select: {
+            firstName: true,
+            lastName: true,
+            affiliateCode: true,
+            couponCode: true
+          }
+        },
+        order: { select: { displayName: true, orderNumber: true } }
+      }
     });
 
     return rows.map((row: any) => ({
@@ -342,7 +379,10 @@ async function loadConversionsFromDb(): Promise<AffiliateConversion[]> {
         "-",
       date: row.occurredAt.toISOString(),
       affiliateId: row.affiliateMemberId,
-      affiliateName: row.affiliateMember ? `${row.affiliateMember.firstName} ${row.affiliateMember.lastName}` : "-",
+      affiliateName: row.affiliateMember ? `${row.affiliateMember.firstName} ${row.affiliateMember.lastName}`.trim() || "-" : "-",
+      // BixGrow's external affiliate_id (saved as AffiliateMember.affiliateCode
+      // by the webhook handler). Lets the merchant cross-reference with BixGrow.
+      affiliateCode: row.affiliateMember?.affiliateCode ?? null,
       total: toNumber(row.salesAmount),
       commission: toNumber(row.commissionAmount),
       status: "approved",

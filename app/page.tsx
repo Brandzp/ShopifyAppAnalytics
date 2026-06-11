@@ -4,6 +4,8 @@ import { SectionHead } from "@/components/dashboard-v2/section-head";
 import { KpiTile } from "@/components/dashboard-v2/kpi-tile";
 import { StyledTable } from "@/components/dashboard-v2/styled-table";
 import { RevenueChartV2 } from "@/components/dashboard-v2/revenue-chart-v2";
+import { EnrichedRevenueChart } from "@/components/dashboard-v2/enriched-revenue-chart";
+import { getDailyTrendContext } from "@/lib/services/daily-trend-context-service";
 import { StockBadge } from "@/components/dashboard-v2/stock-badge";
 import { CollectionChips } from "@/components/dashboard-v2/collection-chips";
 import {
@@ -102,6 +104,18 @@ export default async function CommandCenterPage() {
         end: new Date(`${chrome.controls.endDate}T23:59:59Z`)
       }).catch(() => null)
     : null;
+
+  // Per-day context for the trend chart — top products, active Meta
+  // campaigns, IG posts, discounts redeemed. Powers the rich hover
+  // tooltip + event markers so the operator can answer "WHY did
+  // revenue move on this day?".
+  const trendContext = storeId
+    ? await getDailyTrendContext(
+        storeId,
+        new Date(`${chrome.controls.startDate}T00:00:00Z`),
+        new Date(`${chrome.controls.endDate}T23:59:59Z`)
+      ).catch(() => ({}))
+    : {};
 
   // Pull open alerts from the normalized table. Critical/high get hero
   // placement; medium/low go below in a compact list.
@@ -266,7 +280,11 @@ export default async function CommandCenterPage() {
               </div>
             </CardHeader>
             <CardContent>
-              <RevenueChartV2 data={overview.dailyMetrics} currency={overview.store.currency} />
+              <EnrichedRevenueChart
+                data={overview.dailyMetrics}
+                context={trendContext}
+                currency={overview.store.currency}
+              />
             </CardContent>
           </Card>
         </section>

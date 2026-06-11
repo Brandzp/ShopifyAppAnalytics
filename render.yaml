@@ -34,7 +34,7 @@ services:
     # used by the PDF renderer. Render's Node image doesn't ship with it.
     # Without this, every PDF export fails with "Executable doesn't exist
     # at /opt/render/.cache/ms-playwright/...".
-    buildCommand: rm -rf node_modules/.prisma && npm ci && npx prisma generate && npx playwright install --with-deps chromium && npm run build
+    buildCommand: rm -rf node_modules/.prisma && npm ci && npx prisma generate && npx playwright install --with-deps chromium chromium-headless-shell && npm run build
     startCommand: npm start
     healthCheckPath: /
     autoDeploy: true

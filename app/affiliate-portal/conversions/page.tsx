@@ -40,6 +40,16 @@ export default async function ConversionsPage() {
           { key: "date", label: "Date", render: (row) => new Date(row.date).toLocaleString("en-US") },
           { key: "affiliateName", label: "Affiliate" },
           {
+            key: "affiliateCode",
+            label: "Affiliate ID",
+            render: (row) =>
+              row.affiliateCode ? (
+                <span className="font-mono text-xs text-muted-foreground">{row.affiliateCode}</span>
+              ) : (
+                <span className="text-muted-foreground">—</span>
+              )
+          },
+          {
             key: "couponCode",
             label: "Coupon",
             render: (row) =>

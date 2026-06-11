@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/server/db";
+import { reconcileAffiliateAttributionOrphans } from "@/lib/services/affiliate-attribution-reconciler";
 
 // Per-brand BixGrow webhook receiver.
 //
@@ -162,6 +163,21 @@ export async function POST(
     },
     select: { id: true }
   });
+
+  // If the order DOES match, run the reconciler for THIS order number
+  // before we upsert. Closes the BixGrow re-delivery duplicate bug:
+  //   - First delivery (order not yet in Shopify) → created orphan
+  //   - Order syncs from Shopify
+  //   - BixGrow re-delivers → reconciler now links the orphan in place,
+  //     so the upsert below finds an existing matched row to update
+  //     instead of creating a duplicate.
+  if (orderRow) {
+    await reconcileAffiliateAttributionOrphans(store.id, {
+      orderNumber: `#${orderNumber}`
+    }).catch((err) => {
+      console.error("[bixgrow webhook] reconcile failed:", err);
+    });
+  }
 
   // 5. Upsert AffiliateAttribution. The unique key is (affiliateMemberId,
   // orderId) — if orderId is null (no Shopify match yet) we still record

@@ -176,6 +176,10 @@ async function launchCrawlerBrowser() {
   try {
     return await chromium.launch({
       headless: true,
+      // Force the full Chromium binary (installed via `playwright install
+      // chromium`) instead of Playwright 1.45+'s new chromium-headless-shell
+      // default — keeps the Render build cache simpler.
+      channel: "chromium",
       args: ["--disable-blink-features=AutomationControlled", "--no-sandbox"]
     });
   } catch (error) {

@@ -4,6 +4,7 @@ import { runFullInitialSync } from "@/lib/services/shopify-sync-service";
 import { syncMetaAdsCampaignInsights } from "@/lib/services/meta-ads-service";
 import { syncInstagramPosts } from "@/lib/services/instagram-service";
 import { refreshMetaTokensNearExpiry } from "@/lib/services/meta-token-refresh-service";
+import { reconcileAffiliateAttributionOrphans } from "@/lib/services/affiliate-attribution-reconciler";
 
 // Multi-source data refresh — the unified 2-hour cron tick.
 //
@@ -36,6 +37,7 @@ interface PerStoreResult {
   metaAds: { ok: boolean; skipped?: boolean; error?: string };
   instagram: { ok: boolean; skipped?: boolean; error?: string };
   bixgrow: { ok: boolean; skipped: boolean };
+  affiliateReconcile?: { linked: number; deletedDuplicates: number; stillOrphan: number };
 }
 
 async function handler() {
@@ -98,6 +100,31 @@ async function handler() {
         result.shopify = isConflict
           ? { ok: true, skipped: true }
           : { ok: false, error: err instanceof Error ? err.message : String(err) };
+      }
+
+      // ── Reconcile affiliate attribution orphans ───────────────────
+      // Whether Shopify sync succeeded or was skipped (already running),
+      // we still try to link any orphaned AffiliateAttribution rows
+      // whose matching Order has now arrived. Skip only on hard failure.
+      if (result.shopify.ok) {
+        try {
+          const reconcile = await reconcileAffiliateAttributionOrphans(store.id);
+          result.affiliateReconcile = {
+            linked: reconcile.linked,
+            deletedDuplicates: reconcile.deletedDuplicates,
+            stillOrphan: reconcile.stillOrphan
+          };
+          if (reconcile.linked > 0 || reconcile.deletedDuplicates > 0) {
+            console.log(
+              `[refresh-all] store=${store.id} reconciled ${reconcile.linked} orphan(s)` +
+                (reconcile.deletedDuplicates > 0
+                  ? `, deleted ${reconcile.deletedDuplicates} duplicate(s)`
+                  : "")
+            );
+          }
+        } catch (err) {
+          console.error(`[refresh-all] reconcile failed for ${store.id}:`, err);
+        }
       }
 
       // ── Meta Ads (optional) ───────────────────────────────────────

@@ -76,6 +76,11 @@ export interface AffiliateConversion {
   date: string;
   affiliateId: string;
   affiliateName: string;
+  // The affiliate's external ID from BixGrow (e.g. "mrMyBNq8Hm").
+  // Stored on AffiliateMember.affiliateCode and surfaced here so the
+  // conversions table can show the merchant the same ID they see in
+  // BixGrow, making cross-reference trivial.
+  affiliateCode?: string | null;
   total: number;
   commission: number;
   status: ConversionStatus;
