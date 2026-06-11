@@ -2,6 +2,7 @@ import { Badge } from "@/components/ui/badge";
 import type { Store } from "@/lib/domain/types";
 import type { AppLocale } from "@/lib/i18n";
 import { ReportingPicker } from "@/components/layout/reporting-picker";
+import { SyncNowButton } from "@/components/layout/sync-now-button";
 import {
   StoreSwitcher,
   type StoreSwitcherStore
@@ -58,19 +59,22 @@ export function Topbar({
           </p>
         </div>
       </div>
-      <ReportingPicker
-        storeId={store.id}
-        storeConnected={store.connected}
-        initialPreset={(controls?.preset as never) ?? "last_30"}
-        initialStart={controls?.startDate ?? new Date(Date.now() - 29 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)}
-        initialEnd={controls?.endDate ?? new Date().toISOString().slice(0, 10)}
-        initialComparisonMode={(controls?.comparison?.mode as never) ?? "prev_period"}
-        initialComparisonStart={controls?.comparison?.startDate ?? ""}
-        initialComparisonEnd={controls?.comparison?.endDate ?? ""}
-        initialRangeLabel={controls?.dateRangeLabel ?? "Last 30 days"}
-        initialComparisonLabel={controls?.comparisonLabel ?? "Previous period"}
-        exportLabel={labels.common.exportSummary}
-      />
+      <div className="flex flex-wrap items-center gap-2 lg:flex-nowrap lg:justify-end">
+        <SyncNowButton />
+        <ReportingPicker
+          storeId={store.id}
+          storeConnected={store.connected}
+          initialPreset={(controls?.preset as never) ?? "last_30"}
+          initialStart={controls?.startDate ?? new Date(Date.now() - 29 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)}
+          initialEnd={controls?.endDate ?? new Date().toISOString().slice(0, 10)}
+          initialComparisonMode={(controls?.comparison?.mode as never) ?? "prev_period"}
+          initialComparisonStart={controls?.comparison?.startDate ?? ""}
+          initialComparisonEnd={controls?.comparison?.endDate ?? ""}
+          initialRangeLabel={controls?.dateRangeLabel ?? "Last 30 days"}
+          initialComparisonLabel={controls?.comparisonLabel ?? "Previous period"}
+          exportLabel={labels.common.exportSummary}
+        />
+      </div>
     </div>
   );
 }

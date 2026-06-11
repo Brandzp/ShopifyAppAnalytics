@@ -24,11 +24,14 @@ export type DailyTrendContextMap = Record<string, DailyTrendContextItem>;
 
 function toIsoDay(d: Date | string): string {
   const date = typeof d === "string" ? new Date(d) : d;
-  // YYYY-MM-DD in the **server timezone** — matches how the chart already
-  // groups DailyMetric rows, so keys line up without timezone drift.
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
+  // YYYY-MM-DD in **UTC** so day keys match across all consumers regardless
+  // of the server timezone (Render runs in UTC; local dev runs in Asia/Jerusalem).
+  // Using local-tz components silently bucketed "Jun 9 Israel" Meta rows
+  // (stored as 2026-06-08T21:00:00Z) as "Jun 8" on Render → the chart lookup
+  // for "Jun 9" found nothing. UTC fixes the mismatch.
+  const y = date.getUTCFullYear();
+  const m = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(date.getUTCDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
 }
 
@@ -110,51 +113,65 @@ export async function getDailyTrendContext(
   }
 
   // ── 2. Meta Ads campaigns active each day ─────────────────────────
+  // Expand the query window by ±1 day to catch insights whose dateStart
+  // is stored at the timezone boundary of the operator's range — e.g.
+  // Meta stores 2026-06-09 (Israel) as 2026-06-08T21:00:00Z. Then we
+  // dedupe by (day, campaignName) so multi-level insights (campaign +
+  // ad + adset rows for the same campaign) don't pile up.
   try {
+    const expandedStart = new Date(startDate.getTime() - 24 * 60 * 60 * 1000);
+    const expandedEnd = new Date(endDate.getTime() + 24 * 60 * 60 * 1000);
     const insights = (await db.metaAdsCampaignInsight.findMany({
       where: {
         storeId,
-        level: "campaign",
-        dateStart: { gte: startDate, lte: endDate }
+        dateStart: { gte: expandedStart, lte: expandedEnd },
+        // dateStart === dateStop means "single-day insight" — what we want.
+        // Range insights (dateStart != dateStop) duplicate spend across
+        // the range, so we filter them out at the aggregation step below.
       },
       select: {
         dateStart: true,
+        dateStop: true,
+        level: true,
         campaignName: true,
         spend: true,
-        purchases: true,
-        // Revenue isn't stored directly — Meta returns purchase_value, but
-        // we don't always capture it. Approximate ROAS as purchases × AOV
-        // if needed, but here we just show spend + purchase count.
+        purchases: true
       },
       orderBy: { spend: "desc" }
     })) as Array<{
       dateStart: Date;
+      dateStop: Date;
+      level: string;
       campaignName: string;
       spend: any;
       purchases: number;
     }>;
 
-    // Per day, take top 5 campaigns by spend
-    const perDay = new Map<
-      string,
-      Array<{ name: string; spend: number; revenue: number; roas: number | null }>
-    >();
+    // Per day → per campaign → max spend across levels (dedupe).
+    // Using max() rather than sum() handles the common case where the
+    // sync stores BOTH the campaign-level row AND its ad-level breakdown
+    // for the same day; summing would double-count.
+    const perDayPerCampaign = new Map<string, Map<string, number>>();
     for (const ins of insights) {
+      // Only single-day insights — range rows are summaries.
+      if (ins.dateStart.getTime() !== ins.dateStop.getTime()) continue;
       const day = toIsoDay(ins.dateStart);
       const spend = num(ins.spend);
       if (spend <= 0) continue;
-      const list = perDay.get(day) ?? [];
-      list.push({
-        name: ins.campaignName,
-        spend,
-        revenue: 0, // not currently stored
-        roas: null
-      });
-      perDay.set(day, list);
+      let campMap = perDayPerCampaign.get(day);
+      if (!campMap) {
+        campMap = new Map();
+        perDayPerCampaign.set(day, campMap);
+      }
+      const prev = campMap.get(ins.campaignName) ?? 0;
+      campMap.set(ins.campaignName, Math.max(prev, spend));
     }
-    for (const [day, list] of perDay.entries()) {
-      list.sort((a, b) => b.spend - a.spend);
-      const top5 = list.slice(0, 5);
+
+    for (const [day, campMap] of perDayPerCampaign.entries()) {
+      const top5 = Array.from(campMap.entries())
+        .map(([name, spend]) => ({ name, spend, revenue: 0, roas: null }))
+        .sort((a, b) => b.spend - a.spend)
+        .slice(0, 5);
       result[day] = { ...(result[day] ?? emptyDay(day)), campaigns: top5 };
     }
   } catch (err) {
