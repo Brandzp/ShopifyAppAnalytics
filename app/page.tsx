@@ -1,4 +1,8 @@
 import { AppShell } from "@/components/layout/app-shell";
+import { OnboardingWizard } from "@/components/onboarding/onboarding-wizard";
+import { FirstSyncPending } from "@/components/onboarding/first-sync-pending";
+import { getOnboardingStatus } from "@/lib/onboarding/onboarding-status";
+import { getAuthContext } from "@/lib/auth/session";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { SectionHead } from "@/components/dashboard-v2/section-head";
 import { KpiTile } from "@/components/dashboard-v2/kpi-tile";
@@ -43,11 +47,43 @@ export default async function CommandCenterPage() {
   const isHe = locale === "he";
   const lang = (he: string, en: string) => (isHe ? he : en);
 
+  // Onboarding gate — if this is a fresh user with no connected brands,
+  // render the wizard instead of the empty dashboard. Wizard takes them
+  // through Shopify OAuth → page reload → normal dashboard.
+  const onboarding = await getOnboardingStatus();
+  if (onboarding.needsOnboarding) {
+    const auth = await getAuthContext();
+    return (
+      <main className="min-h-screen bg-gradient-to-br from-violet-50/30 via-background to-indigo-50/30">
+        <OnboardingWizard
+          email={auth.email ?? ""}
+          pendingShopDomain={onboarding.pendingShopDomain}
+          locale={isHe ? "he" : "en"}
+        />
+      </main>
+    );
+  }
+
   const [overview, chrome, storeId] = await Promise.all([
     getOverviewPayload(),
     getAppChromeData(),
     resolveActiveStoreId()
   ]);
+
+  // Second-stage onboarding: store is connected but first sync hasn't
+  // returned any orders yet. Render a polling pending screen instead of
+  // a confusing empty dashboard.
+  const totalRevenue = overview.kpis.reduce(
+    (sum, kpi) => sum + (typeof kpi.value === "number" ? kpi.value : 0),
+    0
+  );
+  if (totalRevenue === 0 && storeId && onboarding.brandCount > 0 && onboarding.connectedBrandCount > 0) {
+    return (
+      <AppShell store={chrome.store} controls={chrome.controls}>
+        <FirstSyncPending storeId={storeId} locale={isHe ? "he" : "en"} />
+      </AppShell>
+    );
+  }
 
   // Run forward-looking detection engines BEFORE reading the alerts table
   // so the page reflects fresh state. These are idempotent (upsert by
@@ -284,6 +320,7 @@ export default async function CommandCenterPage() {
                 data={overview.dailyMetrics}
                 context={trendContext}
                 currency={overview.store.currency}
+                locale={isHe ? "he" : "en"}
               />
             </CardContent>
           </Card>

@@ -561,7 +561,7 @@ export function SalesSummaryPanel({
                 </p>
               ) : null}
               <Button type="submit" disabled={!file || uploading} className="w-full">
-                {uploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
+                {uploading ? <Loader2 className="me-2 h-4 w-4 animate-spin" /> : <Upload className="me-2 h-4 w-4" />}
                 {uploading ? t.upload.submitting : t.upload.submit}
               </Button>
               {error ? <p className="text-xs text-rose-600">{error}</p> : null}
@@ -578,7 +578,7 @@ export function SalesSummaryPanel({
               {t.sync.hint}
             </p>
             <Button variant="secondary" onClick={onSyncProducts} disabled={syncing} className="w-full">
-              {syncing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCcw className="mr-2 h-4 w-4" />}
+              {syncing ? <Loader2 className="me-2 h-4 w-4 animate-spin" /> : <RefreshCcw className="me-2 h-4 w-4" />}
               {syncing ? t.sync.running : t.sync.button}
             </Button>
             {syncMessage ? <p className="mt-2 text-xs text-emerald-700">{syncMessage}</p> : null}
@@ -640,7 +640,7 @@ export function SalesSummaryPanel({
         ) : loadingSummary || !summary ? (
           <Card>
             <CardContent className="flex items-center justify-center py-16 text-sm text-muted-foreground">
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" /> {t.summary.loading}
+              <Loader2 className="me-2 h-4 w-4 animate-spin" /> {t.summary.loading}
             </CardContent>
           </Card>
         ) : (

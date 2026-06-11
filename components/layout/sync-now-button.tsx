@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { RefreshCw, CheckCircle2, AlertTriangle, Loader2 } from "lucide-react";
+import { useSaasStrings, type UiLocale } from "@/lib/i18n/saas-strings";
 
 // "Sync now" — fires the unified refresh-all cron route on demand.
 // Lives in the topbar alongside the date picker so the operator can
@@ -14,8 +15,9 @@ import { RefreshCw, CheckCircle2, AlertTriangle, Loader2 } from "lucide-react";
 // for a single store depending on how many new orders / ad rows landed
 // since the last sync.
 
-export function SyncNowButton() {
+export function SyncNowButton({ locale = "he" }: { locale?: UiLocale }) {
   const router = useRouter();
+  const t = useSaasStrings(locale).syncNow;
   const [state, setState] = useState<"idle" | "running" | "done" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
 
@@ -46,13 +48,10 @@ export function SyncNowButton() {
   };
 
   const label =
-    state === "running"
-      ? "Syncing…"
-      : state === "done"
-        ? "Synced"
-        : state === "error"
-          ? "Sync failed"
-          : "Sync now";
+    state === "running" ? t.running
+      : state === "done" ? t.done
+      : state === "error" ? t.error
+      : t.idle;
 
   const Icon =
     state === "running" ? Loader2 : state === "done" ? CheckCircle2 : state === "error" ? AlertTriangle : RefreshCw;
@@ -63,10 +62,7 @@ export function SyncNowButton() {
         type="button"
         onClick={handleClick}
         disabled={state === "running"}
-        title={
-          error ??
-          "Pull fresh data from Shopify, Meta Ads, and Instagram right now (the 2h cron also runs in the background)."
-        }
+        title={error ?? t.tooltip}
         className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
           state === "done"
             ? "border-emerald-200 bg-emerald-50 text-emerald-800"

@@ -43,7 +43,7 @@ export default function TermsOfServicePage() {
 
       <section className="mt-8 space-y-3">
         <h2 className="text-xl font-semibold">3. Your obligations</h2>
-        <ul className="list-disc space-y-1 pl-6">
+        <ul className="list-disc space-y-1 ps-6">
           <li>
             You will only connect platforms that you own or are authorized
             to administer.
@@ -72,7 +72,7 @@ export default function TermsOfServicePage() {
           you grant us a limited license to process that data solely to
           provide the Service to you, including:
         </p>
-        <ul className="list-disc space-y-1 pl-6">
+        <ul className="list-disc space-y-1 ps-6">
           <li>Computing analytics and reports for your account.</li>
           <li>Storing the data on our servers (see Privacy Policy).</li>
           <li>

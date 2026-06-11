@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
 import { AppError, toErrorMessage } from "@/lib/server/errors";
 import { createMarketingPlannerDiscountInShopify } from "@/lib/services/marketing-planner-shopify-service";
+import { assertStoreInActiveOrg } from "@/lib/auth/guards";
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
     const storeId = typeof body?.storeId === "string" ? body.storeId : "";
+    if (storeId) await assertStoreInActiveOrg(storeId);
     const code = typeof body?.code === "string" ? body.code : "";
     const title = typeof body?.title === "string" ? body.title : "";
     const valueType = body?.valueType === "percent" || body?.valueType === "fixed" ? body.valueType : null;

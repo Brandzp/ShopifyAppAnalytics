@@ -247,7 +247,7 @@ export function ShopifyConnectionManager({
               <HelpCircle className="h-4 w-4" aria-hidden />
               Where do I find the Admin API access token?
             </summary>
-            <ol className="mt-3 list-decimal space-y-2 pl-5 text-xs leading-6 text-slate-700">
+            <ol className="mt-3 list-decimal space-y-2 ps-5 text-xs leading-6 text-slate-700">
               <li>
                 In Shopify Admin, go to <strong>Settings → Apps and sales channels → Develop apps</strong>.
               </li>

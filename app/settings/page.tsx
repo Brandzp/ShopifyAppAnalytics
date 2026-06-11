@@ -85,6 +85,7 @@ export default async function SettingsPage() {
                 initialSlug={storeRow?.bixgrowSlug ?? null}
                 publicAppUrl={publicAppUrl}
                 storeName={chrome.store.name}
+                locale={locale === "he" ? "he" : "en"}
               />
               <CreatorConnectionsManager labels={dictionary.creator} />
             </div>

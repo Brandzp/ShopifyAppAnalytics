@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { AppError, toErrorMessage } from "@/lib/server/errors";
 import { buildInstallRedirect, SHOPIFY_OAUTH_STATE_COOKIE } from "@/lib/services/shopify-oauth-service";
+import { getAuthContext } from "@/lib/auth/session";
+import { assertPlanAllowsAction } from "@/lib/billing/plan-limits";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +21,19 @@ export async function GET(request: Request) {
   const appUrl = process.env.APP_URL?.replace(/\/$/, "") ?? "http://localhost:3000";
 
   try {
+    // Plan-limit gate: if the user is signed in and the org is at its
+    // brand cap, redirect to billing instead of starting OAuth. Skip
+    // when Shopify itself initiated the install (no auth context yet).
+    const auth = await getAuthContext().catch(() => null);
+    if (auth?.orgId) {
+      try {
+        await assertPlanAllowsAction(auth.orgId, "connect_brand");
+      } catch (limitErr) {
+        const msg = encodeURIComponent(toErrorMessage(limitErr));
+        return NextResponse.redirect(`${appUrl}/billing?upgrade_required=${msg}`);
+      }
+    }
+
     const { authorizeUrl, signedState } = await buildInstallRedirect(url.searchParams.get("shop"));
 
     const response = NextResponse.redirect(authorizeUrl);

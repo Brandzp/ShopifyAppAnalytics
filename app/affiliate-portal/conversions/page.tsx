@@ -8,24 +8,51 @@ import { getAffiliateConversions } from "@/lib/services/affiliate-portal-service
 import { DataTable } from "@/components/shared/data-table";
 import { formatCurrency } from "@/lib/utils";
 import { buttonVariants } from "@/components/ui/button";
+import { getAppLocale } from "@/lib/i18n";
+import { saasStrings } from "@/lib/i18n/saas-strings";
 
 export default async function ConversionsPage() {
-  const [chrome, conversions] = await Promise.all([getAppChromeData(), getAffiliateConversions()]);
+  const [chrome, conversions, locale] = await Promise.all([
+    getAppChromeData(),
+    getAffiliateConversions(),
+    getAppLocale()
+  ]);
+  const isHe = locale === "he";
+  const t = saasStrings[isHe ? "he" : "en"].conversions;
+  const heading = isHe
+    ? {
+        eyebrow: "פורטל שותפים",
+        title: "הזמנות שותפים ושיוכים",
+        description: "עקבו אילו הזמנות שויכו לשותפים, איך נמדדו, ומה העמלה שהן יצרו.",
+        exportCsv: "ייצוא CSV",
+        sectionTitle: "הזמנות שותפים",
+        sectionDescription: "הזמנות ששויכו לשותפים ע\"פ שימוש בקופונים ב-Shopify וההתאמה מ-BixGrow."
+      }
+    : {
+        eyebrow: "Affiliate Portal",
+        title: "Referral orders and attributions",
+        description: "Track which affiliate orders were matched, how they were tracked, and what commission they generated.",
+        exportCsv: "Export CSV",
+        sectionTitle: "Referral orders",
+        sectionDescription: "Orders attributed to affiliates from Shopify discount usage and referral matching."
+      };
+
+  const dateLocale = isHe ? "he-IL" : "en-US";
 
   return (
-    <AppShell store={chrome.store} controls={chrome.controls} localeOverride="en">
+    <AppShell store={chrome.store} controls={chrome.controls}>
       <section className="space-y-4">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <SectionHeading
-            eyebrow="Affiliate Portal"
-            title="Referral orders and attributions"
-            description="Track which affiliate orders were matched, how they were tracked, and what commission they generated."
+            eyebrow={heading.eyebrow}
+            title={heading.title}
+            description={heading.description}
           />
           <div className="flex flex-wrap items-start gap-3">
             <AffiliateAttributionSyncButton storeId={chrome.store.id} />
             <UploadConversionsCsvButton />
             <a href="/api/affiliate-portal/conversions/export" className={buttonVariants({ variant: "secondary" })}>
-              Export CSV
+              {heading.exportCsv}
             </a>
           </div>
         </div>
@@ -33,15 +60,15 @@ export default async function ConversionsPage() {
       </section>
 
       <DataTable
-        title="Referral orders"
-        description="Orders attributed to affiliates from Shopify discount usage and referral matching."
+        title={heading.sectionTitle}
+        description={heading.sectionDescription}
         columns={[
-          { key: "orderNumber", label: "Order" },
-          { key: "date", label: "Date", render: (row) => new Date(row.date).toLocaleString("en-US") },
-          { key: "affiliateName", label: "Affiliate" },
+          { key: "orderNumber", label: t.order },
+          { key: "date", label: t.date, render: (row) => new Date(row.date).toLocaleString(dateLocale) },
+          { key: "affiliateName", label: t.affiliate },
           {
             key: "affiliateCode",
-            label: "Affiliate ID",
+            label: t.affiliateId,
             render: (row) =>
               row.affiliateCode ? (
                 <span className="font-mono text-xs text-muted-foreground">{row.affiliateCode}</span>
@@ -51,7 +78,7 @@ export default async function ConversionsPage() {
           },
           {
             key: "couponCode",
-            label: "Coupon",
+            label: t.coupon,
             render: (row) =>
               row.couponCode ? (
                 <span className="inline-flex items-center rounded-md border border-border bg-muted/40 px-1.5 py-0.5 text-xs font-mono font-medium">
@@ -61,11 +88,11 @@ export default async function ConversionsPage() {
                 <span className="text-muted-foreground">—</span>
               )
           },
-          { key: "total", label: "Total", render: (row) => formatCurrency(row.total, chrome.store.currency) },
-          { key: "commission", label: "Commission", render: (row) => formatCurrency(row.commission, chrome.store.currency) },
-          { key: "status", label: "Status" },
-          { key: "trackingBy", label: "Tracking" },
-          { key: "contentTitle", label: "Content" }
+          { key: "total", label: t.total, render: (row) => formatCurrency(row.total, chrome.store.currency) },
+          { key: "commission", label: t.commission, render: (row) => formatCurrency(row.commission, chrome.store.currency) },
+          { key: "status", label: t.status },
+          { key: "trackingBy", label: t.tracking },
+          { key: "contentTitle", label: t.content }
         ]}
         rows={conversions}
       />

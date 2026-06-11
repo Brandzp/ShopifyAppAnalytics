@@ -12,6 +12,16 @@
  * the process.
  */
 export async function register() {
+  // Sentry — must be initialized per-runtime via dedicated configs.
+  // Picking the right one based on NEXT_RUNTIME avoids the "edge runtime
+  // doesn't support node module X" errors that come from importing the
+  // wrong config.
+  if (process.env.NEXT_RUNTIME === "nodejs") {
+    await import("./sentry.server.config");
+  } else if (process.env.NEXT_RUNTIME === "edge") {
+    await import("./sentry.edge.config");
+  }
+
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
   // Unified 2-hour multi-source refresh (Shopify + Meta + Instagram + BixGrow).
   // Supersedes the old Shopify-only cron; the back-compat enable flag in

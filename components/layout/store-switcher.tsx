@@ -24,7 +24,7 @@ export interface StoreSwitcherStore {
 export function StoreSwitcher({
   currentStoreId,
   stores,
-  installHref = "/settings"
+  installHref = "/connect-brand"
 }: {
   currentStoreId: string;
   stores: StoreSwitcherStore[];

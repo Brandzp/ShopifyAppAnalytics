@@ -3,10 +3,13 @@ import type { Store } from "@/lib/domain/types";
 import type { AppLocale } from "@/lib/i18n";
 import { ReportingPicker } from "@/components/layout/reporting-picker";
 import { SyncNowButton } from "@/components/layout/sync-now-button";
+import { AccountMenu } from "@/components/layout/account-menu";
 import {
   StoreSwitcher,
   type StoreSwitcherStore
 } from "@/components/layout/store-switcher";
+import { getAuthContext } from "@/lib/auth/session";
+import { getDb } from "@/lib/server/db";
 
 export interface TopbarControls {
   dateRangeLabel?: string;
@@ -23,10 +26,11 @@ export interface TopbarControls {
   };
 }
 
-export function Topbar({
+export async function Topbar({
   store,
   controls,
   labels,
+  locale,
   allStores
 }: {
   store: Store;
@@ -40,6 +44,22 @@ export function Topbar({
   // renders as a subtle "+ Connect another brand" link.
   allStores?: StoreSwitcherStore[];
 }) {
+  // Auth context for the account menu — bail to anonymous-friendly
+  // defaults if not signed in (legacy path during Phase 1 rollout).
+  const auth = await getAuthContext().catch(() => null);
+  let orgName: string | null = null;
+  if (auth?.orgId) {
+    try {
+      const db = getDb();
+      const org = (await db.organization.findUnique({
+        where: { id: auth.orgId },
+        select: { name: true }
+      })) as { name: string } | null;
+      orgName = org?.name ?? null;
+    } catch {
+      // ignore
+    }
+  }
   return (
     <div className="flex flex-col gap-4 border-b border-border/70 pb-5 sm:pb-6 lg:flex-row lg:items-center lg:justify-between">
       <div className="space-y-2 min-w-0">
@@ -60,7 +80,15 @@ export function Topbar({
         </div>
       </div>
       <div className="flex flex-wrap items-center gap-2 lg:flex-nowrap lg:justify-end">
-        <SyncNowButton />
+        <SyncNowButton locale={locale === "he" ? "he" : "en"} />
+        {auth?.email ? (
+          <AccountMenu
+            email={auth.email}
+            displayName={null}
+            orgName={orgName}
+            locale={locale === "he" ? "he" : "en"}
+          />
+        ) : null}
         <ReportingPicker
           storeId={store.id}
           storeConnected={store.connected}

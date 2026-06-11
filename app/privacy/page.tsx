@@ -45,7 +45,7 @@ export default function PrivacyPolicyPage() {
           When a Merchant connects their accounts, we receive and store the
           following categories of data:
         </p>
-        <ul className="list-disc space-y-1 pl-6">
+        <ul className="list-disc space-y-1 ps-6">
           <li>
             <strong>Shopify data:</strong> orders, line items, customers,
             products, refunds, discount codes, fulfilment events, and shop
@@ -80,7 +80,7 @@ export default function PrivacyPolicyPage() {
 
       <section className="mt-8 space-y-3">
         <h2 className="text-xl font-semibold">3. How we use it</h2>
-        <ul className="list-disc space-y-1 pl-6">
+        <ul className="list-disc space-y-1 ps-6">
           <li>To display analytics dashboards to the Merchant.</li>
           <li>
             To generate weekly performance reports (PDF + email) for the

@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
 import { AppError, toErrorMessage } from "@/lib/server/errors";
 import { getGrowthAgentOverview } from "@/lib/services/growth-agent-overview-service";
+import { assertStoreInActiveOrg } from "@/lib/auth/guards";
 
 export async function GET(request: Request) {
   try {
     const url = new URL(request.url);
     const storeId = url.searchParams.get("storeId") ?? undefined;
+    if (storeId) await assertStoreInActiveOrg(storeId);
     const result = await getGrowthAgentOverview(storeId);
     return NextResponse.json({ ok: true, ...result });
   } catch (error) {

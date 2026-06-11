@@ -14,6 +14,7 @@ import {
 import type { DailyMetric } from "@/lib/domain/types";
 import type { DailyTrendContextMap, DailyTrendContextItem } from "@/lib/services/daily-trend-context-service";
 import { formatCurrency } from "@/lib/utils";
+import { saasStrings, type UiLocale } from "@/lib/i18n/saas-strings";
 
 // Enriched revenue + estimated profit chart.
 //
@@ -38,17 +39,20 @@ function CustomTooltip({
   active,
   payload,
   label,
-  currency
+  currency,
+  locale
 }: {
   active?: boolean;
   payload?: Array<{ name: string; value: number; payload: EnrichedRowBase }>;
   label?: string;
   currency: string;
+  locale: UiLocale;
 }) {
   if (!active || !payload || payload.length === 0) return null;
   const row = payload[0]?.payload;
   if (!row) return null;
   const ctx = row.context;
+  const t = saasStrings[locale].enrichedChart;
 
   return (
     <div
@@ -62,7 +66,7 @@ function CustomTooltip({
         <div className="mt-1 flex items-baseline gap-3">
           <span className="text-sm">
             <span className="inline-block h-2 w-2 rounded-full" style={{ background: "#5E6AD2" }} />{" "}
-            Revenue:{" "}
+            {t.revenue}:{" "}
             <strong className="text-foreground">
               {formatCurrency(row.revenue ?? 0, currency)}
             </strong>
@@ -70,7 +74,7 @@ function CustomTooltip({
         </div>
         <div className="text-sm">
           <span className="inline-block h-2 w-2 rounded-full" style={{ background: "#0080FF" }} />{" "}
-          Profit:{" "}
+          {t.profit}:{" "}
           <strong className="text-foreground">
             {formatCurrency(row.estimatedProfit ?? 0, currency)}
           </strong>
@@ -81,7 +85,7 @@ function CustomTooltip({
         {/* 📦 Top products */}
         {ctx?.topProducts && ctx.topProducts.length > 0 ? (
           <div>
-            <p className="mb-1 font-semibold text-foreground">📦 Top products</p>
+            <p className="mb-1 font-semibold text-foreground">📦 {t.topProducts}</p>
             <ul className="space-y-0.5 text-muted-foreground">
               {ctx.topProducts.map((p) => (
                 <li key={p.title} className="flex justify-between gap-2">
@@ -100,7 +104,7 @@ function CustomTooltip({
         {/* 🎯 Active campaigns */}
         {ctx?.campaigns && ctx.campaigns.length > 0 ? (
           <div>
-            <p className="mb-1 font-semibold text-foreground">🎯 Meta Ads campaigns</p>
+            <p className="mb-1 font-semibold text-foreground">🎯 {t.campaigns}</p>
             <ul className="space-y-0.5 text-muted-foreground">
               {ctx.campaigns.map((c) => (
                 <li key={c.name} className="flex justify-between gap-2">
@@ -108,7 +112,7 @@ function CustomTooltip({
                     {c.name}
                   </span>
                   <span className="shrink-0 tabular-nums text-foreground">
-                    {formatCurrency(c.spend, currency)} spend
+                    {formatCurrency(c.spend, currency)} {t.spend}
                   </span>
                 </li>
               ))}
@@ -119,7 +123,7 @@ function CustomTooltip({
         {/* 📸 Instagram posts */}
         {ctx?.posts && ctx.posts.length > 0 ? (
           <div>
-            <p className="mb-1 font-semibold text-foreground">📸 Instagram posts</p>
+            <p className="mb-1 font-semibold text-foreground">📸 {t.posts}</p>
             <ul className="space-y-0.5 text-muted-foreground">
               {ctx.posts.map((p, idx) => (
                 <li key={`${p.creator}-${idx}`} className="flex justify-between gap-2">
@@ -127,7 +131,7 @@ function CustomTooltip({
                     @{p.creator}
                   </span>
                   <span className="shrink-0 tabular-nums text-foreground">
-                    {new Intl.NumberFormat("en-US", { notation: "compact" }).format(p.engagement)} eng
+                    {new Intl.NumberFormat(locale === "he" ? "he-IL" : "en-US", { notation: "compact" }).format(p.engagement)} {t.eng}
                   </span>
                 </li>
               ))}
@@ -138,7 +142,7 @@ function CustomTooltip({
         {/* 🏷 Discount codes */}
         {ctx?.discounts && ctx.discounts.length > 0 ? (
           <div>
-            <p className="mb-1 font-semibold text-foreground">🏷 Discounts redeemed</p>
+            <p className="mb-1 font-semibold text-foreground">🏷 {t.discounts}</p>
             <ul className="space-y-0.5 text-muted-foreground">
               {ctx.discounts.map((d) => (
                 <li key={d.code} className="flex justify-between gap-2">
@@ -157,7 +161,7 @@ function CustomTooltip({
           !ctx?.campaigns?.length &&
           !ctx?.posts?.length &&
           !ctx?.discounts?.length) ? (
-          <p className="text-muted-foreground">No events tracked on this day.</p>
+          <p className="text-muted-foreground">{t.noEvents}</p>
         ) : null}
       </div>
     </div>
@@ -167,12 +171,15 @@ function CustomTooltip({
 export function EnrichedRevenueChart({
   data,
   context,
-  currency = "USD"
+  currency = "USD",
+  locale = "he"
 }: {
   data: DailyMetric[];
   context?: DailyTrendContextMap;
   currency?: string;
+  locale?: UiLocale;
 }) {
+  const t = saasStrings[locale].enrichedChart;
   // Merge daily metrics with context so the tooltip + markers share a
   // single row source.
   const enrichedData = useMemo<EnrichedRowBase[]>(() => {
@@ -244,7 +251,7 @@ export function EnrichedRevenueChart({
             />
             <Tooltip
               cursor={{ stroke: "#5E6AD2", strokeWidth: 1, strokeDasharray: "4 4" }}
-              content={(props: any) => <CustomTooltip {...props} currency={currency} />}
+              content={(props: any) => <CustomTooltip {...props} currency={currency} locale={locale} />}
             />
             <Area
               type="monotone"
@@ -281,17 +288,17 @@ export function EnrichedRevenueChart({
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-2 text-[11px] text-muted-foreground">
           <span className="inline-flex items-center gap-1.5">
             <span className="inline-block h-2 w-2 rounded-full" style={{ background: "#dc2626" }} />
-            🎯 Meta Ads active
+            {t.legendCampaigns}
           </span>
           <span className="inline-flex items-center gap-1.5">
             <span className="inline-block h-2 w-2 rounded-full" style={{ background: "#db2777" }} />
-            📸 Instagram post
+            {t.legendPosts}
           </span>
           <span className="inline-flex items-center gap-1.5">
             <span className="inline-block h-2 w-2 rounded-full" style={{ background: "#f59e0b" }} />
-            🏷 Discount redeemed
+            {t.legendDiscounts}
           </span>
-          <span className="italic">— hover any day for the full story</span>
+          <span className="italic">{t.legendHint}</span>
         </div>
       ) : null}
     </div>

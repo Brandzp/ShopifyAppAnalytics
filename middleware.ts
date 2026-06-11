@@ -1,0 +1,131 @@
+// Edge middleware — runs on every request before the page handler.
+//
+// Three jobs:
+//   1. Refresh the Supabase Auth session (rotates JWT in cookies, keeps
+//      the user signed in across server-component renders).
+//   2. Gate protected routes — anything outside the public allowlist
+//      requires a signed-in user. Unauthenticated users get redirected
+//      to /signin with `?next=<original_url>` so they land back where
+//      they started after sign in.
+//   3. Lazy-provision User + default Org for first-time signed-in users
+//      who haven't completed the callback handler (e.g. magic link came
+//      in another browser).
+//
+// Public routes (no auth required):
+//   - / (marketing landing; will move to /app for the dashboard later)
+//   - /signin, /signup, /forgot-password, /reset-password
+//   - /privacy, /terms
+//   - /api/auth/callback (Supabase verification redirect)
+//   - /api/webhooks/* (Shopify, BixGrow, etc — auth via signature)
+//   - /api/cron/* (cron self-pings — locked down via env-var secret later)
+//   - /api/meta/data-deletion (Meta deletion callback protocol)
+//
+// Static assets (_next, favicon, robots, etc) bypass middleware via
+// the `matcher` config below.
+
+import { NextResponse, type NextRequest } from "next/server";
+import { createMiddlewareSupabaseClient } from "@/lib/auth/supabase-server";
+
+// Note: "/" is intentionally NOT public — that's the Command Center
+// dashboard. When the marketing site lands (Phase 4) we'll either move
+// the dashboard to `/app` or host the marketing site on a separate
+// subdomain. Until then anonymous "/" hits get bounced to /signin.
+const PUBLIC_PATHS = new Set([
+  "/signin",
+  "/signup",
+  "/forgot-password",
+  "/reset-password",
+  "/privacy",
+  "/terms",
+  "/security",
+  // Public marketing landing — pre-signup.
+  "/welcome",
+  // /accept-invite handles its own auth gate — it redirects to /signin
+  // with the right `next` if the user isn't signed in. Treat as public.
+  "/accept-invite"
+]);
+
+const PUBLIC_PREFIXES = [
+  "/api/auth/",
+  "/api/webhooks/",
+  "/api/cron/",
+  "/api/meta/data-deletion",
+  // Stripe sends webhooks server-to-server; they're authenticated by
+  // signature, not session cookies. Treating this as public lets the
+  // signature-verifying handler run.
+  "/api/billing/webhook"
+];
+
+function isPublic(pathname: string): boolean {
+  if (PUBLIC_PATHS.has(pathname)) return true;
+  for (const prefix of PUBLIC_PREFIXES) {
+    if (pathname === prefix.replace(/\/$/, "") || pathname.startsWith(prefix)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+export async function middleware(req: NextRequest) {
+  // Stamp the current pathname onto a request header so server components
+  // downstream (especially AppShell's paywall gate) can read it without
+  // resorting to global state hacks.
+  const requestHeaders = new Headers(req.headers);
+  requestHeaders.set("x-pathname", req.nextUrl.pathname);
+
+  // Start with the default "pass through" response. The Supabase client
+  // will attach Set-Cookie headers to this response if it rotates a JWT.
+  const res = NextResponse.next({ request: { headers: requestHeaders } });
+
+  // Refresh session on every request — Supabase's helper handles the
+  // token rotation. We never need to call this explicitly; just having
+  // it run is enough.
+  let user: { id: string } | null = null;
+  try {
+    const supabase = createMiddlewareSupabaseClient(req, res);
+    const { data } = await supabase.auth.getUser();
+    user = data?.user ? { id: data.user.id } : null;
+  } catch {
+    // Supabase env not configured (e.g. CI). Treat as anonymous.
+    user = null;
+  }
+
+  const { pathname, search } = req.nextUrl;
+
+  // Public routes — let everything through.
+  if (isPublic(pathname)) {
+    // Bonus: signed-in users hitting /signin or /signup should be sent
+    // home instead of seeing the form again.
+    if (user && (pathname === "/signin" || pathname === "/signup")) {
+      const home = req.nextUrl.clone();
+      home.pathname = "/";
+      home.search = "";
+      return NextResponse.redirect(home);
+    }
+    return res;
+  }
+
+  // Protected routes — gate behind auth.
+  if (!user) {
+    const signin = req.nextUrl.clone();
+    signin.pathname = "/signin";
+    signin.search = `?next=${encodeURIComponent(pathname + search)}`;
+    return NextResponse.redirect(signin);
+  }
+
+  // Note: trial-expiry paywall enforcement lives in `lib/billing/trial-gate.ts`
+  // and runs as a server-component check inside AppShell. Doing it here in
+  // middleware would require importing Prisma into the edge runtime, which
+  // is not supported.
+
+  return res;
+}
+
+export const config = {
+  matcher: [
+    // Run on every request EXCEPT:
+    //   _next/static, _next/image, /favicon.ico, /robots.txt, /sitemap.xml,
+    //   files with extensions (images, fonts, etc.)
+    "/((?!_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml|.*\\..*).*)"
+  ]
+};

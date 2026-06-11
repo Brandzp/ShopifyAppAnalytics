@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { ExternalLink, Loader2, KeyRound, CheckCircle2, AlertTriangle } from "lucide-react";
+import { useSaasStrings, type UiLocale } from "@/lib/i18n/saas-strings";
 
 // The OAuth section that lives at the top of the Shopify connection card.
 // Two parts:
@@ -19,7 +20,8 @@ interface AppConfigStatus {
   hasEnvFallback: { clientId: boolean; clientSecret: boolean };
 }
 
-export function ShopifyOauthSection() {
+export function ShopifyOauthSection({ locale = "he" }: { locale?: UiLocale }) {
+  const t = useSaasStrings(locale).shopifyOauth;
   const [shopDomain, setShopDomain] = useState("");
   const [config, setConfig] = useState<AppConfigStatus | null>(null);
   const [showCredentialsForm, setShowCredentialsForm] = useState(false);
@@ -48,7 +50,7 @@ export function ShopifyOauthSection() {
 
   const handleInstall = () => {
     if (!shopDomain.trim()) {
-      setError("Enter your Shopify store domain first (e.g. yourstore.myshopify.com).");
+      setError(t.domainRequired);
       return;
     }
     setError(null);
@@ -72,7 +74,7 @@ export function ShopifyOauthSection() {
       });
       const body = await res.json();
       if (!res.ok || !body?.ok) throw new Error(body?.error ?? "Failed to save.");
-      setSavedMsg("Credentials saved. You can now click 'Install via Shopify' above.");
+      setSavedMsg(t.savedMsg);
       setClientSecretInput("");
       void loadConfig();
     } catch (e) {
@@ -99,11 +101,8 @@ export function ShopifyOauthSection() {
           <KeyRound className="h-5 w-5" aria-hidden />
         </div>
         <div className="flex-1">
-          <h3 className="text-sm font-semibold">Install via Shopify (OAuth — recommended)</h3>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            Get an Admin API token automatically without copy-pasting. Requires a Shopify Partner app
-            (Client ID + Secret) configured below or in env vars.
-          </p>
+          <h3 className="text-sm font-semibold">{t.headline}</h3>
+          <p className="mt-0.5 text-xs text-muted-foreground">{t.subline}</p>
         </div>
       </div>
 
@@ -111,7 +110,7 @@ export function ShopifyOauthSection() {
         <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-xs">
           <p className="flex items-center gap-1.5 font-semibold text-emerald-900">
             <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />
-            Partner app credentials are set
+            {t.credsReady}
           </p>
           <p className="mt-1 text-emerald-800">{credentialsSource.join(" · ")}</p>
         </div>
@@ -119,11 +118,9 @@ export function ShopifyOauthSection() {
         <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs">
           <p className="flex items-center gap-1.5 font-semibold text-amber-900">
             <AlertTriangle className="h-3.5 w-3.5" aria-hidden />
-            Partner app credentials are missing
+            {t.credsMissing}
           </p>
-          <p className="mt-1 text-amber-900">
-            Configure them below before OAuth can work, or paste an Admin token in the form further down as a fallback.
-          </p>
+          <p className="mt-1 text-amber-900">{t.credsMissingBody}</p>
         </div>
       )}
 
@@ -144,7 +141,7 @@ export function ShopifyOauthSection() {
           disabled={!credentialsReady}
           className="inline-flex w-full sm:w-auto items-center justify-center gap-1.5 rounded-md bg-violet-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-violet-800 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          Install via Shopify
+          {t.install}
           <ExternalLink className="h-3.5 w-3.5" aria-hidden />
         </button>
       </div>
@@ -155,22 +152,21 @@ export function ShopifyOauthSection() {
         className="rounded-lg border border-border bg-card p-4 text-sm"
       >
         <summary className="cursor-pointer font-medium">
-          Shopify Partner app credentials
-          {showCredentialsForm ? " (hide)" : " — Client ID + Secret"}
+          {showCredentialsForm ? t.credsCardTitle : t.credsCardTitleHidden}
         </summary>
         <div className="mt-3 space-y-3">
           <p className="text-xs text-muted-foreground">
-            From your Shopify Partner Dashboard → your app → Client credentials. The Client Secret starts with{" "}
-            <code className="rounded bg-slate-100 px-1 text-[10px]">shpss_</code>. Stored encrypted at rest.
+            {t.credsFormSubtitle}
+            <code className="rounded bg-slate-100 px-1 text-[10px]">shpss_</code>. {t.stored}
           </p>
 
           <label className="block">
             <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Client ID
+              {t.clientIdLabel}
             </span>
             <input
               type="text"
-              placeholder="32-char hex string from Partner Dashboard"
+              placeholder={t.clientIdPlaceholder}
               value={clientIdInput}
               onChange={(e) => setClientIdInput(e.target.value)}
               className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-300"
@@ -179,7 +175,7 @@ export function ShopifyOauthSection() {
 
           <label className="block">
             <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Client Secret {config?.clientSecretLastFour ? "(currently set — paste again to replace)" : ""}
+              {config?.clientSecretLastFour ? t.clientSecretLabelSet : t.clientSecretLabel}
             </span>
             <input
               type="password"
@@ -198,7 +194,7 @@ export function ShopifyOauthSection() {
               className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-3 py-1.5 text-xs font-semibold hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60"
             >
               {saving ? <Loader2 className="h-3 w-3 animate-spin" aria-hidden /> : null}
-              {saving ? "Saving..." : "Save credentials"}
+              {saving ? t.saving : t.save}
             </button>
             <a
               href="https://partners.shopify.com/current/apps"
@@ -206,7 +202,7 @@ export function ShopifyOauthSection() {
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1 text-[11px] text-sky-700 hover:underline"
             >
-              Open Partner Dashboard
+              {t.openPartner}
               <ExternalLink className="h-3 w-3" aria-hidden />
             </a>
           </div>
@@ -223,11 +219,10 @@ export function ShopifyOauthSection() {
           ) : null}
 
           <p className="text-[11px] text-muted-foreground">
-            Make sure your Partner app has{" "}
+            {t.callbackHint}{" "}
             <code className="rounded bg-slate-100 px-1">
               {process.env.NEXT_PUBLIC_APP_URL ?? "https://your-app-url"}/api/shopify/oauth/callback
-            </code>{" "}
-            in its Allowed redirection URLs.
+            </code>
           </p>
         </div>
       </details>

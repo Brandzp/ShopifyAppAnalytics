@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { AppError, toErrorMessage } from "@/lib/server/errors";
 import { runGrowthAgentManualScan } from "@/lib/services/growth-agent-overview-service";
+import { assertStoreInActiveOrg } from "@/lib/auth/guards";
 
 export async function POST(request: Request) {
   try {
@@ -8,6 +9,7 @@ export async function POST(request: Request) {
     if (typeof body.storeId !== "string" || !body.storeId) {
       throw new AppError("Store id is required for Growth Agent scans.", 400);
     }
+    await assertStoreInActiveOrg(body.storeId);
     const result = await runGrowthAgentManualScan(body.storeId);
     return NextResponse.json(result);
   } catch (error) {

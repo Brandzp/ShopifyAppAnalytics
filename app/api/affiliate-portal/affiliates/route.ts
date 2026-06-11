@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
 import { createAffiliate } from "@/lib/services/affiliate-portal-directory-service";
 import { toErrorMessage } from "@/lib/server/errors";
+import { assertStoreInActiveOrg } from "@/lib/auth/guards";
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
+    if (body.storeId) await assertStoreInActiveOrg(body.storeId);
     const result = await createAffiliate({
       storeId: body.storeId,
       email: body.email,

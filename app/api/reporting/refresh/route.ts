@@ -3,6 +3,7 @@ import { toErrorMessage } from "@/lib/server/errors";
 import { runIncrementalSync } from "@/lib/services/shopify-sync-service";
 import { syncMetaAdsCampaignInsights } from "@/lib/services/meta-ads-service";
 import { crawlPublicInstagramProfiles } from "@/lib/services/instagram-public-crawler-service";
+import { assertStoreInActiveOrg } from "@/lib/auth/guards";
 
 type SourceResult = { ok: boolean; error?: string };
 
@@ -24,6 +25,15 @@ export async function POST(request: Request) {
 
   if (!storeId) {
     return NextResponse.json({ ok: true, skipped: true });
+  }
+
+  try {
+    await assertStoreInActiveOrg(storeId);
+  } catch (err) {
+    return NextResponse.json(
+      { ok: false, error: toErrorMessage(err) },
+      { status: err instanceof Error && "statusCode" in err ? (err as any).statusCode : 403 }
+    );
   }
 
   const [shopify, meta, instagram] = await Promise.allSettled([

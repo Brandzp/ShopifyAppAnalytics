@@ -62,6 +62,59 @@ services:
       - key: APP_URL
         sync: false
 
+      # ─── Supabase Auth (Phase 1) ───────────────────────────────────────
+      # NEXT_PUBLIC_* keys are sent to the browser; server-only keys aren't.
+      # Get these from Supabase Dashboard → Project Settings → API.
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        sync: false
+      - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
+        sync: false
+
+      # ─── Stripe Billing (Phase 2) ──────────────────────────────────────
+      # Master switch. Off by default — the app runs without billing
+      # (every signed-in org treated as paying customer on the Agency
+      # tier, no trial banner / paywall). Flip to "true" once Stripe is
+      # fully configured below.
+      - key: BILLING_ENABLED
+        value: "false"
+      # Get from Stripe Dashboard → Developers → API keys. Use test keys
+      # for dev (sk_test_...), live keys for production (sk_live_...).
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      # Per-plan price IDs (Stripe Dashboard → Products → each price has
+      # an ID like price_1AbCdEf...). Set the ones you've created; null
+      # entries gracefully disable that plan/currency/interval combo.
+      - key: STRIPE_PRICE_STARTER_ILS_MONTHLY
+        sync: false
+      - key: STRIPE_PRICE_STARTER_ILS_ANNUAL
+        sync: false
+      - key: STRIPE_PRICE_STARTER_USD_MONTHLY
+        sync: false
+      - key: STRIPE_PRICE_STARTER_USD_ANNUAL
+        sync: false
+      - key: STRIPE_PRICE_GROWTH_ILS_MONTHLY
+        sync: false
+      - key: STRIPE_PRICE_GROWTH_ILS_ANNUAL
+        sync: false
+      - key: STRIPE_PRICE_GROWTH_USD_MONTHLY
+        sync: false
+      - key: STRIPE_PRICE_GROWTH_USD_ANNUAL
+        sync: false
+      - key: STRIPE_PRICE_AGENCY_ILS_MONTHLY
+        sync: false
+      - key: STRIPE_PRICE_AGENCY_ILS_ANNUAL
+        sync: false
+      - key: STRIPE_PRICE_AGENCY_USD_MONTHLY
+        sync: false
+      - key: STRIPE_PRICE_AGENCY_USD_ANNUAL
+        sync: false
+
       # ─── Shopify ───────────────────────────────────────────────────────
       - key: SHOPIFY_CREDENTIALS_ENCRYPTION_KEY
         generateValue: true # Render auto-generates a strong random value on first deploy
@@ -128,4 +181,19 @@ services:
 
       # ─── Flashy (optional) ─────────────────────────────────────────────
       - key: FLASHY_ACCOUNT_ID
+        sync: false
+
+      # ─── Observability (Phase 4) ───────────────────────────────────────
+      # Sentry DSN — server-side and edge. NEXT_PUBLIC_SENTRY_DSN is the
+      # browser variant (same DSN, different env var because only NEXT_PUBLIC_*
+      # is exposed to the browser bundle).
+      - key: SENTRY_DSN
+        sync: false
+      - key: NEXT_PUBLIC_SENTRY_DSN
+        sync: false
+      # Plausible — domain name + script URL (defaults to plausible.io).
+      # Self-hosted Plausible: override NEXT_PUBLIC_PLAUSIBLE_SCRIPT.
+      - key: NEXT_PUBLIC_PLAUSIBLE_DOMAIN
+        sync: false
+      - key: NEXT_PUBLIC_PLAUSIBLE_SCRIPT
         sync: false

@@ -1,10 +1,12 @@
 ﻿import { NextResponse } from "next/server";
 import { createAffiliateCouponInShopify } from "@/lib/services/affiliate-portal-admin-service";
 import { toErrorMessage } from "@/lib/server/errors";
+import { assertStoreInActiveOrg } from "@/lib/auth/guards";
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
+    if (body.storeId) await assertStoreInActiveOrg(body.storeId);
     const result = await createAffiliateCouponInShopify({
       storeId: body.storeId,
       affiliateId: body.affiliateId,

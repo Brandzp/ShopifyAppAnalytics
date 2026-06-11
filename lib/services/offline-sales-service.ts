@@ -8,10 +8,26 @@ import type { ParsedOfflineSalesSheet } from "@/lib/server/offline-sales-excel-p
 export const ACTIVE_STORE_COOKIE = "active_store_id";
 
 export async function resolveActiveStoreId(): Promise<string | null> {
-  // 1. Cookie wins. If the operator picked a brand via the switcher, honor it
-  //    — BUT validate the store actually exists, so a stale cookie pointing
-  //    at a deleted/uninstalled brand falls back to default instead of
-  //    surfacing "store not found" errors everywhere.
+  // Multi-tenant resolution path. Priority:
+  //   1. Auth context (signed-in user + their active org) — if available,
+  //      honor the cookie-or-first-store WITHIN that org.
+  //   2. Legacy fallback for non-authenticated contexts (webhooks, crons,
+  //      background jobs) — pick the most recently updated connected store
+  //      anywhere. This keeps cron paths working until 1E sweep promotes
+  //      them all to org-aware.
+  try {
+    const { getAuthContext } = await import("@/lib/auth/session");
+    const auth = await getAuthContext();
+    if (auth.orgId) {
+      // Honor the user's active store within their active org.
+      return auth.storeId ?? null;
+    }
+  } catch {
+    // No auth context (e.g. webhook handler). Fall through to legacy path.
+  }
+
+  // Legacy path — single-tenant fallback. Kept until every caller is
+  // org-aware.
   const { cookies } = await import("next/headers");
   const cookieStore = await cookies();
   const fromCookie = cookieStore.get(ACTIVE_STORE_COOKIE)?.value?.trim();
@@ -21,12 +37,7 @@ export async function resolveActiveStoreId(): Promise<string | null> {
       null
     );
     if (exists) return exists.id;
-    // Stale cookie — drop through to defaults below. We don't delete the
-    // cookie here (cookies() is read-only in Server Components); the next
-    // POST to /api/settings/active-store will overwrite it.
   }
-
-  // 2. Default: most recently updated connected store.
   return withOptionalDb(async (db) => {
     const connected = await db.store.findFirst({
       where: { connected: true, connection: { isNot: null } },
@@ -40,15 +51,26 @@ export async function resolveActiveStoreId(): Promise<string | null> {
 }
 
 // Read-only list of every store the operator has installed, used by the
-// StoreSwitcher to render its dropdown. Single-tenant operator mode: no
-// auth filter. Switching to multi-user SaaS mode means scoping this by
-// the authenticated user's memberships.
+// StoreSwitcher to render its dropdown. In SaaS mode this is scoped to
+// the active org of the signed-in user — they only ever see their own
+// brands. When called outside an auth context (legacy callers + crons),
+// falls back to all stores (single-tenant behavior).
 export async function listAllStoresForSwitcher(): Promise<
   Array<{ id: string; name: string; domain: string; connected: boolean }>
 > {
+  let scopeOrgId: string | null = null;
+  try {
+    const { getAuthContext } = await import("@/lib/auth/session");
+    const auth = await getAuthContext();
+    scopeOrgId = auth.orgId;
+  } catch {
+    // No auth context — fall through to legacy single-tenant behavior.
+  }
+
   return withOptionalDb(
     async (db) => {
       const rows = (await db.store.findMany({
+        where: scopeOrgId ? { orgId: scopeOrgId } : undefined,
         orderBy: [{ connected: "desc" }, { updatedAt: "desc" }],
         select: { id: true, name: true, domain: true, connected: true }
       })) as Array<{ id: string; name: string; domain: string; connected: boolean }>;
