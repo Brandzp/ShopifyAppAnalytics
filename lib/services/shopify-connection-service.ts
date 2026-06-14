@@ -96,14 +96,46 @@ export async function getStoredShopifyCredentials(storeId: string) {
   }
 
   const decrypted = decryptSecret(connection.adminAccessTokenEnc);
-  const adminAccessToken = decrypted === CLIENT_CREDENTIALS_SENTINEL
-    ? (await resolveShopifyAdminAccessToken({ shopDomain: connection.shopDomain })).adminAccessToken
-    : decrypted;
 
+  // BACKGROUND SYNC MUST USE THE OFFLINE (PERMANENT) OAUTH TOKEN.
+  //
+  // When the stored value is the CLIENT_CREDENTIALS sentinel, we mint a token
+  // via Shopify's client-credentials grant. That token is SHORT-LIVED — Shopify
+  // stamps it with `expires_in` (~24h) — so a background/cron sync that runs a
+  // day after the token was minted fails with:
+  //   "Error validating access token: Session has expired ..."
+  // This is the exact failure the Sync Controls panel was throwing.
+  //
+  // The permanent fix is to connect via OAuth (install/callback), which persists
+  // a real OFFLINE access token into `adminAccessTokenEnc`. When that real token
+  // is present we use it directly (it never expires until the app is uninstalled).
+  // The sentinel path is retained only as a degraded fallback so a store that was
+  // connected the old way still functions, but it now logs LOUDLY so the expiry
+  // behavior is visible and the owner is prompted to re-OAuth.
+  if (decrypted === CLIENT_CREDENTIALS_SENTINEL) {
+    console.warn(
+      `[shopify-connection] store=${storeId} (${connection.shopDomain}) is using the ` +
+        `client-credentials grant, which returns a SHORT-LIVED token (~24h). Background ` +
+        `sync will fail with "Session has expired" once it lapses. Re-connect the store ` +
+        `via OAuth (Settings → Shopify connection → Connect) to persist a permanent ` +
+        `OFFLINE access token.`
+    );
+    const resolved = await resolveShopifyAdminAccessToken({ shopDomain: connection.shopDomain });
+    return {
+      shopDomain: connection.shopDomain,
+      adminAccessToken: resolved.adminAccessToken,
+      apiVersion: connection.apiVersion,
+      tokenSource: "client_credentials" as const
+    };
+  }
+
+  // Real stored token — OAuth-granted offline token (permanent) or a manually
+  // pasted Admin API token. Either is durable; use it directly.
   return {
     shopDomain: connection.shopDomain,
-    adminAccessToken,
-    apiVersion: connection.apiVersion
+    adminAccessToken: decrypted,
+    apiVersion: connection.apiVersion,
+    tokenSource: "offline" as const
   };
 }
 

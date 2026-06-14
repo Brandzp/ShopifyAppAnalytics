@@ -155,7 +155,12 @@ export async function requestShopifyAccessTokenWithClientCredentials(shopDomain:
 
   if (!response.ok) {
     const text = await response.text();
-    throw new AppError(`Shopify token request failed with status ${response.status}. ${text}`, response.status);
+    throw new AppError(
+      `Shopify client-credentials token request failed with status ${response.status}. ${text} ` +
+        `Note: the client-credentials grant returns a SHORT-LIVED token; for durable background ` +
+        `sync, connect the store via OAuth to obtain a permanent OFFLINE access token.`,
+      response.status
+    );
   }
 
   const payload = await response.json() as { access_token?: string; scope?: string; expires_in?: number };
@@ -163,6 +168,9 @@ export async function requestShopifyAccessTokenWithClientCredentials(shopDomain:
     throw new AppError("Shopify did not return an access token for the client credentials grant.", 502, payload);
   }
 
+  // expiresIn is non-null here (Shopify stamps client-credentials tokens with a
+  // TTL). Callers should NOT cache this across requests as if it were permanent —
+  // the only permanent token is the OFFLINE token from the OAuth code grant.
   return {
     accessToken: payload.access_token,
     scope: payload.scope ?? "",

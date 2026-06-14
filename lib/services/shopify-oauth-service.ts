@@ -163,11 +163,22 @@ export async function buildInstallRedirect(shopInput: string | null | undefined)
   const shopDomain = normalizeOauthShopDomain(shopInput);
   const state = generateOauthState();
 
+  // OFFLINE (permanent) token grant — REQUIRED for background sync.
+  //
+  // Shopify's authorize endpoint issues an OFFLINE access token by DEFAULT (i.e.
+  // when no `grant_options[]` is present). An OFFLINE token persists until the
+  // app is uninstalled. Adding `grant_options[]=per-user` would instead request
+  // an ONLINE token, which Shopify expires in ~24h and which then fails every
+  // background/cron sync with "Error validating access token: Session has expired".
+  //
+  // We therefore DELIBERATELY omit `grant_options[]` here. Do NOT add it: the
+  // /api/cron/* sync jobs rely on the resulting token being permanent (offline).
   const params = new URLSearchParams({
     client_id: clientId,
     scope: scopes,
     redirect_uri: redirectUri,
     state
+    // intentionally NO `grant_options[]` → offline (permanent) access token
   });
 
   const authorizeUrl = `https://${shopDomain}/admin/oauth/authorize?${params.toString()}`;
