@@ -2,6 +2,7 @@ import { runFullInitialSync, runIncrementalSync, syncCustomers, syncOrders, sync
 import { getDb } from "@/lib/server/db";
 import { getStoredShopifyCredentials } from "@/lib/services/shopify-connection-service";
 import { registerOrderWebhooks } from "@/lib/services/shopify-oauth-service";
+import { listProductCosts } from "@/lib/services/product-cost-service";
 
 /**
  * Register the order webhooks for an ALREADY-connected store (e.g. to backfill
@@ -62,11 +63,30 @@ export async function runShopifyAdminIngestionPlaceholder(storeId: string) {
   return runFullInitialSync(storeId);
 }
 
+/**
+ * Product cost (COGS) ingestion status for a store.
+ *
+ * SA-HIGH-03: real per-SKU costs are now ingested through the UI
+ * (/profit/costs) and CSV import — see `lib/services/product-cost-service.ts`,
+ * which populates `Product.costOverrideAmount` and re-costs the synced order
+ * line items. This entry point reports current coverage so callers (setup
+ * health, onboarding, the Growth Agent) can nudge the founder to finish
+ * configuring costs. An ERP/automatic feed can later replace the manual path.
+ */
 export async function syncProductCostsPlaceholder(storeId: string) {
-  // TODO: Integrate product cost inputs from ERP, spreadsheets, or explicit SKU cost settings.
+  const db = getDb();
+  if (!db) {
+    return { status: "db_unavailable", storeId } as const;
+  }
+  const { summary } = await listProductCosts(storeId);
   return {
-    status: "not_implemented",
-    storeId
+    status: summary.costCoverage >= 0.9 ? "configured" : "needs_input",
+    storeId,
+    soldProducts: summary.soldProducts,
+    soldProductsWithCost: summary.soldProductsWithCost,
+    productsWithOverride: summary.productsWithOverride,
+    costCoverage: summary.costCoverage,
+    source: "manual_ui_and_csv"
   } as const;
 }
 

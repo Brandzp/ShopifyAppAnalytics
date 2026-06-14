@@ -148,6 +148,10 @@ export default async function ProfitPage() {
             eyebrow="Step 2"
             title="The full breakdown"
             hint="Sortable, paginated tables. Use the page-size toggle if you want to see more rows at once."
+            cta={{
+              href: "/profit/costs",
+              label: locale === "he" ? "עריכת עלויות מוצרים (COGS) →" : "Edit product costs (COGS) →"
+            }}
           />
           <div className="grid items-start gap-4 lg:grid-cols-2">
             <DataTable

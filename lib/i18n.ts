@@ -230,7 +230,7 @@ const dictionaries = {
       oauthTodo:
         "TODO: Add Shopify OAuth install flow and webhook registration for production distribution.",
       costTodo:
-        "TODO: Add product cost ingestion from ERP, spreadsheets, or SKU-level manual overrides.",
+        "Product costs (COGS) are now editable per product and via CSV on the Profit → Product costs page.",
       notificationsTodo:
         "TODO: Add email, WhatsApp, and Slack delivery preferences for summaries and alerts.",
       shopify: {
@@ -558,7 +558,7 @@ const dictionaries = {
       oauthTodo:
         "TODO: להוסיף התקנת Shopify דרך OAuth ורישום Webhooks להפצה אמיתית.",
       costTodo:
-        "TODO: להוסיף קליטת עלויות מוצר מ־ERP, גיליונות או overrides ברמת SKU.",
+        "עלויות מוצרים (COGS) ניתנות כעת לעריכה לכל מוצר ודרך CSV בעמוד רווחיות → עלויות מוצרים.",
       notificationsTodo:
         "TODO: להוסיף העדפות שליחה במייל, וואטסאפ וסלאק לסיכומים ולהתראות.",
       shopify: {
