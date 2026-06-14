@@ -156,6 +156,37 @@
   named exports reliably (returns "is not a function"). Use a temp `.ts` harness
   file run with `npx tsx file.ts` instead, then delete it. NextRequest from
   next/server constructs fine under tsx for middleware tests.
+- tsx + ESM namespace exports are READ-ONLY getters: you CANNOT monkeypatch a
+  collaborator by assigning `(import * as svc).fn = stub` — it throws "Cannot set
+  property of #<Object> which has only a getter". To smoke-test a render/pure
+  function in isolation, EXPORT the pure builder and call it directly with a fake
+  input, rather than trying to stub its DB/network deps.
+
+## Email / notifications (SA-HIGH-04, 2026-06-14)
+- There are THREE Resend layers, do not duplicate them:
+  1. `lib/email/email-client.ts` → `sendTransactionalEmail({to,subject,html})`:
+     lazy singleton, SOFT-FAIL (logs warning + returns false, never throws) when
+     RESEND_API_KEY is unset. Use this for any new transactional send.
+  2. `lib/server/weekly-report-mailer.ts` → `sendWeeklyReportEmail(...)`: the
+     PDF-attached full report (Hebrew-only body). Separate from the digest.
+  3. `lib/services/notification-service.ts` → `sendEmailDigest(summaryId)`: NEW.
+     Short bilingual (he→RTL+bilingual, en→LTR English-only) inbox teaser built
+     from a persisted WeeklyReport. Loads bundle via `getWeeklyReport(id)`,
+     resolves recipients from `WeeklyReportRecipient` (active rows by storeId),
+     sends via `sendTransactionalEmail`. Slack/WhatsApp remain stubs.
+- The app has NO single top-level "revenue/orders". Weekly metrics live nested:
+  `bundle.metaAds.totals.{spend,purchases}` (paid funnel) + brand kpis
+  `brands[0].kpis.purchaseRoas`, and `bundle.instagram.{affiliates[].attributed*,
+  topCreators}` (organic funnel). The digest surfaces BOTH; don't invent a
+  combined revenue figure.
+- Locale source for emails = `bundle.locale` ("he" | "en"), set when the bundle
+  is built (org/store default). Org/User both have a `locale` column ("he" default).
+- Optional-but-feature-degrading env vars warn (don't throw) at boot via
+  `warnOptionalEnv()` in `lib/server/startup-check.ts`, wired into instrumentation
+  AFTER `assertRequiredEnv()`. RESEND_API_KEY / REPORT_FROM_EMAIL live there — the
+  weekly-report cron must run without them, only its email delivery no-ops.
+- `WeeklyReportRecipient` (active=true, by storeId) is the recipient list for both
+  the PDF mailer and the digest. `WeeklyReport.id` is the `summaryId`.
 
 ## Nav / sidebar wiring (2026-06-14, SA-HIGH-06)
 - The sidebar nav array lives in `components/layout/sidebar.tsx` -> `getNavigation()`.
@@ -170,6 +201,22 @@
   icon: Camera }` next to the affiliate/creative experimental items.
 - Pattern lesson: before adding a hardcoded nav label, grep `lib/i18n.ts` for an existing
   `nav.*` key — several were pre-provisioned for pages that aren't yet linked.
+
+## Multi-tenant store resolution (SA-HIGH-08, 2026-06-14)
+- `resolveOrCreateBaseStore()` (lib/services/creator-admin-service.ts) returns the
+  most-recently-updated CONNECTED store (fallback: most-recent store). It is the
+  "current/base store" resolver — it does NOT read cookies/session, but in a
+  multi-tenant context it always collapses to ONE store. Any service that calls it
+  is single-tenant by construction; a multi-tenant caller (the refresh-all cron
+  fan-out) must pass an explicit `storeId` instead.
+- Instagram sync now has both shapes: `syncInstagramPosts(storeId?)` (optional arg,
+  defaults to base-store for the manual single-tenant sync route) and the explicit
+  `syncInstagramPostsForStore(storeId)` used by the cron loop. `InstagramConnection.storeId`
+  is `@unique`, so `findUnique({ where: { storeId } })` is the right per-store lookup and
+  `creatorPost` upserts key on the composite `storeId_externalPostId`.
+- Pattern: when you see `resolveOrCreateBaseStore()` inside a service that a per-store
+  cron iterates, that's the multi-tenant "only one store syncs" smell — thread `storeId`
+  through rather than relying on base-store resolution.
 
 ## SA-CRIT-03 — orderLineItem "Argument 'equals' is missing" is STALE (2026-06-14)
 - The `GET /` Prisma error noted under Gotchas (`prisma.orderLineItem.findMany ...
@@ -196,3 +243,35 @@
 - ACTION for future readers: do not chase this error; if it recurs, it will be a
   NEW data/code condition — re-run the harness pattern above (resolve a connected
   store, call the 4 services) to localize it.
+
+## Stripe billing layer (SA-HIGH-09, 2026-06-14)
+- Master switch: `lib/billing/billing-flag.ts` `billingEnabled()` reads
+  `BILLING_ENABLED` (truthy 1/true/yes/on, default OFF). While OFF the whole
+  Stripe surface is inert: `getSubscriptionStatus()` returns plan="agency"
+  status="paid" for every org, checkout/portal 503, and the webhook returns
+  200 `{billingDisabled:true}` WITHOUT verifying the signature. So no Stripe
+  config is needed to run the app; flip the flag LAST (see docs/BILLING_CHECKLIST.md).
+- NOTE on a comment drift: billing-flag.ts header says OFF returns "paid"
+  plan — the code actually returns plan="agency" (highest tier so plan-limit
+  checks pass). plan-limits.ts comment is the correct one. Behavior is fine.
+- Webhook `app/api/billing/webhook/route.ts` handles: checkout.session.completed,
+  customer.subscription.{created,updated,deleted}, invoice.payment_failed. It
+  matches the org by `stripeCustomerId` via `updateMany` — that id is set
+  EARLIER by the checkout route (`stripe.customers.create` → `Organization.update`)
+  before any charge, so by webhook time the org already carries it. A Stripe
+  customer with no matching org → updateMany updates 0 rows silently (by design).
+- `priceIdToPlan()` reverse-maps an incoming Stripe price id → plan by scanning
+  12 env vars `STRIPE_PRICE_<STARTER|GROWTH|AGENCY>_<ILS|USD>_<MONTHLY|ANNUAL>`.
+  Same vars are read by `plans.ts` envPrice(). No price ids in code.
+- SA-HIGH-09 fix: `customer.subscription.created` was previously unhandled
+  (fell to default no-op). Merged into the `customer.subscription.updated` case
+  (identical plan-sync). `created` sends NO email (avoids duplicate with the
+  checkout-completed started-email); only checkout.session.completed and
+  ...deleted send owner emails + audit events (billing.subscription_started /
+  _canceled). Signature verify uses raw `request.text()` + constructEvent — correct.
+- Route auth: `/api/billing/webhook` is in middleware.ts PUBLIC_PREFIXES and is
+  NOT under `/api/cron/*`, so it is NOT gated by CRON_SECRET — authenticated
+  ONLY by the Stripe signature. Don't expect CRON_SECRET to protect it.
+- `.env.example` does NOT document any STRIPE_*/BILLING_ENABLED vars yet — the
+  full env list lives in docs/BILLING_CHECKLIST.md §2. Add placeholders there
+  if you touch it, never real keys (file was previously sanitized of a leak).

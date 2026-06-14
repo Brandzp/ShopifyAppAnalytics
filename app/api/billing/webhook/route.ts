@@ -17,6 +17,9 @@ import type Stripe from "stripe";
 // changes. We verify the signature, then update the matching Org row:
 //
 //   - checkout.session.completed       → set plan + subscription id
+//   - customer.subscription.created    → keep plan in sync (covers subs
+//                                        created via API/Dashboard, not
+//                                        only via our Checkout flow)
 //   - customer.subscription.updated    → keep plan in sync (upgrade/downgrade)
 //   - customer.subscription.deleted    → revert org to "trial" (frozen)
 //   - invoice.payment_failed           → leave plan as-is; the customer
@@ -27,6 +30,7 @@ import type Stripe from "stripe";
 //   URL: https://shopifyappanalytics.onrender.com/api/billing/webhook
 //   Events:
 //     - checkout.session.completed
+//     - customer.subscription.created
 //     - customer.subscription.updated
 //     - customer.subscription.deleted
 //     - invoice.payment_failed
@@ -197,6 +201,14 @@ export async function POST(request: Request) {
         break;
       }
 
+      // `created` and `updated` are handled identically: read the plan off
+      // the subscription's first price and sync it onto the matching org.
+      // Handling `created` (not only checkout.session.completed) covers
+      // subscriptions created directly via the Stripe API or Dashboard,
+      // and is resilient to webhook delivery ordering. The org row already
+      // carries stripeCustomerId (set by the checkout route before the
+      // Stripe Customer is used), so updateMany matches by customer id.
+      case "customer.subscription.created":
       case "customer.subscription.updated": {
         const sub = event.data.object as Stripe.Subscription;
         const customerId =
