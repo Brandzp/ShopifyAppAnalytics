@@ -59,6 +59,43 @@ export function getMissingRequiredEnv(): EnvRequirement[] {
 }
 
 /**
+ * Optional integration env vars. These are NOT required for boot — the app
+ * runs fine without them — but a feature silently no-ops when they're absent.
+ * We WARN (never throw) at boot so an operator who expected the feature to
+ * work sees a clear reason it didn't, instead of wondering why no email ever
+ * arrived. Each entry's `names` are OR'd (any one satisfies it).
+ */
+const OPTIONAL_ENV: Array<EnvRequirement & { feature: string }> = [
+  {
+    label: "Resend API key",
+    names: ["RESEND_API_KEY"],
+    feature: "weekly/monthly email reports + digests"
+  },
+  {
+    label: "Report from-address",
+    names: ["REPORT_FROM_EMAIL"],
+    feature: "weekly/monthly email reports + digests"
+  }
+];
+
+/**
+ * Emit a non-fatal warning for any absent optional integration env var.
+ * Specifically: if the weekly-report cron is enabled but RESEND_API_KEY /
+ * REPORT_FROM_EMAIL are unset, the cron will run and generate reports but be
+ * UNABLE to deliver email — so we warn loudly at boot rather than letting the
+ * delivery silently no-op. Never throws. Safe to call after the crons start.
+ */
+export function warnOptionalEnv(): void {
+  for (const opt of OPTIONAL_ENV) {
+    if (opt.names.some(isSet)) continue;
+    console.warn(
+      `[startup-check] ${opt.label} is not set (one of: ${opt.names.join(" or ")}). ` +
+        `Feature degraded: ${opt.feature} will be skipped until it is configured.`
+    );
+  }
+}
+
+/**
  * Assert all required env vars are present. Throws a clear Error listing the
  * missing ones if not. Call once at boot so the process dies loudly instead
  * of silently 500-ing later.
