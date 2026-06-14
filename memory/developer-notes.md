@@ -124,3 +124,48 @@
 - After this, `npx prisma migrate status` reports "Database schema is up to date!"
   with 1 migration found. Future schema changes should use `migrate dev`/`deploy`.
 - Baseline SQL = 1368 lines, 42 tables, committed locally (no push).
+
+## P0 hardening pass (2026-06-14)
+- `npx tsc --noEmit` is now FULLY CLEAN (exit 0, zero output). The pre-existing
+  errors noted under "Gotchas" (mock-store.ts, affiliate-conversion-import-service.ts,
+  weekly-report-service.ts) have since been resolved — that Gotcha note is stale.
+- `lib/auth/supabase-server.ts` ALREADY EXISTS and exports the three factories
+  incl. `createMiddlewareSupabaseClient`. (A task claimed it was missing; it isn't.)
+  It resolves SUPABASE_URL || NEXT_PUBLIC_SUPABASE_URL (and same for anon key).
+- `lib/prisma.ts` now imports `PrismaClient` strictly (no more try/catch null
+  fallback). Safe because `node_modules/.prisma/client` is generated and
+  `postinstall: prisma generate` keeps it generated after `npm install`.
+  No caller relied on the old null return (grepped: no `if (!prisma)` / `prisma?.`).
+- ENCODING TRAP: the two corrupted-Hebrew files could NOT be fixed with Edit —
+  the on-disk mojibake bytes don't reconcile with the Edit match layer. Fix by
+  full-file Write (clean UTF-8). alert-service.ts was recoverable mojibake
+  (UTF-8-as-Latin1); affiliate-link-builder.tsx was lossy `?????` (reconstructed
+  Hebrew from adjacent English context).
+- CRON LOCK (SA-CRIT-07): middleware.ts `requireCronSecret()` 401s `/api/cron/*`
+  when `CRON_SECRET` is set and `x-cron-secret` header is absent/wrong; skips when
+  unset (dev). CRITICAL: the in-process self-fetch crons (data-refresh, shopify-sync,
+  outcome-measurement) ping `/api/cron/*` and would 401 themselves in prod — they
+  now attach the header via `cronSecretHeaders()` in lib/server/cron-util.ts.
+  weekly-report cron pings `/api/weekly-summary/cron/run` (NOT under /api/cron/),
+  so it's unaffected.
+- Boot env validation: `lib/server/startup-check.ts` (`assertRequiredEnv()`) is
+  called from `instrumentation.ts register()` inside the Node-runtime guard;
+  fails fast at boot if Supabase URL/key or SHOPIFY_CREDENTIALS_ENCRYPTION_KEY missing.
+- tsx behavioral smoke tests: `import('./x.ts')` via `npx tsx -e` does NOT resolve
+  named exports reliably (returns "is not a function"). Use a temp `.ts` harness
+  file run with `npx tsx file.ts` instead, then delete it. NextRequest from
+  next/server constructs fine under tsx for middleware tests.
+
+## Nav / sidebar wiring (2026-06-14, SA-HIGH-06)
+- The sidebar nav array lives in `components/layout/sidebar.tsx` -> `getNavigation()`.
+  Each item is `{ href, label, icon }`. Labels are either `labels.nav.X` (i18n
+  dictionary key) or an inline `locale === "he" ? "..." : "..."` ternary. Icons are
+  lucide-react components imported at the top of the file.
+- `app/creator-flow/page.tsx` was a fully-built feature (uses `creator-analytics-service`,
+  `dictionary.creator.*`, charts, data table) but had NO nav entry — unreachable from UI.
+  The i18n dictionary already had `nav.creatorFlow` ("Creator Commerce" / "יוצרים ומכירות")
+  provisioned in BOTH locales, so the page was always intended to be navigable; only the
+  sidebar item was missing. Added `{ href: "/creator-flow", label: labels.nav.creatorFlow,
+  icon: Camera }` next to the affiliate/creative experimental items.
+- Pattern lesson: before adding a hardcoded nav label, grep `lib/i18n.ts` for an existing
+  `nav.*` key — several were pre-provisioned for pages that aren't yet linked.

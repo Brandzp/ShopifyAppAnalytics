@@ -28,7 +28,7 @@ Legend:
 | `app/alerts` | **core** | Rule-based alert configuration and feed. |
 | `app/settings` | **core** | Shopify connection, credentials, recipients, setup health. |
 | `app/creative` | **experimental** | AI creative/packshot generation studio (Konva editor, image/video providers). |
-| `app/creator-flow` | **experimental** | Creator content analytics page (pairs with `creator-analytics-service`). Uncertain: it has zero `href`/nav references anywhere in `app/` or `components/` (not linked from the sidebar), so it may be abandoned/orphaned — verify before relying on it. |
+| `app/creator-flow` | **experimental** | Creator content analytics page (pairs with `creator-analytics-service`). Linked from the sidebar as "Creator Commerce" (`nav.creatorFlow`) as of SA-HIGH-06; previously had no nav reference. |
 | `app/affiliate-portal` | **experimental** | Affiliate/influencer portal, link tracking, conversion import. |
 | `app/growth-agent` | **experimental** | Autonomous "growth agent": anomaly detection, action engine, crawlers. |
 | `app/marketing-planner` | **experimental** | Marketing/influencer planning, readiness, learning loop. |

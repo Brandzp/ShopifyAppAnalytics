@@ -2,7 +2,7 @@
 
 import Link, { useLinkStatus } from "next/link";
 import { usePathname } from "next/navigation";
-import { Bell, CalendarRange, LayoutDashboard, LineChart, Loader2, Menu, PackageCheck, Settings2, Sparkles, Users2, Megaphone, Bot, FileSpreadsheet, type LucideIcon } from "lucide-react";
+import { Bell, CalendarRange, Camera, LayoutDashboard, LineChart, Loader2, Menu, PackageCheck, Settings2, Sparkles, Users2, Megaphone, Bot, FileSpreadsheet, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useMemo, useState } from "react";
@@ -24,6 +24,7 @@ function getNavigation(labels: { nav: Record<string, string> }, locale: AppLocal
       icon: PackageCheck
     },
     { href: "/affiliate-portal", label: locale === "he" ? "פורטל שותפים" : "Affiliate Portal", icon: Megaphone },
+    { href: "/creator-flow", label: labels.nav.creatorFlow, icon: Camera },
     { href: "/creative", label: locale === "he" ? "סטודיו קריאייטיב" : "Creative", icon: Sparkles },
     { href: "/weekly-summary", label: labels.nav.weeklySummary, icon: Sparkles },
     // Growth Agent — hidden from nav until the automation loop is shipped.
