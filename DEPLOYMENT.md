@@ -122,6 +122,35 @@ You need a registered Shopify app to use OAuth (instead of paste-token).
 After redeploy, opening `${APP_URL}/api/shopify/oauth/install?shop=YOUR_SHOP.myshopify.com`
 will start the OAuth flow.
 
+### 3a. Affiliate tracking theme snippet
+
+To attribute storefront sales to affiliate/agent referrals, the merchant's
+theme must load the storefront tracking script
+(`/shopify/affiliate-ref-tracking.js`). The snippet that loads it lives at
+[docs/shopify-theme-affiliate-ref-snippet.liquid](docs/shopify-theme-affiliate-ref-snippet.liquid).
+Paste its contents into the theme (e.g. `theme.liquid`, just before
+`</body>`).
+
+The snippet reads the app's base URL from a **shop metafield**,
+`custom.growth_agent_app_url`. This metafield is **not** set automatically —
+the merchant must create it once, or the script tag resolves to an empty URL
+and tracking silently never loads. Set up the metafield like this:
+
+1. In **Shopify Admin → Settings → Custom data → Shop** (under "Metafields"),
+   click **Add definition**.
+2. Set the **namespace and key** to `custom.growth_agent_app_url` and the
+   **type** to **URL**. Save the definition.
+3. Set the value for the shop to the app's base URL with no trailing slash,
+   e.g. `https://shopifyappanalytics.onrender.com` (use whatever `${APP_URL}`
+   resolves to for this deployment).
+
+After saving, load the storefront and confirm in the browser network tab that
+`/shopify/affiliate-ref-tracking.js` loads from your app URL. The script
+captures the `ref` and `agent_click_id` query params from affiliate redirect
+links, persists them (localStorage plus a first-party cookie that survives
+Safari ITP), and writes them onto the Shopify cart `note_attributes` so the
+order webhook can match the conversion.
+
 ---
 
 ## 4. Meta for Developers (OAuth app for Meta Ads + Instagram)
