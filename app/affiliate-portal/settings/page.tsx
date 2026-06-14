@@ -1,6 +1,7 @@
 import { AppShell } from "@/components/layout/app-shell";
 import { SectionHeading } from "@/components/ui/section-heading";
 import { AffiliatePortalNav } from "@/components/affiliate-portal/portal-nav";
+import { UploadBixGrowCsvButton } from "@/components/affiliate-portal/upload-bixgrow-csv-button";
 import { getAppChromeData } from "@/lib/services/analytics-service";
 import { getAffiliatePortalSettings } from "@/lib/services/affiliate-portal-service";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -89,6 +90,19 @@ export default async function AffiliatePortalSettingsPage() {
               <div className="rounded-2xl border border-border/70 bg-background/70 p-4">
                 Webhooks ready: {settings.advanced.webhookReady ? "Ready" : "Not ready"}
               </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>BixGrow attribution import</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm">
+              <p className="text-muted-foreground">
+                BixGrow is a manual-export platform. Download the conversions CSV from your BixGrow dashboard, then
+                upload it here to import affiliate attributions. Re-uploading the same export is safe — rows are
+                deduplicated by affiliate and order.
+              </p>
+              <UploadBixGrowCsvButton />
             </CardContent>
           </Card>
         </div>
