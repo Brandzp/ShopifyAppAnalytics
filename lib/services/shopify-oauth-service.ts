@@ -241,6 +241,95 @@ interface TokenExchangeResult {
   scope: string;
 }
 
+// Order webhook topics we subscribe to so order data arrives in real time
+// (polling/sync remains the fallback if registration fails).
+const ORDER_WEBHOOK_TOPICS = ["orders/create", "orders/updated", "orders/cancelled"] as const;
+
+// Admin REST API version for the Webhooks endpoint. Override via
+// SHOPIFY_ADMIN_API_VERSION (the same env var the GraphQL client reads).
+const WEBHOOK_API_VERSION = process.env.SHOPIFY_ADMIN_API_VERSION?.trim() || "2024-10";
+
+interface RegisterOrderWebhooksResult {
+  webhookIds: string[];
+  registered: number;
+  failed: number;
+}
+
+/**
+ * Register the order webhooks (create / updated / cancelled) for a freshly
+ * connected shop via the Shopify REST Webhooks API:
+ *   POST https://{shop}/admin/api/{version}/webhooks.json
+ *   { "webhook": { "topic": "orders/create", "address": "...", "format": "json" } }
+ *
+ * Failure is non-fatal by design: every error is logged and swallowed so the
+ * OAuth flow still completes — polling (the existing sync) covers us until the
+ * webhooks are (re)registered. Returns the IDs of the webhooks that registered
+ * successfully so the caller can persist them on ShopifyConnection.
+ *
+ * A 422 from Shopify when the identical subscription already exists is treated
+ * as "already registered" rather than a failure (re-running install is safe).
+ */
+export async function registerOrderWebhooks(input: {
+  shopDomain: string;
+  accessToken: string;
+}): Promise<RegisterOrderWebhooksResult> {
+  const appUrl = process.env.APP_URL?.trim().replace(/\/$/, "");
+  if (!appUrl) {
+    console.error("[shopify-oauth] Cannot register webhooks: APP_URL is not set.");
+    return { webhookIds: [], registered: 0, failed: ORDER_WEBHOOK_TOPICS.length };
+  }
+
+  const address = `${appUrl}/api/webhooks/shopify/orders`;
+  const endpoint = `https://${input.shopDomain}/admin/api/${WEBHOOK_API_VERSION}/webhooks.json`;
+  const webhookIds: string[] = [];
+  let registered = 0;
+  let failed = 0;
+
+  for (const topic of ORDER_WEBHOOK_TOPICS) {
+    try {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+          "X-Shopify-Access-Token": input.accessToken
+        },
+        body: JSON.stringify({ webhook: { topic, address, format: "json" } }),
+        cache: "no-store"
+      });
+
+      if (response.status === 201) {
+        const payload = (await response.json().catch(() => null)) as { webhook?: { id?: number | string } } | null;
+        const id = payload?.webhook?.id;
+        if (id !== undefined && id !== null) {
+          webhookIds.push(String(id));
+        }
+        registered += 1;
+        continue;
+      }
+
+      // 422 = subscription already exists for this topic+address (idempotent re-install).
+      // Not a failure: the webhook is present, we just don't learn its id here.
+      if (response.status === 422) {
+        const text = await response.text().catch(() => "");
+        console.warn(`[shopify-oauth] Webhook ${topic} already registered for ${input.shopDomain} (422). ${text}`);
+        registered += 1;
+        continue;
+      }
+
+      const text = await response.text().catch(() => "");
+      console.error(`[shopify-oauth] Webhook ${topic} registration failed (${response.status}) for ${input.shopDomain}. ${text}`);
+      failed += 1;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(`[shopify-oauth] Webhook ${topic} registration threw for ${input.shopDomain}: ${message}`);
+      failed += 1;
+    }
+  }
+
+  return { webhookIds, registered, failed };
+}
+
 /**
  * Exchange the temporary authorization code for a permanent Admin API access token.
  * POST https://{shop}/admin/oauth/access_token  { client_id, client_secret, code }
@@ -323,7 +412,7 @@ export async function persistOauthConnection(input: {
     }
   });
 
-  await db.shopifyConnection.upsert({
+  const connection = await db.shopifyConnection.upsert({
     where: { storeId: store.id },
     update: {
       shopDomain: input.shopDomain,
@@ -339,6 +428,40 @@ export async function persistOauthConnection(input: {
       tokenLastFour
     }
   });
+
+  // Register order webhooks so order data arrives in real time. This is
+  // best-effort: registerOrderWebhooks never throws, and we additionally guard
+  // the persistence so a webhook/DB hiccup can never fail the OAuth flow
+  // (polling/sync remains the fallback).
+  try {
+    const result = await registerOrderWebhooks({
+      shopDomain: input.shopDomain,
+      accessToken: input.accessToken
+    });
+
+    if (result.webhookIds.length > 0) {
+      await db.shopifyConnection.update({
+        where: { id: connection.id },
+        data: { webhookIds: result.webhookIds, webhooksRegisteredAt: new Date() }
+      });
+    } else if (result.registered > 0) {
+      // All topics already existed (422s) — record the registration timestamp
+      // even though we didn't capture new ids this time.
+      await db.shopifyConnection.update({
+        where: { id: connection.id },
+        data: { webhooksRegisteredAt: new Date() }
+      });
+    }
+
+    if (result.failed > 0) {
+      console.warn(
+        `[shopify-oauth] ${result.failed}/${ORDER_WEBHOOK_TOPICS.length} order webhooks failed to register for ${input.shopDomain}; polling will backfill until they are retried.`
+      );
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`[shopify-oauth] Webhook registration/persist step failed for ${input.shopDomain}: ${message}`);
+  }
 
   return { storeId: store.id, shopDomain: input.shopDomain };
 }

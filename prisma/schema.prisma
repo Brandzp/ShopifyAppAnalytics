@@ -235,6 +235,8 @@ model ShopifyConnection {
   adminAccessTokenEnc  String
   tokenLastFour        String
   apiVersion           String    @default("2025-01")
+  webhookIds           String[]  @default([])
+  webhooksRegisteredAt DateTime?
   lastSyncAt           DateTime?
   lastProductsSyncAt   DateTime?
   lastCustomersSyncAt  DateTime?
