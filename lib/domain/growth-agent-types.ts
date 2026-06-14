@@ -2,7 +2,7 @@
 export type GrowthFindingSeverity = "info" | "warning" | "critical";
 export type GrowthActionStatus = "recommended" | "pending_approval" | "approved" | "executed" | "rejected" | "blocked" | "failed";
 export type GrowthRiskLevel = "low" | "medium" | "high";
-export type GrowthPlatform = "shopify" | "amazon" | "metaAds" | "instagram" | "facebook" | "tiktok" | "googleAnalytics" | "productCrawler";
+export type GrowthPlatform = "shopify" | "amazon" | "metaAds" | "instagram" | "facebook" | "tiktok" | "googleAnalytics" | "googleSearchConsole" | "productCrawler";
 export type GrowthMetricStatus = "normal" | "warning" | "critical";
 export type GrowthActionType =
   | "SEND_ALERT"

@@ -153,6 +153,16 @@ services:
       - key: SHOPIFY_OAUTH_SCOPES
         value: "read_products,read_orders,read_customers,read_inventory,read_customer_journey"
 
+      # ─── Google Search Console (DATA-01) ───────────────────────────────
+      # OAuth app credentials from Google Cloud Console → APIs & Services →
+      # Credentials → OAuth 2.0 Client ID (Web application). Authorized
+      # redirect URI must be <APP_URL>/api/gsc/oauth/callback. Secrets — set
+      # in the Render dashboard, never commit values here.
+      - key: GOOGLE_OAUTH_CLIENT_ID
+        sync: false
+      - key: GOOGLE_OAUTH_CLIENT_SECRET
+        sync: false
+
       # ─── Meta Ads ──────────────────────────────────────────────────────
       - key: META_ADS_CLIENT_ID
         sync: false

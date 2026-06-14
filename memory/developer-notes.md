@@ -322,3 +322,66 @@
   Playwright crawler is only called from: app/api/reporting/refresh (Promise.allSettled),
   marketing-planner-readiness-service.ts:323 (.catch), and the manual endpoint
   app/api/creator/instagram/public-crawl (try/catch). All already isolate failures.
+
+## Hydration / SSR date rendering (SA-BUG-001, 2026-06-14)
+- React #418 ("server HTML didn't match client") on the dashboard (/) was caused
+  by `components/command-center/command-center-alert-card.tsx` (a "use client"
+  component) rendering `new Date(alert.createdAt).toLocaleString(..., {hour, minute})`.
+  toLocaleString formats in the server's UTC zone during SSR and the browser's
+  LOCAL zone on hydration → the hour:minute string diverges → #418. Fix: added
+  `suppressHydrationWarning` to that one `<p>` only (commit b6e8fa4). The client
+  (local-time) value is the intended display, so suppress > defer-to-useEffect here.
+- RULE OF THUMB for this repo: a server component (no "use client", incl. async
+  pages like app/page.tsx and Topbar) renders dates ONCE on the server — no
+  hydration mismatch, no guard needed. The #418 risk lives ONLY in "use client"
+  components that render TIME-OF-DAY (hour/minute/second) or relative time.
+  Date-only renders built from an ISO `YYYY-MM-DD` string + {month,day,year} are
+  TZ-stable and safe (see reporting-picker.tsx formatDate). Audit only client
+  components when chasing a date-mismatch hydration error.
+- Other client components rendering toLocaleString with time-of-day that are NOT
+  on the dashboard tree but would hit the same #418 if surfaced SSR'd: growth-agent/
+  findings-list, connections-panel, amazon-supplier-order-manager; settings/
+  shopify-connection-manager, meta-ads-connection-manager; creative/creative-project-detail.
+  Apply the same suppressHydrationWarning fix if #418 is reported on those pages.
+
+## Google Search Console data source (DATA-01, 2026-06-14)
+- GSC is wired as a GENERIC connector, not a bespoke one: PlatformConnection row
+  with `platform = "googleSearchConsole"`. The OAuth refresh token is stored
+  ENCRYPTED in `PlatformConnection.config.refreshTokenEnc` (JSON column), via the
+  same `encryptSecret`/`decryptSecret` AES-256-GCM helpers Shopify uses
+  (lib/security/encryption.ts, keyed off SHOPIFY_CREDENTIALS_ENCRYPTION_KEY).
+  We persist ONLY the refresh token; access tokens are short-lived and re-minted
+  by the OAuth2 client on each sync.
+- Service: `lib/services/gsc-service.ts`. Exports getGscOAuthUrl(storeId),
+  handleGscOAuthCallback(code, storeId), syncGscData(storeId, siteUrl), plus
+  decodeGscOAuthState (used by the callback route). The OAuth `state` param is
+  base64url(JSON({storeId})) — that's how the callback recovers which store to
+  attach to (there is no server-side session store for the OAuth nonce here).
+- googleapis TYPE TRAP: there are TWO copies of `google-auth-library` in the tree
+  (top-level 10.7.0 + a nested copy under googleapis-common). Importing
+  `OAuth2Client`/`Credentials` straight from `google-auth-library` makes tsc fail
+  with "Types have separate declarations of a private property 'redirectUri'".
+  FIX: derive the types off the googleapis graph itself —
+  `type X = InstanceType<typeof google.auth.OAuth2>` and
+  `Parameters<X["setCredentials"]>[0]` for Credentials. Don't import the auth
+  types directly. (Note: `Awaited<ReturnType<X["getToken"]>>` does NOT work — TS
+  resolves getToken to its void callback overload.)
+- GSC Search Analytics client = `google.searchconsole({ version: "v1", auth })`,
+  paginated via `searchanalytics.query` with startRow/rowLimit (max 25k). Sync
+  window = last 90d ending 2d ago (GSC data lags ~2 days). Grouped by
+  [date, page, query]; page/query rollups are derived in the same pass with an
+  IMPRESSION-WEIGHTED avgPosition. Metric upsert keys on the
+  (storeId, date, url, query) unique constraint so re-syncing is idempotent.
+- Routes: app/api/gsc/oauth/{start,callback}/route.ts. Both re-check the Supabase
+  session in-route (createRouteHandlerSupabaseClient().auth.getUser()) for defence
+  in depth, but the GLOBAL middleware already gates /api/gsc/* — it is NOT in
+  middleware.ts PUBLIC_PREFIXES, so any path outside the allowlist requires auth
+  by default. New API routes here are auth-gated automatically unless added to
+  PUBLIC_PREFIXES.
+- Env: GOOGLE_OAUTH_CLIENT_ID / GOOGLE_OAUTH_CLIENT_SECRET (render.yaml, sync:false).
+  Authorized redirect URI in Google Cloud Console must be
+  <APP_URL>/api/gsc/oauth/callback. Migration SQL (NOT applied) lives at
+  prisma/supabase/alter-2026-06-14-gsc-models.sql — owner runs it against the
+  Supabase DIRECT endpoint, or `npx prisma db push` creates the 3 tables.
+- Three new models: SearchConsoleMetric (raw per-day rows), SearchConsolePage
+  + SearchConsoleQuery (rollups). All storeId-scoped, ON DELETE CASCADE.

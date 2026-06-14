@@ -221,6 +221,9 @@ model Store {
   creativeJobs               CreativeGenerationJob[]
   weeklyReports              WeeklyReport[]
   weeklyReportRecipients     WeeklyReportRecipient[]
+  searchConsoleMetrics       SearchConsoleMetric[]
+  searchConsolePages         SearchConsolePage[]
+  searchConsoleQueries       SearchConsoleQuery[]
   createdAt                  DateTime                      @default(now())
   updatedAt                  DateTime                      @updatedAt
 
@@ -1249,4 +1252,63 @@ model CreativeGenerationJob {
   @@index([status, createdAt])
   @@index([storeId, status])
   @@index([lockedAt])
+}
+
+// ─── Google Search Console (DATA-01) ──────────────────────────────────
+// GSC connects via the generic PlatformConnection row (platform =
+// "googleSearchConsole"); the OAuth refresh token is stored encrypted in
+// PlatformConnection.config. These three models hold the synced Search
+// Analytics data, scoped to a Store like every other model in this schema.
+//
+//   SearchConsoleMetric — raw per-day rows from searchanalytics.query
+//     (one row per date+url+query dimension combination).
+//   SearchConsolePage   — per-URL rollup (totals + average position).
+//   SearchConsoleQuery  — per-query rollup (totals + average position).
+// String columns instead of enums to match the rest of the schema.
+
+model SearchConsoleMetric {
+  id          String   @id @default(cuid())
+  storeId     String
+  date        DateTime @db.Date
+  url         String
+  query       String?
+  impressions Int      @default(0)
+  clicks      Int      @default(0)
+  ctr         Float    @default(0)
+  position    Float    @default(0)
+  createdAt   DateTime @default(now())
+  store       Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@unique([storeId, date, url, query])
+  @@index([storeId, date(sort: Desc)])
+  @@index([storeId, url])
+  @@index([storeId, query])
+}
+
+model SearchConsolePage {
+  id               String    @id @default(cuid())
+  storeId          String
+  url              String
+  totalImpressions Int       @default(0)
+  totalClicks      Int       @default(0)
+  avgPosition      Float     @default(0)
+  lastSyncAt       DateTime?
+  store            Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@unique([storeId, url])
+  @@index([storeId, totalImpressions(sort: Desc)])
+}
+
+model SearchConsoleQuery {
+  id               String    @id @default(cuid())
+  storeId          String
+  query            String
+  totalImpressions Int       @default(0)
+  totalClicks      Int       @default(0)
+  avgPosition      Float     @default(0)
+  lastSyncAt       DateTime?
+  store            Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@unique([storeId, query])
+  @@index([storeId, totalImpressions(sort: Desc)])
 }
