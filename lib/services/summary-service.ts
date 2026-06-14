@@ -5,6 +5,7 @@ import { getFounderSummaryInputs, getOverviewPayload, getProfitAnalyticsPayload,
 import { getDb } from "@/lib/server/db";
 import { getReportingDateRangeSelection } from "@/lib/server/reporting-date-range";
 import { resolveActiveStoreId } from "@/lib/services/offline-sales-service";
+import { generateSummaryHeadline, type SummaryInsightInput } from "@/lib/services/summary-insights-service";
 
 // Direct-from-Orders fallback for the headline %s.
 //
@@ -233,8 +234,83 @@ export async function getLatestSummary(): Promise<Summary> {
   return summary;
 }
 
+// Assemble the structured metric inputs the LLM needs from the real payloads.
+// Prefers the Order-table deltas for revenue/profit (the most reliable source,
+// same shortcut the headline-repair path uses) and falls back to the
+// comparison-pipeline figures when the Order deltas come up empty.
+function buildSummaryInsightInput(
+  overview: Awaited<ReturnType<typeof getOverviewPayload>>,
+  profit: Awaited<ReturnType<typeof getProfitAnalyticsPayload>>,
+  retention: Awaited<ReturnType<typeof getRetentionPayload>>,
+  orderDeltas: { revenueChange: number | null; profitChange: number | null } | null
+): SummaryInsightInput {
+  const revenueChange =
+    orderDeltas?.revenueChange ?? overview.comparisonMetrics[0]?.change ?? null;
+  const profitChange =
+    orderDeltas?.profitChange ?? overview.comparisonMetrics[1]?.change ?? null;
+
+  const top = profit.topProducts[0];
+  return {
+    revenueChange,
+    profitChange,
+    topProduct: top ? { title: top.productTitle, revenue: top.revenue } : null,
+    keyChanges: overview.comparisonMetrics
+      .filter((m) => Number.isFinite(m.change))
+      .slice(0, 4)
+      .map((m) => ({ label: m.label, change: m.change })),
+    discountRate: overview.kpis[4]?.value ?? null,
+    refundRate: overview.kpis[5]?.value ?? null,
+    repeatPurchaseRate: retention.snapshot.repeatPurchaseRate ?? null,
+    secondOrderRate: retention.snapshot.secondOrderRate ?? null
+  };
+}
+
+// Replaces the hand-crafted template headline with an OpenAI LLM prompt
+// pipeline (SA-HIGH-05). Keeps the structured sections from the deterministic
+// builder — they back the print/UI layout — but rewrites the founder-facing
+// headline as a concise 3-5 sentence AI summary in the store's locale.
+// Falls back to the template summary verbatim when OPENAI_API_KEY is missing
+// or the LLM call fails (generateSummaryHeadline returns null, never throws).
 export async function regenerateSummary(): Promise<Summary> {
-  // TODO: Replace this structured summary builder with an LLM prompt pipeline that consumes real founder summary inputs.
-  return getLatestSummary();
+  const locale = await getAppLocale();
+
+  const [overview, profit, retention, inputs, orderDeltas] = await Promise.all([
+    getOverviewPayload(),
+    getProfitAnalyticsPayload(),
+    getRetentionPayload(),
+    getFounderSummaryInputs(),
+    computeHeadlineDeltasFromOrders(locale)
+  ]);
+
+  const summary = buildGeneratedSummary(locale, overview, profit, retention, inputs);
+
+  // Repair a bogus/empty template headline from the Order deltas first, so the
+  // deterministic fallback below is already the best non-AI copy we can show.
+  const overviewLooksEmpty =
+    (overview.comparisonMetrics[0]?.change === undefined ||
+      overview.comparisonMetrics[0]?.change === 0) &&
+    (overview.comparisonMetrics[1]?.change === undefined ||
+      overview.comparisonMetrics[1]?.change === 0);
+  if ((overviewLooksEmpty || headlineLooksBogus(summary.headline)) && orderDeltas) {
+    summary.headline = buildHeadlineFromDeltas(locale, orderDeltas);
+  }
+
+  // LLM pass: produce a 3-5 sentence founder-facing summary from the real
+  // metrics. On any failure (no key / network / bad JSON) it returns null and
+  // we keep the deterministic headline above.
+  try {
+    const aiHeadline = await generateSummaryHeadline(
+      buildSummaryInsightInput(overview, profit, retention, orderDeltas),
+      locale
+    );
+    if (aiHeadline) {
+      return { ...summary, headline: aiHeadline };
+    }
+  } catch {
+    // Defensive: generateSummaryHeadline already swallows its own errors, but
+    // never let summary regeneration throw — fall through to the template.
+  }
+
+  return summary;
 }
 

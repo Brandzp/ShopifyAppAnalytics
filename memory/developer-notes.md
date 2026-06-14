@@ -275,3 +275,26 @@
 - `.env.example` does NOT document any STRIPE_*/BILLING_ENABLED vars yet — the
   full env list lives in docs/BILLING_CHECKLIST.md §2. Add placeholders there
   if you touch it, never real keys (file was previously sanitized of a leak).
+
+## LLM summary pipeline (SA-HIGH-05, 2026-06-14)
+- The OpenAI insights pattern in this repo is CONSISTENT across services — copy it,
+  don't reinvent: gpt-4o-mini via raw `fetch` to
+  `https://api.openai.com/v1/chat/completions`, `response_format:{type:"json_object"}`,
+  system prompt with the LANGUAGE DIRECTIVE AT THE TOP (the model mirrors the English
+  data dump and ignores a trailing Hebrew hint otherwise), defensive JSON parse, and a
+  deterministic fallback when `OPENAI_API_KEY` is missing or the call fails (never throw).
+  Reference impls: `meta-ads-report-insights-service.ts`, `instagram-report-insights-service.ts`.
+- `regenerateSummary()` (lib/services/summary-service.ts) no longer just delegates to the
+  template builder. It now: builds the deterministic `Summary` (sections back the print/UI
+  layout — keep them), repairs the headline from Order-table deltas, then calls
+  `generateSummaryHeadline()` (lib/services/summary-insights-service.ts) to REPLACE only the
+  `headline` with a 3-5 sentence founder paragraph. `generateSummaryHeadline` returns
+  `string | null` — null means "no key / call failed", caller keeps the template headline.
+- Revenue/profit deltas for the prompt prefer `computeHeadlineDeltasFromOrders()` (raw Order
+  aggregate, most reliable) over `overview.comparisonMetrics` (DailyMetric pipeline, often
+  empty in dev). Same source-of-truth ordering the headline-repair path already uses.
+- `OPENAI_API_KEY` is in `.env` (project-scoped `sk-proj-...`), but `npx tsx` does NOT
+  auto-load `.env` — a bare tsx harness sees no key and hits the fallback. To behaviorally
+  test the LIVE LLM path from a tsx harness, inject the key into `$env:OPENAI_API_KEY` for
+  that one run (read it out of `.env`, never echo/commit the value). Verified live: HE+EN
+  both produce correct locale-specific 3-4 sentence summaries citing the real numbers.
