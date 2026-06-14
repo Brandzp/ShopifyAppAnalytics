@@ -1,4 +1,4 @@
-﻿import { getAnalyticsRepository } from "@/lib/repositories";
+import { getAnalyticsRepository } from "@/lib/repositories";
 import { getAppLocale } from "@/lib/i18n";
 import type { Summary } from "@/lib/domain/types";
 import { getFounderSummaryInputs, getOverviewPayload, getProfitAnalyticsPayload, getRetentionPayload } from "@/lib/services/analytics-service";
@@ -78,46 +78,46 @@ function buildGeneratedSummary(
   if (locale === "he") {
     return {
       id: "generated-summary",
-      headline: `×”×”×›× ×¡×•×ª ×”×©×ª× ×• ×‘-${overview.comparisonMetrics[0]?.change.toFixed(1) ?? "0.0"}% ×ž×•×œ ×”×ª×§×•×¤×” ×”×§×•×“×ž×ª, ×•×”×¨×•×•×— ×”×ž×©×•×¢×¨ ×¢×•×ž×“ ×¢×œ ${overview.comparisonMetrics[1]?.change.toFixed(1) ?? "0.0"}%.`,
+      headline: `ההכנסות השתנו ב-${overview.comparisonMetrics[0]?.change.toFixed(1) ?? "0.0"}% מול התקופה הקודמת, והרווח המשוער עומד על ${overview.comparisonMetrics[1]?.change.toFixed(1) ?? "0.0"}%.`,
       generatedAt: new Date().toISOString(),
       sections: [
         {
-          title: "× ×¦×—×•× ×•×ª",
+          title: "ניצחונות",
           items: inputs.bestProducts.length
-            ? inputs.bestProducts.map((item) => `${item} ×ª×•×¨× ×›×¨×’×¢ ×‘×¦×•×¨×” ×—×™×•×‘×™×ª ×œ×‘×™×¦×•×¢×™ ×”×—× ×•×ª ×‘×¨×ž×ª ×ž×™×™×¡×“.`)
-            : ["×—×‘×¨×• × ×ª×•× ×™ ×—× ×•×ª ×›×“×™ ×œ×ž×œ× × ×¦×—×•× ×•×ª ×‘×¨×ž×ª ×ž×•×¦×¨."]
+            ? inputs.bestProducts.map((item) => `${item} תורם כרגע בצורה חיובית לביצועי החנות ברמת מייסד.`)
+            : ["חברו נתוני חנות כדי למלא ניצחונות ברמת מוצר."]
         },
         {
-          title: "×¡×™×›×•× ×™×",
+          title: "סיכונים",
           items: [
-            `×©×™×¢×•×¨ ×”×”× ×—×•×ª ×¢×•×ž×“ ×¢×œ ${overview.kpis[4]?.value.toFixed(1) ?? "0.0"}%.`,
-            `×©×™×¢×•×¨ ×”×”×—×–×¨×™× ×¢×•×ž×“ ×¢×œ ${overview.kpis[5]?.value.toFixed(1) ?? "0.0"}%.`
+            `שיעור ההנחות עומד על ${overview.kpis[4]?.value.toFixed(1) ?? "0.0"}%.`,
+            `שיעור ההחזרים עומד על ${overview.kpis[5]?.value.toFixed(1) ?? "0.0"}%.`
           ]
         },
         {
-          title: "×©×™× ×•×™×™× ×ž×¨×›×–×™×™× ×ž×•×œ ×”×ª×§×•×¤×” ×”×§×•×“×ž×ª",
-          items: overview.comparisonMetrics.map((metric) => `${metric.label}: ×©×™× ×•×™ ×©×œ ${metric.change.toFixed(1)}`)
+          title: "שינויים מרכזיים מול התקופה הקודמת",
+          items: overview.comparisonMetrics.map((metric) => `${metric.label}: שינוי של ${metric.change.toFixed(1)}`)
         },
         {
-          title: "×ª×•×‘× ×•×ª ×ž×•×¦×¨",
-          items: profit.topProducts.slice(0, 3).map((item) => `${item.productTitle} ×™×¦×¨ ${Math.round(item.revenue).toLocaleString()} ×‘×”×›× ×¡×•×ª.`)
+          title: "תובנות מוצר",
+          items: profit.topProducts.slice(0, 3).map((item) => `${item.productTitle} יצר ${Math.round(item.revenue).toLocaleString()} בהכנסות.`)
         },
         {
-          title: "×ª×•×‘× ×•×ª ×”× ×—×•×ª ×•×ž×‘×¦×¢×™×",
-          items: inputs.discountSpikes.length ? inputs.discountSpikes.map((item) => `${item} ×”×–×ž× ×•×ª`) : ["×œ× ×–×•×”×ª×” ×—×¨×™×’×ª ×”× ×—×•×ª."]
+          title: "תובנות הנחות ומבצעים",
+          items: inputs.discountSpikes.length ? inputs.discountSpikes.map((item) => `${item} הזמנות`) : ["לא זוהתה חריגת הנחות."]
         },
         {
-          title: "×ª×•×‘× ×•×ª ×¨×™×˜× ×©×Ÿ",
+          title: "תובנות ריטנשן",
           items: [
-            `×©×™×¢×•×¨ ×”×¨×›×™×©×” ×”×—×•×–×¨×ª ×¢×•×ž×“ ×¢×œ ${retention.snapshot.repeatPurchaseRate.toFixed(1)}%.`,
-            `×©×™×¢×•×¨ ×”×”×–×ž× ×” ×”×©× ×™×™×” ×¢×•×ž×“ ×¢×œ ${retention.snapshot.secondOrderRate.toFixed(1)}%.`
+            `שיעור הרכישה החוזרת עומד על ${retention.snapshot.repeatPurchaseRate.toFixed(1)}%.`,
+            `שיעור ההזמנה השנייה עומד על ${retention.snapshot.secondOrderRate.toFixed(1)}%.`
           ]
         },
         {
-          title: "×”×¦×¢×“×™× ×”×‘××™×",
+          title: "הצעדים הבאים",
           items: [
-            "×”×¨×™×¦×• ×¡× ×›×¨×•×Ÿ ××™× ×§×¨×ž× ×˜×œ×™ ×œ×¤× ×™ ×©×™×ª×•×£ ×¢×“×›×•×Ÿ ×œ×ž×™×™×¡×“.",
-            "×¢×‘×¨×• ×¢×œ ×¢×ž×•×“×™ ×”×¨×•×•×—×™×•×ª ×•×”×¨×™×˜× ×©×Ÿ ×›×“×™ ×œ×–×”×•×ª ×œ×—×¥ ×¢×œ ×ž×¨×•×•×— ×•×”×–×“×ž× ×•×™×•×ª ×œ×”×–×ž× ×” ×©× ×™×™×”."
+            "הריצו סנכרון אינקרמנטלי לפני שיתוף עדכון למייסד.",
+            "עברו על עמודי הרווחיות והריטנשן כדי לזהות לחץ על מרווח והזדמנויות להזמנה שנייה."
           ]
         }
       ]
