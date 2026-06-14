@@ -1,22 +1,14 @@
-// TODO: Re-enable strict PrismaClient typing after `npm run prisma:generate` is part of setup automation.
-type PrismaModule = {
-  PrismaClient: new (options?: { log?: string[] }) => unknown;
-};
+import { PrismaClient } from "@prisma/client";
 
-const globalForPrisma = globalThis as unknown as { prisma?: unknown };
+const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
 
-function createPrismaClient() {
-  try {
-    const prismaModule = require("@prisma/client") as PrismaModule;
-    return new prismaModule.PrismaClient({
-      log: ["warn", "error"]
-    });
-  } catch {
-    return null;
-  }
+function createPrismaClient(): PrismaClient {
+  return new PrismaClient({
+    log: ["warn", "error"]
+  });
 }
 
-export const prisma = globalForPrisma.prisma ?? createPrismaClient();
+export const prisma: PrismaClient = globalForPrisma.prisma ?? createPrismaClient();
 
 if (process.env.NODE_ENV !== "production") {
   globalForPrisma.prisma = prisma;
