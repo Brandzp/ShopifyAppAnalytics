@@ -298,3 +298,27 @@
   test the LIVE LLM path from a tsx harness, inject the key into `$env:OPENAI_API_KEY` for
   that one run (read it out of `.env`, never echo/commit the value). Verified live: HE+EN
   both produce correct locale-specific 3-4 sentence summaries citing the real numbers.
+
+## Playwright on Render + Instagram crawler graceful fallback (SA-FIX2, 2026-06-14)
+- TWO Playwright consumers in this repo: `lib/server/pdf-renderer.ts` (PDF export)
+  and `lib/services/instagram-public-crawler-service.ts` (IG public crawler). Both
+  drive the SAME Chromium binary installed by the render.yaml buildCommand
+  (`npx playwright install --with-deps chromium chromium-headless-shell`).
+- The IG crawler launches with `channel: "chromium"` (full binary, not the new
+  chromium-headless-shell) — note both are installed in the buildCommand.
+- render.yaml now sets `PLAYWRIGHT_BROWSERS_PATH=/opt/render/.cache/ms-playwright`
+  (value:, not sync:false — it's a fixed non-secret constant). This pins the
+  build-time install dir AND the runtime lookup dir to the same path. Symptom of
+  the missing pin: build installs chromium but runtime throws "Executable doesn't
+  exist at /opt/render/.cache/ms-playwright/chromium-1223/...". Requires a Render
+  REDEPLOY to take effect (env + buildCommand changes only apply on next build).
+- `launchCrawlerBrowser()` now returns `Browser | null` and SKIPS GRACEFULLY (logs
+  `[instagram-crawler] Chromium not available — skipping Instagram sync`, returns
+  null) when Playwright can't import OR the binary is missing (regex on the launch
+  error). Other launch errors still throw AppError. `crawlPublicInstagramProfiles`
+  returns a valid EMPTY result + a "skipped" failed SyncRun when browser is null.
+- IMPORTANT: the `refresh-all` cron does NOT use the Playwright crawler — it calls
+  `syncInstagramPostsForStore` (instagram-service.ts, API-based, no browser). The
+  Playwright crawler is only called from: app/api/reporting/refresh (Promise.allSettled),
+  marketing-planner-readiness-service.ts:323 (.catch), and the manual endpoint
+  app/api/creator/instagram/public-crawl (try/catch). All already isolate failures.
