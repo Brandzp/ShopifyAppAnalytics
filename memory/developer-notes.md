@@ -32,7 +32,8 @@
   `lib/services/weekly-report-service.ts`. Don't attribute these to your change.
 - A page render (`GET /`) logs a pre-existing Prisma error:
   `prisma.orderLineItem.findMany ... Argument 'equals' is missing` — unrelated
-  to crons.
+  to crons. **RESOLVED / STALE as of 2026-06-14 (SA-CRIT-03)** — see the
+  SA-CRIT-03 entry below; this no longer reproduces.
 - `.env.example` was sanitized of a leaked secret. Never reintroduce real values;
   keep all example values empty/placeholder.
 - Do NOT commit `tsconfig.tsbuildinfo` (build artifact, intentional holdback).
@@ -169,3 +170,29 @@
   icon: Camera }` next to the affiliate/creative experimental items.
 - Pattern lesson: before adding a hardcoded nav label, grep `lib/i18n.ts` for an existing
   `nav.*` key — several were pre-provisioned for pages that aren't yet linked.
+
+## SA-CRIT-03 — orderLineItem "Argument 'equals' is missing" is STALE (2026-06-14)
+- The `GET /` Prisma error noted under Gotchas (`prisma.orderLineItem.findMany ...
+  Argument 'equals' is missing`) NO LONGER REPRODUCES. Investigated and behaviorally
+  verified, not just typechecked.
+- Static audit: ALL 13 `orderLineItem.{findMany,aggregate,groupBy}` call sites
+  (grep `orderLineItem\.(findMany|aggregate|groupBy)`) use well-formed Prisma
+  filter operators (`gte/lte/lt/gt/not/in`, scalar shorthand, nested relation
+  `order: {...}`). There is NO `{ equals: undefined }`, no bare empty filter
+  object, and no `mode:"insensitive"` without an operator on OrderLineItem. The
+  ONLY `equals` in the whole repo is `prisma-analytics-repository.ts:714`
+  (`status: { equals: "ACTIVE", mode: "insensitive" }` on `db.product`, valid).
+- Behavioral verification against the LIVE DB (store incenseparfums, real data):
+  ran all 7 orderLineItem query shapes the landing page triggers, AND invoked the
+  4 real exported services it calls (`getShopifySalesSummaryForWindow`,
+  `buildContributionMargin`, `buildStockoutImminentReport`,
+  `buildRestockHeroAlerts`) end-to-end. All returned valid payloads; zero
+  "Argument 'equals'" error. (Temp tsx harness, run then deleted.)
+- Note: commit 5b5c449 ("postinstall prisma generate, strict client typing")
+  touched ONLY `lib/prisma.ts` + `package.json` — it did NOT edit any query, so
+  it is not what "fixed" this. The likeliest original cause was the OLD null-client
+  fallback in lib/prisma.ts (a `db` that wasn't a real PrismaClient → malformed
+  query) or a since-refactored query; either way the current tree is clean.
+- ACTION for future readers: do not chase this error; if it recurs, it will be a
+  NEW data/code condition — re-run the harness pattern above (resolve a connected
+  store, call the 4 services) to localize it.
