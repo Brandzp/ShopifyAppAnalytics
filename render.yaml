@@ -61,6 +61,11 @@ services:
       # (or your custom domain if you've mapped one).
       - key: APP_URL
         sync: false
+      # Browser-exposed copy of APP_URL. The Settings → Shopify OAuth card
+      # renders the callback URL from NEXT_PUBLIC_APP_URL (only NEXT_PUBLIC_*
+      # vars reach the client bundle). Set it to the same value as APP_URL.
+      - key: NEXT_PUBLIC_APP_URL
+        sync: false
 
       # ─── Supabase Auth (Phase 1) ───────────────────────────────────────
       # NEXT_PUBLIC_* keys are sent to the browser; server-only keys aren't.
@@ -171,6 +176,15 @@ services:
       - key: CREATIVE_WORKER_SECRET
         generateValue: true
 
+      # ─── Cron auth (CRIT-07) ───────────────────────────────────────────
+      # Shared secret that gates every /api/cron/* route (middleware.ts).
+      # When set, requests must carry a matching `x-cron-secret` header; the
+      # in-process self-fetch crons attach it automatically. REQUIRED in
+      # production — without it, anyone on the internet can trigger a full
+      # sync / email blast. Generate any long random string.
+      - key: CRON_SECRET
+        generateValue: true
+
       # ─── Background crons (all ON by default in production via cron-util)
       # Leaving these unset means they run automatically because NODE_ENV=production.
       # Use *_DISABLED=1 in the dashboard if you ever need to kill one quickly.
@@ -178,6 +192,24 @@ services:
       # store load (e.g. "3600000" for hourly on a high-volume tenant).
       - key: DATA_REFRESH_CRON_MS
         value: "7200000"
+      # ─── Optional cron / provider tuning overrides ─────────────────────
+      # All of the following have safe in-code defaults — set only to override.
+      # Cron intervals (ms) and self-ping URLs: SHOPIFY_SYNC_CRON_MS,
+      #   SHOPIFY_SYNC_CRON_URL, CREATIVE_JOB_CRON_MS, CREATIVE_JOB_CRON_URL,
+      #   WEEKLY_REPORT_CRON_MS, WEEKLY_REPORT_CRON_URL, DATA_REFRESH_CRON_URL,
+      #   OUTCOME_MEASUREMENT_CRON_MS, OUTCOME_MEASUREMENT_CRON_URL,
+      #   SHOPIFY_SYNC_STALE_THRESHOLD_MIN, ENABLE_SHOPIFY_SYNC_CRON.
+      # Creative provider/model overrides: CREATIVE_MAX_JOBS_PER_DAY (see below),
+      #   CREATIVE_IMAGE_MODEL_DEFAULT, CREATIVE_IMAGE_MODEL_FAST,
+      #   CREATIVE_VIDEO_MODEL_DEFAULT, CREATIVE_VIDEO_ENABLED,
+      #   CREATIVE_MAX_VIDEO_BATCH, CREATIVE_BATCH_QUALITY,
+      #   CREATIVE_PROVIDER_CONCURRENCY, CREATIVE_STORAGE_LOCAL_DIR,
+      #   OPENAI_API_BASE_URL, OPENAI_ORG_ID, OPENAI_IMAGE_MODEL,
+      #   OPENAI_IMAGE_QUALITY, GEMINI_API_BASE_URL, NANOBANANA_MODEL,
+      #   HIGGSFIELD_API_BASE_URL, HIGGSFIELD_IMAGE_MODEL, HIGGSFIELD_VIDEO_MODEL.
+      # Other optional: FLASHY_ACCOUNT_IDS_JSON (multi-account override of
+      #   FLASHY_ACCOUNT_ID), GROWTH_AGENT_PRODUCT_CRAWLER_DEFAULT_URLS,
+      #   GROWTH_AGENT_PRODUCT_CRAWLER_USER_AGENT.
 
       # ─── Flashy (optional) ─────────────────────────────────────────────
       - key: FLASHY_ACCOUNT_ID

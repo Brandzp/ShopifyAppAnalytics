@@ -85,6 +85,11 @@ Editor** before pointing Render at the new URL.
    - `SHOPIFY_WEBHOOK_SECRET`, `SHOPIFY_CLIENTID`, `SHOPIFY_CLIENT_SECRET` (step 3)
    - `META_ADS_CLIENT_ID`, `META_ADS_CLIENT_SECRET` (step 4)
    - `RESEND_API_KEY`, `REPORT_FROM_EMAIL`, `OPENAI_API_KEY`
+   - `CRON_SECRET` — shared secret that gates `/api/cron/*` (CRIT-07). The
+     `render.yaml` declares it with `generateValue: true`, so Render auto-fills
+     a strong random value; required in production. Leave unset only in local dev.
+   - `NEXT_PUBLIC_APP_URL` — same value as `APP_URL`; the browser-rendered
+     Shopify OAuth callback URL reads from it.
    - Any of the optional creative-studio AI keys you actually use
 5. Trigger the first deploy. Watch logs.
 6. When the service shows as live, copy the URL and set `APP_URL` to it.
