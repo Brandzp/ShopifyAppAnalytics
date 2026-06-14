@@ -23,6 +23,13 @@ export async function register() {
   }
 
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
+
+  // Fail fast at boot if critical secrets are missing, so a misconfigured
+  // deploy dies loudly here instead of silently 500-ing on the first
+  // Supabase Auth / credential-decryption request. See lib/server/startup-check.
+  const { assertRequiredEnv } = await import("@/lib/server/startup-check");
+  assertRequiredEnv();
+
   // Unified 2-hour multi-source refresh (Shopify + Meta + Instagram + BixGrow).
   // Supersedes the old Shopify-only cron; the back-compat enable flag in
   // data-refresh-cron.ts means existing .env files keep working.
