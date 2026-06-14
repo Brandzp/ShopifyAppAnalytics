@@ -73,12 +73,12 @@ export function AffiliateLinkBuilder({
         });
         const payload = await response.json();
         if (!response.ok || !payload.ok) {
-          throw new Error(payload.error ?? "????? ?????? ?????");
+          throw new Error(payload.error ?? "יצירת הקופון נכשלה");
         }
-        setMessage(`?????? ${payload.code} ???? ?-Shopify ?????? ???? ??????.`);
+        setMessage(`הקופון ${payload.code} נוצר ב-Shopify ומוכן לשיתוף.`);
         router.refresh();
       } catch (error) {
-        setMessage(error instanceof Error ? error.message : "????? ?????? ?????");
+        setMessage(error instanceof Error ? error.message : "יצירת הקופון נכשלה");
       }
     });
   }
@@ -86,9 +86,9 @@ export function AffiliateLinkBuilder({
   async function handleCopyLink() {
     try {
       await navigator.clipboard.writeText(generatedLink);
-      setMessage("????? ????? ????.");
+      setMessage("הקישור הועתק ללוח.");
     } catch {
-      setMessage("?? ?????? ?????? ?? ?????. ???? ?????? ?????.");
+      setMessage("לא ניתן להעתיק את הקישור. העתיקו אותו ידנית.");
     }
   }
 
@@ -96,7 +96,7 @@ export function AffiliateLinkBuilder({
     <div className="space-y-4 rounded-2xl border border-border/70 bg-background/70 p-4">
       <div className="grid gap-3 xl:grid-cols-4">
         <label className="space-y-2 text-sm">
-          <span className="text-muted-foreground">????????</span>
+          <span className="text-muted-foreground">שותף</span>
           <select
             value={affiliateId}
             onChange={(event) => setAffiliateId(event.target.value)}
@@ -104,13 +104,13 @@ export function AffiliateLinkBuilder({
           >
             {affiliates.map((item) => (
               <option key={item.id} value={item.id}>
-                {item.firstName} {item.lastName} Â· {item.affiliateCode}
+                {item.firstName} {item.lastName} · {item.affiliateCode}
               </option>
             ))}
           </select>
         </label>
         <label className="space-y-2 text-sm">
-          <span className="text-muted-foreground">????? ?????</span>
+          <span className="text-muted-foreground">תבנית הנחה</span>
           <select
             value={templateId}
             onChange={(event) => setTemplateId(event.target.value)}
@@ -118,13 +118,13 @@ export function AffiliateLinkBuilder({
           >
             {templates.map((template) => (
               <option key={template.id} value={template.id}>
-                {template.name} Â· {template.discountType === "percent" ? `${template.value}%` : `?${template.value}`}
+                {template.name} · {template.discountType === "percent" ? `${template.value}%` : `₪${template.value}`}
               </option>
             ))}
           </select>
         </label>
         <label className="space-y-2 text-sm">
-          <span className="text-muted-foreground">??? ?????</span>
+          <span className="text-muted-foreground">קוד מותאם</span>
           <input
             value={customCode}
             onChange={(event) => setCustomCode(event.target.value.toUpperCase())}
@@ -133,7 +133,7 @@ export function AffiliateLinkBuilder({
           />
         </label>
         <label className="space-y-2 text-sm">
-          <span className="text-muted-foreground">???? ???</span>
+          <span className="text-muted-foreground">נתיב יעד</span>
           <input
             value={redirectPath}
             onChange={(event) => setRedirectPath(event.target.value || "/")}
@@ -144,16 +144,16 @@ export function AffiliateLinkBuilder({
       </div>
 
       <div className="space-y-2 text-sm">
-        <span className="text-muted-foreground">???? apply ???? ??????</span>
+        <span className="text-muted-foreground">קישור עם apply אוטומטי של הקופון</span>
         <div className="rounded-xl border border-border bg-card px-4 py-3 text-xs leading-6 break-all">{generatedLink}</div>
       </div>
 
       <div className="flex flex-wrap gap-3">
         <Button type="button" onClick={handleCreateCoupon} disabled={isPending || !affiliate || !selected}>
-          {isPending ? "???? ?????..." : "????? ????? ????? ?-Shopify"}
+          {isPending ? "יוצר קופון..." : "צור קופון והפעל ב-Shopify"}
         </Button>
         <Button type="button" variant="secondary" onClick={handleCopyLink} disabled={!generatedLink}>
-          ????? ????
+          העתק קישור
         </Button>
       </div>
 
