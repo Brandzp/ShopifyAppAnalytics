@@ -1070,6 +1070,7 @@ model AttributionSession {
   sourceUrl         String?
   destinationUrl    String
   landingPath       String?
+  productId         String?
   couponCode        String?
   affiliateCode     String?
   utmSource         String?

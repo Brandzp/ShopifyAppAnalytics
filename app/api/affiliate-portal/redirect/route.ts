@@ -13,6 +13,7 @@ export async function GET(request: Request) {
 
     const couponCode = url.searchParams.get("coupon");
     const destinationPath = url.searchParams.get("destination") ?? "/";
+    const productId = url.searchParams.get("product") ?? url.searchParams.get("productId");
     const sourcePlatform = resolveAffiliateSourcePlatform({
       sourcePlatform: url.searchParams.get("sourcePlatform"),
       sourceUrl: url.searchParams.get("sourceUrl"),
@@ -22,6 +23,7 @@ export async function GET(request: Request) {
       affiliateCode: affiliateCode.toUpperCase(),
       couponCode,
       destinationPath,
+      productId,
       sourcePlatform,
       sourceUrl: url.searchParams.get("sourceUrl"),
       utmSource: url.searchParams.get("utm_source"),
@@ -44,7 +46,18 @@ export async function GET(request: Request) {
       utmCampaign: url.searchParams.get("utm_campaign")
     });
 
-    return NextResponse.redirect(redirectUrl, { status: 307 });
+    const response = NextResponse.redirect(redirectUrl, { status: 307 });
+    // First-party session cookie so a later conversion can be matched back to
+    // this click even if the storefront localStorage snippet never runs.
+    // Keyed on clickId (the AttributionSession.clickId / agent_click_id value).
+    response.cookies.set("aff_click_id", session.clickId, {
+      httpOnly: true,
+      secure: true,
+      sameSite: "lax",
+      path: "/",
+      maxAge: 60 * 60 * 24 * 30 // 30 days
+    });
+    return response;
   } catch (error) {
     const statusCode = error instanceof AppError ? error.statusCode : 500;
     return NextResponse.json({ ok: false, error: toErrorMessage(error) }, { status: statusCode });

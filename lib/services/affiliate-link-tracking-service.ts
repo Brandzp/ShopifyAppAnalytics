@@ -28,6 +28,7 @@ export async function createAffiliateRedirectSession(input: {
   couponCode?: string | null;
   destinationPath?: string;
   destinationUrl?: string;
+  productId?: string | null;
   sourcePlatform?: string | null;
   sourceUrl?: string | null;
   utmSource?: string | null;
@@ -55,6 +56,7 @@ export async function createAffiliateRedirectSession(input: {
         sourceUrl: input.sourceUrl ?? null,
         destinationUrl,
         landingPath: input.destinationPath ?? "/",
+        productId: input.productId ?? null,
         couponCode: input.couponCode ?? null,
         affiliateCode: affiliate.affiliateCode,
         utmSource: input.utmSource ?? null,
