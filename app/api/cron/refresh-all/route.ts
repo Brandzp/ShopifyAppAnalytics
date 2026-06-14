@@ -24,11 +24,59 @@ import { reconcileAffiliateAttributionOrphans } from "@/lib/services/affiliate-a
 // synced at" timestamps on each Connection row. Multiple invocations
 // inside the same window are safe — the second call just sees nothing
 // new to pull.
+//
+// Defense-in-depth against duplicate Render invocations (SA-MED-04): on top
+// of the per-store SyncRun guard in shopify-sync-service (a real DB read that
+// 409s an in-flight sync), this route also short-circuits a re-fired request
+// carrying the SAME `Idempotency-Key` (or `X-Idempotency-Key`) header within a
+// 5-minute window. Render can double-deliver a scheduled/cron invocation; the
+// dedup below makes the second one a cheap 200 no-op instead of re-walking
+// every store. The DB guard remains the source of truth — this is purely an
+// early-exit optimization, so it lives in-process (a Map) and is best-effort
+// (a process restart simply clears the cache, falling back to the DB guard).
 
 export const dynamic = "force-dynamic";
 // 10 min headroom for the slowest tick (large stores with thousands of
 // new orders). The cron's own AbortController kills hung ticks earlier.
 export const maxDuration = 600;
+
+// In-process idempotency cache: idempotency-key -> epoch ms when first seen.
+// Module-level so it survives across requests within a single server process.
+const IDEMPOTENCY_WINDOW_MS = 5 * 60 * 1000; // 5 minutes
+const recentIdempotencyKeys = new Map<string, number>();
+
+// Drop expired entries so the Map can't grow unbounded over the process
+// lifetime (one entry per distinct key per 5-min window — tiny, but tidy).
+function pruneIdempotencyCache(now: number): void {
+  for (const [key, seenAt] of recentIdempotencyKeys) {
+    if (now - seenAt >= IDEMPOTENCY_WINDOW_MS) {
+      recentIdempotencyKeys.delete(key);
+    }
+  }
+}
+
+// Returns true if this key was already seen inside the window (i.e. a duplicate
+// invocation we should short-circuit). Otherwise records it and returns false.
+// A request with no idempotency header is never treated as a duplicate.
+function isDuplicateInvocation(request: Request): boolean {
+  const key = (
+    request.headers.get("idempotency-key") ??
+    request.headers.get("x-idempotency-key") ??
+    ""
+  ).trim();
+  if (!key) return false;
+
+  const now = Date.now();
+  pruneIdempotencyCache(now);
+
+  const seenAt = recentIdempotencyKeys.get(key);
+  if (seenAt !== undefined && now - seenAt < IDEMPOTENCY_WINDOW_MS) {
+    return true;
+  }
+
+  recentIdempotencyKeys.set(key, now);
+  return false;
+}
 
 interface PerStoreResult {
   storeId: string;
@@ -40,7 +88,19 @@ interface PerStoreResult {
   affiliateReconcile?: { linked: number; deletedDuplicates: number; stillOrphan: number };
 }
 
-async function handler() {
+async function handler(request: Request) {
+  // Duplicate-invocation guard: if Render re-fires the same request (same
+  // Idempotency-Key) within 5 minutes, return 200 immediately without doing
+  // any sync work. The per-store DB SyncRun guard would 409 the overlapping
+  // syncs anyway, but this avoids even walking the store list a second time.
+  if (isDuplicateInvocation(request)) {
+    return NextResponse.json({
+      ok: true,
+      deduplicated: true,
+      message: "Duplicate invocation skipped (Idempotency-Key seen within 5m)."
+    });
+  }
+
   const db = getDb();
 
   // Pre-step: refresh any Meta long-lived tokens that are within 7 days of
