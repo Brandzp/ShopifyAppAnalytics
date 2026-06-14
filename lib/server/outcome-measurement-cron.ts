@@ -11,7 +11,7 @@
 //   OUTCOME_MEASUREMENT_CRON_MS=<ms>      → override polling interval
 //   OUTCOME_MEASUREMENT_CRON_URL=<url>    → override the endpoint pinged
 
-import { isCronEnabled, fetchWithTimeout, computeBackoffMs } from "./cron-util";
+import { isCronEnabled, fetchWithTimeout, computeBackoffMs, cronSecretHeaders } from "./cron-util";
 
 const DEFAULT_INTERVAL_MS = 10 * 60 * 1000; // poll every 10 minutes
 const BOOT_DELAY_MS = 60_000; // wait 1 minute after boot before first tick
@@ -87,7 +87,7 @@ export function startOutcomeMeasurementCron(): void {
     try {
       const response = await fetchWithTimeout(
         url,
-        { method: "POST", headers: { "Content-Type": "application/json" } },
+        { method: "POST", headers: { "Content-Type": "application/json", ...cronSecretHeaders() } },
         FETCH_TIMEOUT_MS
       );
       if (!response.ok) {

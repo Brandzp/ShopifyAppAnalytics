@@ -57,6 +57,19 @@ export async function fetchWithTimeout(
 }
 
 /**
+ * Headers to attach to an in-process cron self-fetch so it can pass the
+ * middleware CRON_SECRET gate (see middleware.ts). When `CRON_SECRET` is set
+ * the middleware 401s any `/api/cron/*` request whose `x-cron-secret` header
+ * doesn't match it; the in-process crons self-ping those routes, so they must
+ * send the header. When `CRON_SECRET` is unset (e.g. local dev) this returns
+ * an empty object and the middleware skips the check — dev keeps working.
+ */
+export function cronSecretHeaders(): Record<string, string> {
+  const secret = process.env.CRON_SECRET?.trim();
+  return secret ? { "x-cron-secret": secret } : {};
+}
+
+/**
  * Exponential backoff (capped) for N consecutive failures. Returns the extra
  * delay to skip ticks for. failures<=0 → 0 (no backoff while healthy).
  */

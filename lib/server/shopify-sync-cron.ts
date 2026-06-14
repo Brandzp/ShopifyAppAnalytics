@@ -1,4 +1,4 @@
-import { isCronEnabled, fetchWithTimeout, computeBackoffMs } from "./cron-util";
+import { isCronEnabled, fetchWithTimeout, computeBackoffMs, cronSecretHeaders } from "./cron-util";
 
 const DEFAULT_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
 const BOOT_DELAY_MS = 20_000; // first run shortly after server is listening
@@ -53,7 +53,7 @@ export function startShopifySyncCron() {
     if (Date.now() < backoffUntil) return; // backing off after recent failures
     running = true;
     try {
-      const response = await fetchWithTimeout(url, { method: "POST" }, FETCH_TIMEOUT_MS);
+      const response = await fetchWithTimeout(url, { method: "POST", headers: cronSecretHeaders() }, FETCH_TIMEOUT_MS);
       const body = await response.json().catch(() => ({}));
       if (body?.skipped) {
         console.log("[shopify-sync-cron] skipped (no connected store or sync already running)");

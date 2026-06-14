@@ -17,7 +17,10 @@
 //   - /privacy, /terms
 //   - /api/auth/callback (Supabase verification redirect)
 //   - /api/webhooks/* (Shopify, BixGrow, etc — auth via signature)
-//   - /api/cron/* (cron self-pings — locked down via env-var secret later)
+//   - /api/cron/* (cron self-pings — locked behind CRON_SECRET; see
+//     requireCronSecret below. When CRON_SECRET is set, these routes require
+//     a matching x-cron-secret header; when unset, the check is skipped so
+//     local dev keeps working.)
 //   - /api/meta/data-deletion (Meta deletion callback protocol)
 //
 // Static assets (_next, favicon, robots, etc) bypass middleware via
@@ -66,7 +69,33 @@ function isPublic(pathname: string): boolean {
   return false;
 }
 
+// Cron routes are session-less (the in-process schedulers self-ping them, and
+// an external scheduler may hit them too). To stop anyone on the internet from
+// triggering a full sync / email blast, gate /api/cron/* behind a shared
+// secret: when CRON_SECRET is set, the request MUST carry a matching
+// `x-cron-secret` header. When CRON_SECRET is unset (local dev), the check is
+// skipped so the dev server keeps working without the var.
+//
+// Returns a 401 NextResponse to short-circuit with, or null to allow through.
+function requireCronSecret(req: NextRequest): NextResponse | null {
+  if (!req.nextUrl.pathname.startsWith("/api/cron/")) return null;
+
+  const expected = process.env.CRON_SECRET?.trim();
+  if (!expected) return null; // not configured — skip the check (dev)
+
+  const provided = req.headers.get("x-cron-secret")?.trim();
+  if (provided && provided === expected) return null; // authorized
+
+  return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+}
+
 export async function middleware(req: NextRequest) {
+  // Cron lock — reject unauthorized /api/cron/* hits before doing any other
+  // work. Runs ahead of the public-route short-circuit so the CRON_SECRET
+  // gate is not bypassed by /api/cron/ being in PUBLIC_PREFIXES.
+  const cronReject = requireCronSecret(req);
+  if (cronReject) return cronReject;
+
   // Stamp the current pathname onto a request header so server components
   // downstream (especially AppShell's paywall gate) can read it without
   // resorting to global state hacks.

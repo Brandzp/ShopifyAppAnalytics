@@ -22,7 +22,7 @@
 // new flag isn't, we treat it as enabling this cron too. This way existing
 // .env files don't silently turn off all syncing during the rename.
 
-import { isCronEnabled, fetchWithTimeout, computeBackoffMs } from "./cron-util";
+import { isCronEnabled, fetchWithTimeout, computeBackoffMs, cronSecretHeaders } from "./cron-util";
 
 const DEFAULT_INTERVAL_MS = 2 * 60 * 60 * 1000; // 2 hours
 const BOOT_DELAY_MS = 30_000; // first run 30s after server boots — long enough
@@ -77,7 +77,7 @@ export function startDataRefreshCron(): void {
     if (Date.now() < backoffUntil) return;
     running = true;
     try {
-      const response = await fetchWithTimeout(url, { method: "POST" }, FETCH_TIMEOUT_MS);
+      const response = await fetchWithTimeout(url, { method: "POST", headers: cronSecretHeaders() }, FETCH_TIMEOUT_MS);
       const body = (await response.json().catch(() => ({}))) as {
         ok?: boolean;
         stores?: number;
