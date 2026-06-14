@@ -156,21 +156,31 @@ function publicInstagramHeaders(username: string) {
 const BROWSER_USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36";
 
+const CRAWLER_LOG_PREFIX = "[instagram-crawler]";
+
 /**
  * Launches a headless Chromium via Playwright. Instagram serves a 429 to bare
  * server-side fetches of its web_profile_info endpoint, so we drive a real
  * browser instead. Dynamically imported so Playwright isn't pulled into the
  * Next build graph.
+ *
+ * Returns `null` (instead of throwing) when the browser is UNAVAILABLE — the
+ * Playwright package can't be imported, or the Chromium binary isn't installed
+ * (e.g. a Render deploy that skipped `playwright install`). The caller treats a
+ * null launch as "skip the Instagram sync gracefully" rather than crashing the
+ * surrounding refresh/cron. Any OTHER launch failure is still thrown so it is
+ * surfaced as a real error.
  */
-async function launchCrawlerBrowser() {
+async function launchCrawlerBrowser(): Promise<import("playwright").Browser | null> {
   let chromium: typeof import("playwright").chromium;
   try {
     ({ chromium } = await import("playwright"));
   } catch {
-    throw new AppError(
-      'Playwright is not installed. Run "npm i -D @playwright/test" then "npx playwright install".',
-      500
+    console.warn(
+      `${CRAWLER_LOG_PREFIX} Playwright is not installed — skipping Instagram sync. ` +
+        'Run "npm i -D @playwright/test" then "npx playwright install".'
     );
+    return null;
   }
 
   try {
@@ -183,10 +193,23 @@ async function launchCrawlerBrowser() {
       args: ["--disable-blink-features=AutomationControlled", "--no-sandbox"]
     });
   } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    // A missing/unfound Chromium binary is an ENVIRONMENT problem, not a
+    // request problem: the deploy didn't run `playwright install`, or the
+    // install path doesn't match the runtime lookup path. Skip gracefully so
+    // the rest of the refresh still completes instead of crashing.
+    const isBinaryMissing =
+      /executable doesn't exist|playwright install|browsertype\.launch/i.test(message);
+    if (isBinaryMissing) {
+      console.warn(
+        `${CRAWLER_LOG_PREFIX} Chromium not available — skipping Instagram sync. ` +
+          `(${message}) Run "npx playwright install --with-deps chromium" on the host.`
+      );
+      return null;
+    }
     throw new AppError(
-      `Could not launch the Playwright browser for the Instagram crawler: ${
-        error instanceof Error ? error.message : String(error)
-      }. Run "npx playwright install".`,
+      `Could not launch the Playwright browser for the Instagram crawler: ${message}. ` +
+        'Run "npx playwright install".',
       500
     );
   }
@@ -586,6 +609,41 @@ export async function crawlPublicInstagramProfiles(input: InstagramPublicCrawler
 
   try {
     browser = await launchCrawlerBrowser();
+
+    // Browser unavailable (Playwright/Chromium not installed on this host).
+    // Return a valid, empty result so callers (reporting refresh, marketing
+    // planner readiness, the refresh cron) keep working instead of crashing.
+    if (!browser) {
+      const skipWarning =
+        "Instagram crawler skipped: headless Chromium is not available on this host.";
+      warnings.push(skipWarning);
+      console.warn(`${CRAWLER_LOG_PREFIX} ${skipWarning}`);
+
+      await createSyncRun(db, {
+        storeId: store.id,
+        status: "failed",
+        startedAt,
+        recordsCreated: 0,
+        recordsUpdated: 0,
+        errorMessage: skipWarning,
+        detailsJson: { source: PUBLIC_CRAWLER_PLATFORM, skipped: true, reason: "chromium_unavailable" }
+      }).catch(() => undefined);
+
+      return {
+        ok: true,
+        storeId: store.id,
+        storeDomain: store.domain,
+        source: PUBLIC_CRAWLER_PLATFORM,
+        profilesRequested: profilesToCrawl.length,
+        profilesCrawled: 0,
+        postsFound: 0,
+        postsSaved: 0,
+        postsUpdated: 0,
+        crawledProfiles: [],
+        warnings
+      } satisfies InstagramPublicCrawlerResult;
+    }
+
     const context = await browser.newContext({
       userAgent: BROWSER_USER_AGENT,
       locale: "en-US",

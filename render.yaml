@@ -31,9 +31,16 @@ services:
     # references a model the client doesn't know about" bugs.
     #
     # `playwright install chromium` downloads the headless Chromium binary
-    # used by the PDF renderer. Render's Node image doesn't ship with it.
-    # Without this, every PDF export fails with "Executable doesn't exist
-    # at /opt/render/.cache/ms-playwright/...".
+    # used by the PDF renderer AND the Instagram public crawler. Render's
+    # Node image doesn't ship with it. Without this, every PDF export and
+    # every Instagram crawl fails with "Executable doesn't exist at
+    # /opt/render/.cache/ms-playwright/...".
+    #
+    # PLAYWRIGHT_BROWSERS_PATH (set in envVars below) pins both the install
+    # location here AND the runtime lookup location to the same directory
+    # (/opt/render/.cache/ms-playwright). Without an explicit path the build
+    # user's default cache can differ from the runtime resolution, leaving
+    # the binary "missing" at launch even though the build installed it.
     buildCommand: rm -rf node_modules/.prisma && npm ci && npx prisma generate && npx playwright install --with-deps chromium chromium-headless-shell && npm run build
     startCommand: npm start
     healthCheckPath: /
@@ -45,6 +52,18 @@ services:
         value: production
       - key: PORT
         value: "3000"
+
+      # ─── Playwright (PDF renderer + Instagram public crawler) ──────────
+      # Pins BOTH the build-time `playwright install` location and the
+      # runtime browser lookup to the same on-disk path so the Chromium
+      # binary installed during the build is found when launched at runtime.
+      # This is a fixed, non-secret constant — declared with `value:` (not
+      # `sync: false`) so it is always present without manual UI entry; a
+      # forgotten value here is exactly what reintroduces the
+      # "Executable doesn't exist at /opt/render/.cache/ms-playwright/..."
+      # crash. /opt/render/.cache is Render's persistent build cache dir.
+      - key: PLAYWRIGHT_BROWSERS_PATH
+        value: /opt/render/.cache/ms-playwright
 
       # ─── Database (Supabase) ───────────────────────────────────────────
       # Pooled connection for the app. Use Supabase's POOLED endpoint
