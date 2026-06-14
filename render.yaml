@@ -157,6 +157,12 @@ services:
         sync: false
       - key: GEMINI_API_KEY
         sync: false
+      # Per-org daily cap on creative generation jobs (SA-MED-05). Every
+      # provider call costs money; the runner rejects an org's jobs once it
+      # has run this many in a UTC day ("Daily creative job limit reached").
+      # Default 10 if unset. Raise for high-volume orgs; lower to throttle spend.
+      - key: CREATIVE_MAX_JOBS_PER_DAY
+        value: "10"
 
       # ─── Creative Studio storage (R2 / S3 for production) ──────────────
       # In production the "local" backend won't survive container restarts —

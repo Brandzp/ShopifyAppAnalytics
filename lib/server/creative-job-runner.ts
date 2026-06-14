@@ -39,6 +39,63 @@ import type {
 // bundle. p-limit is tiny but the principle holds for heavier deps.
 const concurrencyLimit = Number(process.env.CREATIVE_PROVIDER_CONCURRENCY) || 3;
 
+// Per-org daily spending cap on creative generation (SA-MED-05). Every
+// creative provider (Replicate, OpenAI image gen, Higgsfield, Gemini/Nano
+// Banana) costs real money per call, and a runaway batch could rack up a
+// large bill. We cap the number of CreativeGenerationJob rows an org may run
+// per UTC day. Enforced HERE in the runner/coordinator (not in any single
+// provider service) so the cap is uniform across all providers.
+const DEFAULT_MAX_JOBS_PER_DAY = 10;
+function maxJobsPerDay(): number {
+  const parsed = Number(process.env.CREATIVE_MAX_JOBS_PER_DAY);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_MAX_JOBS_PER_DAY;
+}
+
+function startOfUtcDay(now = new Date()): Date {
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+}
+
+/**
+ * Enforce the per-org daily creative-job quota. Resolves the org that owns the
+ * just-claimed job (via its store), counts the OTHER jobs that org has already
+ * created today (UTC, excluding this one), and throws a user-facing error when
+ * that org has reached its limit — so this job is the (limit+1)th and must be
+ * rejected. Stores not yet assigned to an org (orgId null during the Phase 1
+ * migration) are scoped by storeId so the cap still applies per store.
+ *
+ * Throwing from runOneJob's try block marks the job failed with this message,
+ * which surfaces on the project page — no provider API call is made.
+ */
+async function assertOrgDailyQuota(jobId: string): Promise<void> {
+  const db = getDb();
+  const job = await db.creativeGenerationJob.findUnique({
+    where: { id: jobId },
+    select: { id: true, createdAt: true, store: { select: { id: true, orgId: true } } }
+  });
+  if (!job) throw new Error(`Job ${jobId} disappeared before quota check.`);
+
+  const limit = maxJobsPerDay();
+  const since = startOfUtcDay();
+  const orgId = job.store?.orgId ?? null;
+
+  // Count jobs for this org (or this store, if unassigned) created today,
+  // excluding the job we just claimed so the org can run exactly `limit`/day.
+  const usedToday = await db.creativeGenerationJob.count({
+    where: {
+      id: { not: jobId },
+      createdAt: { gte: since },
+      ...(orgId ? { store: { orgId } } : { storeId: job.store?.id })
+    }
+  });
+
+  if (usedToday >= limit) {
+    // X = jobs already counted toward today's quota including this one.
+    throw new Error(
+      `Daily creative job limit reached (${usedToday + 1}/${limit}). Resets at midnight UTC.`
+    );
+  }
+}
+
 export interface RunOneJobResult {
   ranJob: boolean;
   jobId?: string;
@@ -54,6 +111,10 @@ export async function runOneJob(): Promise<RunOneJobResult> {
   if (!claim) return { ranJob: false };
   const jobId = claim.id;
   try {
+    // Enforce the per-org daily quota BEFORE any provider API call. If the
+    // org is over its cap this throws and the job is marked failed below with
+    // the user-facing limit message — no Replicate/OpenAI/Higgsfield call fires.
+    await assertOrgDailyQuota(jobId);
     await dispatch(jobId);
     await markJobSucceeded(jobId);
     return { ranJob: true, jobId };
