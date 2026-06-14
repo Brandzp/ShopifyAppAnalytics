@@ -153,6 +153,9 @@ will start the OAuth flow.
 
 The weekly cron uses these to mail the PDF every Sunday 09:00 IL.
 
+> Weekly summary fires at 09:00 Asia/Jerusalem for all stores; per-store
+> timezone scheduling is not yet implemented.
+
 ---
 
 ## 6. OpenAI (AI insights)

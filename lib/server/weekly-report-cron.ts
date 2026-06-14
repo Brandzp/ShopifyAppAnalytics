@@ -4,6 +4,13 @@
 // does the actual work — same architecture as the existing shopify-sync /
 // creative-job crons.
 //
+// MULTI-TENANT LIMITATION (SA-MED-03): the schedule below is HARDCODED to
+// Asia/Jerusalem. The cron fires ONCE for ALL stores at Jerusalem time,
+// regardless of each Store's own `timezone` field. Per-store scheduling
+// (firing each tenant's report at 09:00 in THEIR timezone) is a future
+// enhancement and is NOT yet implemented — a tenant in another timezone
+// will receive its weekly summary at 09:00 Jerusalem time, not 09:00 local.
+//
 // Idempotency: the route checks the WeeklyReport table for a row matching
 // the period the cron is asking for. If one exists, it skips. So this cron
 // is safe to fire multiple times within a window — only the first one will
