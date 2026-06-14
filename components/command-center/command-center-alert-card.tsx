@@ -118,7 +118,12 @@ export function CommandCenterAlertCard({
               {alert.source}
             </span>
           </div>
-          <p className="text-[10px] text-muted-foreground">
+          {/* Time is rendered in the viewer's local timezone, which differs
+              from the server's (UTC) — the hour/minute would not match across
+              the server/client boundary. suppressHydrationWarning silences the
+              expected React #418 mismatch for THIS element only; the client
+              (local-time) value is the one we want the founder to see. */}
+          <p className="text-[10px] text-muted-foreground" suppressHydrationWarning>
             {new Date(alert.createdAt).toLocaleString(isHe ? "he-IL" : "en-US", {
               month: "short",
               day: "numeric",
