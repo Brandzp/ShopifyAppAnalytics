@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getDb } from "@/lib/server/db";
 import { runFullInitialSync } from "@/lib/services/shopify-sync-service";
 import { syncMetaAdsCampaignInsights } from "@/lib/services/meta-ads-service";
-import { syncInstagramPosts } from "@/lib/services/instagram-service";
+import { syncInstagramPostsForStore } from "@/lib/services/instagram-service";
 import { refreshMetaTokensNearExpiry } from "@/lib/services/meta-token-refresh-service";
 import { reconcileAffiliateAttributionOrphans } from "@/lib/services/affiliate-attribution-reconciler";
 
@@ -153,11 +153,11 @@ async function handler() {
         result.instagram = { ok: true, skipped: true };
       } else {
         try {
-          // syncInstagramPosts reads the active store via cookie/context,
-          // so it's effectively for the "current" store. In single-tenant
-          // mode (one store) this matches. For multi-tenant we'll need a
-          // storeId-scoped variant — tracked as a follow-up.
-          await syncInstagramPosts();
+          // storeId-scoped sync: each iteration syncs THIS store's Instagram
+          // posts using the token stored on its own InstagramConnection row.
+          // (Previously syncInstagramPosts() resolved a single "base"/"current"
+          // store via context, so in multi-tenant mode only one store synced.)
+          await syncInstagramPostsForStore(store.id);
           result.instagram = { ok: true };
         } catch (err) {
           result.instagram = {

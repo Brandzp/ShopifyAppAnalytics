@@ -125,12 +125,29 @@ export async function saveInstagramConnection(accessToken: string) {
   };
 }
 
-export async function syncInstagramPosts() {
+/**
+ * Sync Instagram posts for a specific store.
+ *
+ * Pass `storeId` to scope the sync to one store — this is the multi-tenant
+ * path (e.g. the refresh-all cron iterating every connected store). When
+ * `storeId` is omitted the legacy single-tenant behaviour is preserved: the
+ * "base" store is resolved via `resolveOrCreateBaseStore()`.
+ *
+ * `InstagramConnection.storeId` is unique, so each store has at most one
+ * connection and the lookup/upserts below are correctly scoped to it.
+ */
+export async function syncInstagramPosts(storeId?: string) {
   const db = getDb();
   if (!db) throw new AppError("Database client is not available.", 500);
-  const store = await resolveOrCreateBaseStore();
-  if (!store) throw new AppError("Unable to resolve a store for Instagram sync.", 500);
-  const connection = await db.instagramConnection.findUnique({ where: { storeId: store.id } });
+
+  let resolvedStoreId = storeId?.trim() || null;
+  if (!resolvedStoreId) {
+    const store = await resolveOrCreateBaseStore();
+    if (!store) throw new AppError("Unable to resolve a store for Instagram sync.", 500);
+    resolvedStoreId = store.id;
+  }
+
+  const connection = await db.instagramConnection.findUnique({ where: { storeId: resolvedStoreId } });
   if (!connection) throw new AppError("Connect an Instagram account first.", 400);
 
   const payload = await fetchInstagramMedia(decryptSecret(connection.accessTokenEnc));
@@ -140,7 +157,7 @@ export async function syncInstagramPosts() {
     await db.creatorPost.upsert({
       where: {
         storeId_externalPostId: {
-          storeId: store.id,
+          storeId: resolvedStoreId,
           externalPostId: String(post.id)
         }
       },
@@ -155,7 +172,7 @@ export async function syncInstagramPosts() {
         commentsCount: Number(post.comments_count ?? 0)
       },
       create: {
-        storeId: store.id,
+        storeId: resolvedStoreId,
         instagramConnectionId: connection.id,
         externalPostId: String(post.id),
         caption: post.caption ?? null,
@@ -171,7 +188,7 @@ export async function syncInstagramPosts() {
   }
 
   await db.instagramConnection.update({
-    where: { storeId: store.id },
+    where: { storeId: resolvedStoreId },
     data: {
       syncStatus: "success",
       lastSyncAt: new Date(),
@@ -183,6 +200,17 @@ export async function syncInstagramPosts() {
     ok: true,
     count: posts.length
   };
+}
+
+/**
+ * storeId-scoped variant of {@link syncInstagramPosts}. Use this from any
+ * multi-tenant context (cron fan-out, admin tooling) where the target store
+ * is known explicitly and must NOT be inferred from cookie/session context.
+ */
+export async function syncInstagramPostsForStore(storeId: string) {
+  const id = storeId?.trim();
+  if (!id) throw new AppError("storeId is required for Instagram sync.", 400);
+  return syncInstagramPosts(id);
 }
 
 export async function getInstagramConnectionSummary() {
