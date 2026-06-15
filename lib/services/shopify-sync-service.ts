@@ -1,14 +1,32 @@
 import { getDb, withOptionalDb } from "@/lib/server/db";
 import { AppError, toErrorMessage } from "@/lib/server/errors";
-import { createShopifyClient } from "@/lib/shopify/client";
+import { createShopifyClient, ShopifyGraphQLClient } from "@/lib/shopify/client";
 import { COLLECTIONS_QUERY, COLLECTION_PRODUCTS_PAGE_QUERY } from "@/lib/shopify/queries/collections";
 import { CUSTOMERS_QUERY } from "@/lib/shopify/queries/customers";
 import { ORDERS_QUERY } from "@/lib/shopify/queries/orders";
 import { PRODUCTS_QUERY } from "@/lib/shopify/queries/products";
 import { SHOP_QUERY } from "@/lib/shopify/queries/shop";
+import { bulkCustomersQuery, bulkOrdersQuery, bulkProductsQuery } from "@/lib/shopify/queries/bulk";
+import {
+  BulkOperationBusyError,
+  fetchBulkJsonl,
+  pollBulkOperation,
+  reassembleByParent,
+  runBulkQuery,
+  type ChildAttachPlan
+} from "@/lib/shopify/bulk-client";
 import { mapCustomerNode, mapOrderNode, mapProductNode, mapShopMetadata } from "@/lib/shopify/mappers/shopify-mappers";
 import { getStoredShopifyCredentials } from "@/lib/services/shopify-connection-service";
 import type { SyncMode, SyncRunSummary } from "@/lib/domain/types";
+
+// Stores at or above this many orders use Bulk Operations for the initial sync;
+// smaller stores keep using the paginated path (a single bulk op has fixed
+// kickoff + poll overhead that isn't worth it for a few hundred orders).
+// Override with SHOPIFY_BULK_SYNC_THRESHOLD.
+const BULK_SYNC_ORDER_THRESHOLD = (() => {
+  const n = Number(process.env.SHOPIFY_BULK_SYNC_THRESHOLD);
+  return Number.isFinite(n) && n > 0 ? n : 1000;
+})();
 
 // A full initial sync for a high-volume store (tens of thousands of orders /
 // customers) legitimately runs well over 20 minutes. The old 20-minute cutoff
@@ -148,6 +166,46 @@ export async function syncStoreMetadata(storeId: string) {
   });
 }
 
+/**
+ * Persists a single mapped product (and its variants). Returns how many variants
+ * were upserted so callers can keep their created/updated counters. Shared by the
+ * paginated and bulk product sync paths.
+ */
+async function upsertProductFromNode(db: any, storeId: string, productNode: any): Promise<{ variants: number }> {
+  const mapped = mapProductNode(productNode, storeId);
+  const product = await db.product.upsert({
+    where: {
+      storeId_shopifyProductId: {
+        storeId,
+        shopifyProductId: mapped.product.shopifyProductId
+      }
+    },
+    update: mapped.product,
+    create: mapped.product
+  });
+
+  for (const variant of mapped.variants) {
+    await db.productVariant.upsert({
+      where: {
+        storeId_shopifyVariantId: {
+          storeId,
+          shopifyVariantId: variant.shopifyVariantId
+        }
+      },
+      update: {
+        ...variant,
+        productId: product.id
+      },
+      create: {
+        ...variant,
+        productId: product.id
+      }
+    });
+  }
+
+  return { variants: mapped.variants.length };
+}
+
 export async function syncProducts(storeId: string, updatedAfter?: Date | null) {
   const db = getDb();
   const store = await db.store.findUnique({ where: { id: storeId } });
@@ -161,39 +219,9 @@ export async function syncProducts(storeId: string, updatedAfter?: Date | null) 
   let updated = 0;
 
   for (const productNode of products) {
-    const mapped = mapProductNode(productNode, storeId);
-    const product = await db.product.upsert({
-      where: {
-        storeId_shopifyProductId: {
-          storeId,
-          shopifyProductId: mapped.product.shopifyProductId
-        }
-      },
-      update: mapped.product,
-      create: mapped.product
-    });
-
+    const { variants } = await upsertProductFromNode(db, storeId, productNode);
     updated += 1;
-
-    for (const variant of mapped.variants) {
-      await db.productVariant.upsert({
-        where: {
-          storeId_shopifyVariantId: {
-            storeId,
-            shopifyVariantId: variant.shopifyVariantId
-          }
-        },
-        update: {
-          ...variant,
-          productId: product.id
-        },
-        create: {
-          ...variant,
-          productId: product.id
-        }
-      });
-      created += 1;
-    }
+    created += variants;
   }
 
   await db.shopifyConnection.update({
@@ -319,6 +347,21 @@ export async function syncCollections(storeId: string) {
   return { fetched: collectionsFetched, updated: collectionsUpdated, memberships: membershipsCreated };
 }
 
+/** Persists a single mapped customer. Shared by paginated and bulk customer sync. */
+async function upsertCustomerFromNode(db: any, storeId: string, customerNode: any): Promise<void> {
+  const mapped = mapCustomerNode(customerNode, storeId);
+  await db.customer.upsert({
+    where: {
+      storeId_shopifyCustomerId: {
+        storeId,
+        shopifyCustomerId: mapped.shopifyCustomerId
+      }
+    },
+    update: mapped,
+    create: mapped
+  });
+}
+
 export async function syncCustomers(storeId: string, updatedAfter?: Date | null) {
   const db = getDb();
   const credentials = await getStoredShopifyCredentials(storeId);
@@ -329,17 +372,7 @@ export async function syncCustomers(storeId: string, updatedAfter?: Date | null)
   let updated = 0;
 
   for (const customerNode of customers) {
-    const mapped = mapCustomerNode(customerNode, storeId);
-    await db.customer.upsert({
-      where: {
-        storeId_shopifyCustomerId: {
-          storeId,
-          shopifyCustomerId: mapped.shopifyCustomerId
-        }
-      },
-      update: mapped,
-      create: mapped
-    });
+    await upsertCustomerFromNode(db, storeId, customerNode);
     updated += 1;
     created += 1;
   }
@@ -352,6 +385,161 @@ export async function syncCustomers(storeId: string, updatedAfter?: Date | null)
   });
 
   return { created, updated, fetched: customers.length };
+}
+
+/**
+ * Persists a single mapped order (and its line items, discounts, refunds) into the
+ * DB. Shared by BOTH the paginated `syncOrders` and the bulk `bulkSyncOrders` path
+ * so the two never drift apart. `db` and `store` are passed in so the caller can
+ * resolve them once per run instead of per order.
+ */
+async function upsertOrderFromMapped(
+  db: any,
+  storeId: string,
+  store: any,
+  orderNode: any
+): Promise<void> {
+  const mapped = mapOrderNode(orderNode, storeId, Number(store.defaultCostRatio ?? 0.35));
+
+  const customer = mapped.order.shopifyCustomerId
+    ? await db.customer.findUnique({
+        where: {
+          storeId_shopifyCustomerId: {
+            storeId,
+            shopifyCustomerId: mapped.order.shopifyCustomerId
+          }
+        }
+      })
+    : null;
+
+  const orderRecord = await db.order.upsert({
+    where: {
+      storeId_shopifyOrderId: {
+        storeId,
+        shopifyOrderId: mapped.order.shopifyOrderId
+      }
+    },
+    update: {
+      orderNumber: mapped.order.orderNumber,
+      displayName: mapped.order.displayName,
+      createdAt: mapped.order.createdAt,
+      processedAt: mapped.order.processedAt,
+      currency: mapped.order.currency,
+      subtotalPrice: mapped.order.subtotalPrice,
+      totalDiscounts: mapped.order.totalDiscounts,
+      totalTax: mapped.order.totalTax,
+      totalShipping: mapped.order.totalShipping,
+      totalRefunds: mapped.order.totalRefunds,
+      totalPrice: mapped.order.totalPrice,
+      taxesIncluded: mapped.order.taxesIncluded,
+      financialStatus: mapped.order.financialStatus,
+      fulfillmentStatus: mapped.order.fulfillmentStatus,
+      cancelledAt: mapped.order.cancelledAt,
+      test: mapped.order.test,
+      sourceName: mapped.order.sourceName,
+      landingSiteRef: mapped.order.landingSiteRef ?? null,
+      referringSite: mapped.order.referringSite ?? null,
+      updatedAt: mapped.order.updatedAt,
+      customerId: customer?.id ?? null
+    },
+    create: {
+      storeId,
+      shopifyOrderId: mapped.order.shopifyOrderId,
+      orderNumber: mapped.order.orderNumber,
+      displayName: mapped.order.displayName,
+      createdAt: mapped.order.createdAt,
+      processedAt: mapped.order.processedAt,
+      currency: mapped.order.currency,
+      subtotalPrice: mapped.order.subtotalPrice,
+      totalDiscounts: mapped.order.totalDiscounts,
+      totalTax: mapped.order.totalTax,
+      totalShipping: mapped.order.totalShipping,
+      totalRefunds: mapped.order.totalRefunds,
+      totalPrice: mapped.order.totalPrice,
+      taxesIncluded: mapped.order.taxesIncluded,
+      financialStatus: mapped.order.financialStatus,
+      fulfillmentStatus: mapped.order.fulfillmentStatus,
+      cancelledAt: mapped.order.cancelledAt,
+      test: mapped.order.test,
+      sourceName: mapped.order.sourceName,
+      landingSiteRef: mapped.order.landingSiteRef ?? null,
+      referringSite: mapped.order.referringSite ?? null,
+      updatedAt: mapped.order.updatedAt,
+      customerId: customer?.id ?? null
+    }
+  });
+
+  await db.orderLineItem.deleteMany({ where: { orderId: orderRecord.id } });
+  await db.discountUsage.deleteMany({ where: { orderId: orderRecord.id } });
+  await db.refund.deleteMany({ where: { orderId: orderRecord.id } });
+
+  for (const lineItem of mapped.lineItems) {
+    const product = lineItem.shopifyProductId
+      ? await db.product.findUnique({
+          where: {
+            storeId_shopifyProductId: {
+              storeId,
+              shopifyProductId: lineItem.shopifyProductId
+            }
+          }
+        })
+      : null;
+    const variant = lineItem.shopifyVariantId
+      ? await db.productVariant.findUnique({
+          where: {
+            storeId_shopifyVariantId: {
+              storeId,
+              shopifyVariantId: lineItem.shopifyVariantId
+            }
+          }
+        })
+      : null;
+    const overrideCost = product?.costOverrideAmount ? Number(product.costOverrideAmount) * lineItem.quantity : null;
+
+    await db.orderLineItem.create({
+      data: {
+        storeId,
+        orderId: orderRecord.id,
+        productId: product?.id ?? null,
+        variantId: variant?.id ?? null,
+        shopifyLineItemId: lineItem.shopifyLineItemId,
+        title: lineItem.title,
+        quantity: lineItem.quantity,
+        originalUnitPrice: lineItem.originalUnitPrice,
+        discountedUnitPrice: lineItem.discountedUnitPrice,
+        lineSubtotal: lineItem.lineSubtotal,
+        lineDiscountAmount: lineItem.lineDiscountAmount,
+        taxAmount: lineItem.taxAmount,
+        refundedQuantity: lineItem.refundedQuantity,
+        refundedSubtotal: lineItem.refundedSubtotal,
+        estimatedCostAmount: overrideCost ?? lineItem.estimatedCostAmount
+      }
+    });
+  }
+
+  for (const discount of mapped.discounts) {
+    await db.discountUsage.create({
+      data: {
+        storeId,
+        orderId: orderRecord.id,
+        code: discount.code,
+        amount: mapped.order.totalDiscounts / Math.max(mapped.discounts.length, 1)
+      }
+    });
+  }
+
+  for (const refund of mapped.refunds) {
+    await db.refund.create({
+      data: {
+        storeId,
+        orderId: orderRecord.id,
+        shopifyRefundId: refund.shopifyRefundId,
+        refundedAmount: refund.refundedAmount,
+        refundedLineItemsAmount: refund.refundedLineItemsAmount,
+        createdAt: refund.createdAt
+      }
+    });
+  }
 }
 
 export async function syncOrders(storeId: string, updatedAfter?: Date | null) {
@@ -367,148 +555,7 @@ export async function syncOrders(storeId: string, updatedAfter?: Date | null) {
   let updated = 0;
 
   for (const orderNode of orders) {
-    const mapped = mapOrderNode(orderNode, storeId, Number(store.defaultCostRatio ?? 0.35));
-
-    const customer = mapped.order.shopifyCustomerId
-      ? await db.customer.findUnique({
-          where: {
-            storeId_shopifyCustomerId: {
-              storeId,
-              shopifyCustomerId: mapped.order.shopifyCustomerId
-            }
-          }
-        })
-      : null;
-
-    const orderRecord = await db.order.upsert({
-      where: {
-        storeId_shopifyOrderId: {
-          storeId,
-          shopifyOrderId: mapped.order.shopifyOrderId
-        }
-      },
-      update: {
-        orderNumber: mapped.order.orderNumber,
-        displayName: mapped.order.displayName,
-        createdAt: mapped.order.createdAt,
-        processedAt: mapped.order.processedAt,
-        currency: mapped.order.currency,
-        subtotalPrice: mapped.order.subtotalPrice,
-        totalDiscounts: mapped.order.totalDiscounts,
-        totalTax: mapped.order.totalTax,
-        totalShipping: mapped.order.totalShipping,
-        totalRefunds: mapped.order.totalRefunds,
-        totalPrice: mapped.order.totalPrice,
-        taxesIncluded: mapped.order.taxesIncluded,
-        financialStatus: mapped.order.financialStatus,
-        fulfillmentStatus: mapped.order.fulfillmentStatus,
-        cancelledAt: mapped.order.cancelledAt,
-        test: mapped.order.test,
-        sourceName: mapped.order.sourceName,
-        landingSiteRef: mapped.order.landingSiteRef ?? null,
-        referringSite: mapped.order.referringSite ?? null,
-        updatedAt: mapped.order.updatedAt,
-        customerId: customer?.id ?? null
-      },
-      create: {
-        storeId,
-        shopifyOrderId: mapped.order.shopifyOrderId,
-        orderNumber: mapped.order.orderNumber,
-        displayName: mapped.order.displayName,
-        createdAt: mapped.order.createdAt,
-        processedAt: mapped.order.processedAt,
-        currency: mapped.order.currency,
-        subtotalPrice: mapped.order.subtotalPrice,
-        totalDiscounts: mapped.order.totalDiscounts,
-        totalTax: mapped.order.totalTax,
-        totalShipping: mapped.order.totalShipping,
-        totalRefunds: mapped.order.totalRefunds,
-        totalPrice: mapped.order.totalPrice,
-        taxesIncluded: mapped.order.taxesIncluded,
-        financialStatus: mapped.order.financialStatus,
-        fulfillmentStatus: mapped.order.fulfillmentStatus,
-        cancelledAt: mapped.order.cancelledAt,
-        test: mapped.order.test,
-        sourceName: mapped.order.sourceName,
-        landingSiteRef: mapped.order.landingSiteRef ?? null,
-        referringSite: mapped.order.referringSite ?? null,
-        updatedAt: mapped.order.updatedAt,
-        customerId: customer?.id ?? null
-      }
-    });
-
-    await db.orderLineItem.deleteMany({ where: { orderId: orderRecord.id } });
-    await db.discountUsage.deleteMany({ where: { orderId: orderRecord.id } });
-    await db.refund.deleteMany({ where: { orderId: orderRecord.id } });
-
-    for (const lineItem of mapped.lineItems) {
-      const product = lineItem.shopifyProductId
-        ? await db.product.findUnique({
-            where: {
-              storeId_shopifyProductId: {
-                storeId,
-                shopifyProductId: lineItem.shopifyProductId
-              }
-            }
-          })
-        : null;
-      const variant = lineItem.shopifyVariantId
-        ? await db.productVariant.findUnique({
-            where: {
-              storeId_shopifyVariantId: {
-                storeId,
-                shopifyVariantId: lineItem.shopifyVariantId
-              }
-            }
-          })
-        : null;
-      const overrideCost = product?.costOverrideAmount ? Number(product.costOverrideAmount) * lineItem.quantity : null;
-
-      await db.orderLineItem.create({
-        data: {
-          storeId,
-          orderId: orderRecord.id,
-          productId: product?.id ?? null,
-          variantId: variant?.id ?? null,
-          shopifyLineItemId: lineItem.shopifyLineItemId,
-          title: lineItem.title,
-          quantity: lineItem.quantity,
-          originalUnitPrice: lineItem.originalUnitPrice,
-          discountedUnitPrice: lineItem.discountedUnitPrice,
-          lineSubtotal: lineItem.lineSubtotal,
-          lineDiscountAmount: lineItem.lineDiscountAmount,
-          taxAmount: lineItem.taxAmount,
-          refundedQuantity: lineItem.refundedQuantity,
-          refundedSubtotal: lineItem.refundedSubtotal,
-          estimatedCostAmount: overrideCost ?? lineItem.estimatedCostAmount
-        }
-      });
-    }
-
-    for (const discount of mapped.discounts) {
-      await db.discountUsage.create({
-        data: {
-          storeId,
-          orderId: orderRecord.id,
-          code: discount.code,
-          amount: mapped.order.totalDiscounts / Math.max(mapped.discounts.length, 1)
-        }
-      });
-    }
-
-    for (const refund of mapped.refunds) {
-      await db.refund.create({
-        data: {
-          storeId,
-          orderId: orderRecord.id,
-          shopifyRefundId: refund.shopifyRefundId,
-          refundedAmount: refund.refundedAmount,
-          refundedLineItemsAmount: refund.refundedLineItemsAmount,
-          createdAt: refund.createdAt
-        }
-      });
-    }
-
+    await upsertOrderFromMapped(db, storeId, store, orderNode);
     updated += 1;
     created += 1;
   }
@@ -523,6 +570,105 @@ export async function syncOrders(storeId: string, updatedAfter?: Date | null) {
   return { created, updated, fetched: orders.length };
 }
 
+/**
+ * Bulk-exports the store's products via a single Shopify Bulk Operation, re-nests
+ * each product's variants, and upserts via the shared `upsertProductFromNode`.
+ * Returns counts shaped like the paginated `syncProducts` so callers can sum them
+ * uniformly. Throws BulkOperationBusyError if a bulk op is already running so the
+ * caller can fall back to the paginated path.
+ */
+async function bulkSyncProducts(storeId: string, updatedAfter?: Date | null) {
+  const db = getDb();
+  const store = await db.store.findUnique({ where: { id: storeId } });
+  if (!store) throw new AppError("Store not found.", 404);
+  const credentials = await getStoredShopifyCredentials(storeId);
+  const client = createShopifyClient(credentials);
+  const innerQuery = bulkProductsQuery(updatedAfter);
+  const operationId = await runBulkQuery(client, innerQuery);
+  const state = await pollBulkOperation(client, operationId);
+  const rows = await fetchBulkJsonl(state.url);
+  const PRODUCT_CHILD_PLAN: ChildAttachPlan[] = [
+    { gidMarker: "/ProductVariant/", field: "variants", shape: "connection" }
+  ];
+  const productNodes = reassembleByParent(rows, PRODUCT_CHILD_PLAN);
+  let created = 0;
+  let updated = 0;
+  for (const productNode of productNodes) {
+    const { variants } = await upsertProductFromNode(db, storeId, productNode);
+    updated += 1;
+    created += variants;
+  }
+  await db.shopifyConnection.update({
+    where: { storeId },
+    data: { lastProductsSyncAt: new Date() }
+  });
+  return { fetched: productNodes.length, created, updated };
+}
+
+/**
+ * Bulk-exports the store's customers via a single Shopify Bulk Operation. Customers
+ * have no nested connections we sync, so each JSONL line is a root node mapped
+ * directly through the shared `upsertCustomerFromNode`. Throws BulkOperationBusyError
+ * if a bulk op is already running.
+ */
+async function bulkSyncCustomers(storeId: string, updatedAfter?: Date | null) {
+  const db = getDb();
+  const store = await db.store.findUnique({ where: { id: storeId } });
+  if (!store) throw new AppError("Store not found.", 404);
+  const credentials = await getStoredShopifyCredentials(storeId);
+  const client = createShopifyClient(credentials);
+  const innerQuery = bulkCustomersQuery(updatedAfter);
+  const operationId = await runBulkQuery(client, innerQuery);
+  const state = await pollBulkOperation(client, operationId);
+  const rows = await fetchBulkJsonl(state.url);
+  // No child plan: every customer row is a root node.
+  const customerNodes = reassembleByParent(rows, []);
+  let created = 0;
+  let updated = 0;
+  for (const customerNode of customerNodes) {
+    await upsertCustomerFromNode(db, storeId, customerNode);
+    updated += 1;
+    created += 1;
+  }
+  await db.shopifyConnection.update({
+    where: { storeId },
+    data: { lastCustomersSyncAt: new Date() }
+  });
+  return { fetched: customerNodes.length, created, updated };
+}
+
+/**
+ * Bulk-exports the store's orders via a single Shopify Bulk Operation, re-nests each
+ * order's line items, and upserts via the shared `upsertOrderFromMapped`. Throws
+ * BulkOperationBusyError if a bulk op is already running so the caller can fall back
+ * to the paginated path.
+ */
+async function bulkSyncOrders(storeId: string, updatedAfter?: Date | null) {
+  const db = getDb();
+  const store = await db.store.findUnique({ where: { id: storeId } });
+  if (!store) throw new AppError("Store not found.", 404);
+  const credentials = await getStoredShopifyCredentials(storeId);
+  const client = createShopifyClient(credentials);
+  const innerQuery = bulkOrdersQuery(updatedAfter);
+  const operationId = await runBulkQuery(client, innerQuery);
+  const state = await pollBulkOperation(client, operationId);
+  const rows = await fetchBulkJsonl(state.url);
+  const ORDER_CHILD_PLAN: ChildAttachPlan[] = [
+    { gidMarker: "/LineItem/", field: "lineItems", shape: "connection" }
+  ];
+  const orderNodes = reassembleByParent(rows, ORDER_CHILD_PLAN);
+  let processed = 0;
+  for (const orderNode of orderNodes) {
+    await upsertOrderFromMapped(db, storeId, store, orderNode);
+    processed++;
+  }
+  await db.shopifyConnection.update({
+    where: { storeId },
+    data: { lastOrdersSyncAt: new Date() }
+  });
+  return { fetched: orderNodes.length, created: processed, updated: processed };
+}
+
 export async function runFullInitialSync(storeId: string): Promise<SyncRunSummary> {
   const db = getDb();
   if (!db) throw new AppError("Database client is not available.", 500);
@@ -533,13 +679,53 @@ export async function runFullInitialSync(storeId: string): Promise<SyncRunSummar
 
   try {
     await syncStoreMetadata(storeId);
-    const products = await syncProducts(storeId, null);
+
+    // Large stores (>= threshold orders already on record) use a single Bulk
+    // Operation per resource instead of hundreds of paginated round-trips. Each
+    // bulk call is wrapped so that if a bulk op is already running for the shop
+    // (BulkOperationBusyError) we transparently fall back to the paginated path
+    // for just that resource. Small stores stay paginated end-to-end.
+    const existingOrderCount = await db.order.count({ where: { storeId } });
+    const useBulk = existingOrderCount >= BULK_SYNC_ORDER_THRESHOLD;
+    console.info(
+      `[shopify-sync] initial sync for store ${storeId}: ${existingOrderCount} existing orders; ` +
+        `path=${useBulk ? "bulk" : "paginated"} (threshold=${BULK_SYNC_ORDER_THRESHOLD}).`
+    );
+
+    const products = useBulk
+      ? await bulkSyncProducts(storeId, null).catch((err) => {
+          if (err instanceof BulkOperationBusyError) {
+            console.warn("[shopify-sync] bulk products busy; falling back to paginated.", err);
+            return syncProducts(storeId, null);
+          }
+          throw err;
+        })
+      : await syncProducts(storeId, null);
+
     const collections = await syncCollections(storeId).catch((err) => {
       console.error("Collection sync failed; continuing without collections.", err);
       return { fetched: 0, updated: 0, memberships: 0 };
     });
-    const customers = await syncCustomers(storeId, null);
-    const orders = await syncOrders(storeId, null);
+
+    const customers = useBulk
+      ? await bulkSyncCustomers(storeId, null).catch((err) => {
+          if (err instanceof BulkOperationBusyError) {
+            console.warn("[shopify-sync] bulk customers busy; falling back to paginated.", err);
+            return syncCustomers(storeId, null);
+          }
+          throw err;
+        })
+      : await syncCustomers(storeId, null);
+
+    const orders = useBulk
+      ? await bulkSyncOrders(storeId, null).catch((err) => {
+          if (err instanceof BulkOperationBusyError) {
+            console.warn("[shopify-sync] bulk orders busy; falling back to paginated.", err);
+            return syncOrders(storeId, null);
+          }
+          throw err;
+        })
+      : await syncOrders(storeId, null);
 
     const result = await finishSyncRun(syncRun.id, {
       status: "success",
