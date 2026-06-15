@@ -21,3 +21,11 @@ bi14append.js
 
 # TypeScript incremental build cache — never useful in source control
 tsconfig.tsbuildinfo
+
+# --- AgentsTeam agent artifacts (belong in the AgentsTeam control panel, NOT this repo) ---
+/memory/
+/qa/
+/tasks/bugs.md
+qa-smoke-dev.log
+*.tsbuildinfo
+
