@@ -28,7 +28,7 @@ export const saasStrings = {
       domainRequired: "הזינו את כתובת החנות (לדוגמה: yourstore.myshopify.com).",
       credsCardTitle: "פרטי אפליקציית Shopify Partner",
       credsCardTitleHidden: "פרטי אפליקציית Shopify Partner — Client ID + Secret",
-      credsFormSubtitle: "מה-Partner Dashboard של Shopify ← האפליקציה שלכם ← Client credentials. ה-Client Secret מתחיל ב-",
+      credsFormSubtitle: "מה-Partner Dashboard של Shopify (לוח הבקרה של שותפי Shopify) ← האפליקציה שלכם ← Client credentials. ה-Client Secret מתחיל ב-",
       stored: "מוצפן בבסיס הנתונים.",
       clientIdLabel: "Client ID",
       clientIdPlaceholder: "מחרוזת hex של 32 תווים מה-Partner Dashboard",

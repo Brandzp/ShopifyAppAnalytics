@@ -17,7 +17,7 @@ time a term appears in a given screen. Short repeat mentions may use the bare te
 | OAuth | **OAuth** — introduce as `OAuth (התחברות מאובטחת)` | (5) stays English + Hebrew gloss |
 | Webhook | **Webhook** — introduce as `Webhook (עדכונים אוטומטיים בזמן אמת)` | (5) stays English + Hebrew gloss |
 | Admin API | **Admin API** — introduce as `Admin API (ממשק הניהול של Shopify)` | (5) stays English + Hebrew gloss |
-| Partner Dashboard | **Partner Dashboard** (English) | (5) stays English (not currently in any UI string) |
+| Partner Dashboard | **Partner Dashboard** — introduce as `Partner Dashboard (לוח הבקרה של שותפי Shopify)` | (5) stays English + Hebrew gloss (appears in the Shopify connection creds form, `saas-strings.ts`) |
 | Instagram / Meta Ads / Shopify / BixGrow / Resend | English, verbatim | (6) product names — never translated |
 | DTC | **DTC** — introduce as `DTC (מכירה ישירה לצרכן / Direct to Consumer)` | (7) stays English + gloss |
 | p90 | **p90** — introduce as `p90 (אחוזון 90 / 90th percentile)` | (8) stays English + Hebrew gloss |
