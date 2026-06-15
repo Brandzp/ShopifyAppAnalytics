@@ -22,6 +22,19 @@ const nextConfig: NextConfig = {
     // behavior-preserving for the emitted output.
     webpackMemoryOptimizations: true
   },
+  // Skip ESLint during the production build. Linting runs in the same
+  // "Linting and checking validity of types" pass that was OOM-ing the build
+  // worker on Render (SIGABRT, heap exhaustion). Disabling ESLint here removes
+  // that extra work from the build; TypeScript type errors are still caught
+  // (typescript.ignoreBuildErrors stays false). Lint locally / in CI instead.
+  eslint: {
+    ignoreDuringBuilds: true
+  },
+  // Keep type-checking enabled — we want type errors to fail the build, we just
+  // don't want ESLint piling onto the same memory-constrained pass.
+  typescript: {
+    ignoreBuildErrors: false
+  },
   // Native server-only modules — keep external so Next doesn't try to bundle them.
   // Playwright: Instagram crawler. Sharp: Creative image compositor.
   // fluent-ffmpeg + ffmpeg-static: Creative video pipeline.

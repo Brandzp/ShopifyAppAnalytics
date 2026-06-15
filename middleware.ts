@@ -29,6 +29,15 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createMiddlewareSupabaseClient } from "@/lib/auth/supabase-server";
 
+// Run the middleware on the Node.js runtime (not the default Edge runtime).
+// Supabase SSR (@supabase/ssr → @supabase/supabase-js) touches Node-only APIs
+// such as `process.version`, which the Edge runtime does not support and which
+// breaks the Render production build ("A Node.js API is used (process.version)
+// which is not supported in the Edge Runtime"). Node.js middleware is stable in
+// Next.js 15.2+, so we pin it here. Do NOT remove without making supabase-server
+// edge-compatible first.
+export const runtime = "nodejs";
+
 // Note: "/" is intentionally NOT public — that's the Command Center
 // dashboard. When the marketing site lands (Phase 4) we'll either move
 // the dashboard to `/app` or host the marketing site on a separate
