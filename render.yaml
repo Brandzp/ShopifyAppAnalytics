@@ -51,7 +51,18 @@ services:
     # actually wants. Costs ~30s per build but eliminates an entire class
     # of "Executable doesn't exist at chromium-XXXX/..." crashes after
     # Playwright minor-version bumps.
-    buildCommand: rm -rf node_modules/.prisma && rm -rf $PLAYWRIGHT_BROWSERS_PATH/* && npm ci && npx prisma generate && npx playwright install --with-deps chromium chromium-headless-shell && npm run build
+    # NODE_OPTIONS=--max-old-space-size=4096 raises the V8 heap ceiling for the
+    # `next build` step only. The production build (147 route/page entry points,
+    # React 19 + TS type-check, plus heavy deps: recharts/konva/exceljs/xlsx/
+    # pdf-parse/googleapis/archiver/aws-sdk) exceeds Node's default heap and the
+    # Render build was dying with "FATAL ERROR: Reached heap limit Allocation
+    # failed - JavaScript heap out of memory" → Build failed (SA-FIX4). Scoped to
+    # the build command (NOT envVars) on purpose: putting it in envVars would also
+    # lift the ceiling on the 512MB runtime instance, where it would remove GC
+    # back-pressure and risk a cgroup OOM-kill of `next start`. Bump to 6144/8192
+    # here if a future build still OOMs. (next.config.ts also enables
+    # experimental.webpackMemoryOptimizations to cut peak build memory.)
+    buildCommand: rm -rf node_modules/.prisma && rm -rf $PLAYWRIGHT_BROWSERS_PATH/* && npm ci && npx prisma generate && npx playwright install --with-deps chromium chromium-headless-shell && NODE_OPTIONS=--max-old-space-size=4096 npm run build
     startCommand: npm start
     healthCheckPath: /
     autoDeploy: true

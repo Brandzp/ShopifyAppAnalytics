@@ -14,7 +14,13 @@ const nextConfig: NextConfig = {
   // Serial collection is slightly slower but reliable.
   experimental: {
     cpus: 1,
-    workerThreads: false
+    workerThreads: false,
+    // Reduce peak webpack memory during the production build by freeing
+    // per-module data between compilations. The build (147 entry points +
+    // heavy deps) was OOM-ing on Render (SA-FIX4); this trims real memory use
+    // rather than only raising the heap ceiling. Slightly slower build, but
+    // behavior-preserving for the emitted output.
+    webpackMemoryOptimizations: true
   },
   // Native server-only modules — keep external so Next doesn't try to bundle them.
   // Playwright: Instagram crawler. Sharp: Creative image compositor.
