@@ -556,14 +556,14 @@ const dictionaries = {
       compareToPreviousPeriod: "השוואה לתקופה קודמת",
       enabled: "פעיל",
       oauthTodo:
-        "TODO: להוסיף התקנת Shopify דרך OAuth ורישום Webhooks להפצה אמיתית.",
+        "TODO: להוסיף התקנת Shopify דרך OAuth (התחברות מאובטחת) ורישום Webhooks (עדכונים אוטומטיים בזמן אמת) להפצה אמיתית.",
       costTodo:
         "עלויות מוצרים (COGS / Cost of Goods Sold) ניתנות כעת לעריכה לכל מוצר ודרך CSV בעמוד רווחיות → עלויות מוצרים.",
       notificationsTodo:
         "TODO: להוסיף העדפות שליחה במייל, וואטסאפ וסלאק לסיכומים ולהתראות.",
       shopify: {
         title: "חיבור Shopify",
-        description: "שימוש בטוקן Admin API של אפליקציה פרטית בשלב זה. הטוקנים נשמרים רק בצד השרת.",
+        description: "שימוש בטוקן Admin API (ממשק הניהול של Shopify) של אפליקציה פרטית בשלב זה. הטוקנים נשמרים רק בצד השרת.",
         shopDomain: "דומיין החנות",
         shopDomainPlaceholder: "example.myshopify.com",
         token: "טוקן גישה של Admin API",

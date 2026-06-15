@@ -239,7 +239,7 @@ function buildQualityNotes(input: {
   costCoveragePct: number;
 }): { he: string; en: string } {
   const pieces: { he: string[]; en: string[] } = { he: [], en: [] };
-  pieces.he.push(`רמת דיוק: מוערך · כיסוי COGS ${input.costCoveragePct}%.`);
+  pieces.he.push(`רמת דיוק: מוערך · כיסוי עלות מוצרים (COGS) ${input.costCoveragePct}%.`);
   pieces.en.push(
     `Accuracy: estimated · ${input.costCoveragePct}% of revenue has concrete COGS.`
   );

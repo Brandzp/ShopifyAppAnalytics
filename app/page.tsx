@@ -501,7 +501,7 @@ function ContributionMarginPanel({
           <BreakdownTile label={lang("הכנסה", "Revenue")} value={fmt(t.revenue)} />
           <BreakdownTile label={lang("הנחות", "Discounts")} value={`-${fmt(t.discounts)}`} />
           <BreakdownTile label={lang("החזרים", "Refunds")} value={`-${fmt(t.refunds)}`} />
-          <BreakdownTile label={lang("COGS", "COGS")} value={`-${fmt(t.cogs)}`} />
+          <BreakdownTile label={lang("עלות מוצרים (COGS)", "COGS")} value={`-${fmt(t.cogs)}`} />
           {t.affiliateCommission > 0 ? (
             <BreakdownTile
               label={lang("עמלות שותפים", "Affiliate")}

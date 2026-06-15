@@ -40,7 +40,7 @@ export default async function SecurityPage() {
             icon: KeyRound,
             title: "אימות וגישה",
             body:
-              "האימות מתבצע ב-Supabase Auth (תואם SOC 2). סיסמאות מוגנות עם bcrypt. תמיכה ב-OAuth מ-Google, GitHub, ועוד מגיעה בקרוב."
+              "האימות מתבצע ב-Supabase Auth (תואם SOC 2). סיסמאות מוגנות עם bcrypt. תמיכה ב-OAuth (התחברות מאובטחת דרך ספק חיצוני) מ-Google, GitHub, ועוד מגיעה בקרוב."
           },
           {
             icon: Server,

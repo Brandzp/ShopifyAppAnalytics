@@ -323,7 +323,7 @@ export default async function ProfitPage() {
               title={locale === "he" ? "רווח תרומה ועלות רכישת לקוח לפי ערוץ" : "Channel CAC & contribution margin"}
               hint={
                 locale === "he"
-                  ? "כמה כל ערוץ עולה לך, מה החזיר בהכנסה, ומה נשאר ברווח תרומה אחרי COGS והוצאת פרסום מיוחסת. מומלצת = להגדיל. לעיון = לבחון קריאייטיב/קהל. להרעיב = לעצור הוצאה."
+                  ? "כמה כל ערוץ עולה לך, מה החזיר בהכנסה, ומה נשאר ברווח תרומה אחרי עלות מוצרים (COGS) והוצאת פרסום מיוחסת. מומלצת = להגדיל. לעיון = לבחון קריאייטיב/קהל. להרעיב = לעצור הוצאה."
                   : "How much each channel costs, what it returned in revenue, and what's left as contribution margin after COGS and attributed spend. Push = scale, review = check creative/audience, starve = stop spending."
               }
             />
@@ -471,7 +471,7 @@ function ChannelCacTable({
       </table>
       <div className="border-t border-border bg-slate-50 px-3 py-2 text-[10px] text-muted-foreground">
         {lang(
-          `כיסוי שיוך: ${Math.round(report.attributionCoverage * 100)}% · הקצאת COGS פר ערוץ ב-v1 לפי משקל הכנסה (יחודד בעתיד)`,
+          `כיסוי שיוך: ${Math.round(report.attributionCoverage * 100)}% · הקצאת עלות מוצרים (COGS) פר ערוץ ב-v1 לפי משקל הכנסה (יחודד בעתיד)`,
           `Attribution coverage: ${Math.round(report.attributionCoverage * 100)}% · v1 allocates COGS per channel by revenue share (refined in future)`
         )}
       </div>
