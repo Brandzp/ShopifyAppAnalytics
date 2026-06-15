@@ -153,7 +153,7 @@ export interface GrowthAction {
 export interface GrowthPlatformConnection {
   id: string;
   platform: GrowthPlatform;
-  status: "connected" | "not_connected" | "degraded" | "stub";
+  status: "connected" | "not_connected" | "degraded" | "stub" | "needs_oauth";
   config?: Record<string, unknown> | null;
   healthMessage?: string | null;
   tokenLastFour?: string | null;

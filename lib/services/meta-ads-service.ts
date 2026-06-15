@@ -357,7 +357,14 @@ async function fetchCreativesForAds(accessToken: string, adIds: string[], appSec
 }
 
 function metaConnectionSummary(storeId: string, connection: any, latestRun?: any | null) {
-  const tokenHealth = summarizeTokenHealth(connection.tokenExpiresAt ?? null);
+  // System User tokens never expire — `tokenExpiresAt` stays null after
+  // save because Meta's debug_token doesn't return an expiry for them.
+  // Show "Never expires" instead of the generic "Expiry unknown" so the
+  // merchant sees that their permanent token is working as intended.
+  const tokenHealth =
+    !connection.tokenExpiresAt && connection.tokenType === "SYSTEM_USER"
+      ? { status: "healthy" as const, label: "Never expires" }
+      : summarizeTokenHealth(connection.tokenExpiresAt ?? null);
 
   return {
     storeId,

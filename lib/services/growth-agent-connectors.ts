@@ -29,6 +29,8 @@ export function getConnectorDefinition(platform: GrowthPlatform) {
 }
 
 export function platformNeedsStubLabel(connection: GrowthPlatformConnection) {
-  return connection.status === "stub" || connection.status === "not_connected";
+  return connection.status === "stub"
+    || connection.status === "not_connected"
+    || connection.status === "needs_oauth";
 }
 

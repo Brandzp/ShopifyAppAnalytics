@@ -12,6 +12,7 @@ export function GrowthStatusBadge({ status }: { status: string }) {
     not_connected: "border-slate-200 bg-slate-100 text-slate-700",
     degraded: "border-amber-200 bg-amber-50 text-amber-700",
     stub: "border-sky-200 bg-sky-50 text-sky-700",
+    needs_oauth: "border-violet-200 bg-violet-50 text-violet-700",
     recommended: "border-sky-200 bg-sky-50 text-sky-700",
     pending_approval: "border-amber-200 bg-amber-50 text-amber-700",
     approved: "border-indigo-200 bg-indigo-50 text-indigo-700",

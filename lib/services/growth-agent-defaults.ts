@@ -69,9 +69,13 @@ export const defaultPlatformConnections: Omit<GrowthPlatformConnection, "id">[] 
   { platform: "shopify", status: "connected", healthMessage: "Store data is available through the Shopify ingestion pipeline.", lastSyncAt: null, tokenLastFour: null },
   { platform: "productCrawler", status: "stub", healthMessage: "Product crawler is ready. Add supplier, catalog, or product-listing URLs to let AI discover products.", lastSyncAt: null, tokenLastFour: null },
   { platform: "amazon", status: "stub", healthMessage: "Amazon supplier drafting is ready. Save ASINs or supplier URLs to prepare manual dropship order drafts.", lastSyncAt: null, tokenLastFour: null },
-  { platform: "metaAds", status: "stub", healthMessage: "Connector scaffold is ready. OAuth/token exchange is still required.", lastSyncAt: null, tokenLastFour: null },
-  { platform: "instagram", status: "stub", healthMessage: "Can reuse creator/Instagram signals when connected.", lastSyncAt: null, tokenLastFour: null },
-  { platform: "facebook", status: "stub", healthMessage: "Meta page and traffic signals are not connected yet.", lastSyncAt: null, tokenLastFour: null },
-  { platform: "tiktok", status: "stub", healthMessage: "TikTok Ads connector is prepared as a stub.", lastSyncAt: null, tokenLastFour: null },
-  { platform: "googleAnalytics", status: "stub", healthMessage: "Analytics source abstraction is ready for GA4 or another traffic source.", lastSyncAt: null, tokenLastFour: null }
+  // metaAds / instagram statuses below are SEED defaults for the "no token stored yet" case.
+  // ensureGrowthAgentDefaults() reconciles them at runtime against the real MetaAdsConnection /
+  // InstagramConnection tokens (see growth-agent-service.ts) — when a token exists the row flips
+  // to "connected"/"degraded" automatically. (SA-MED-01)
+  { platform: "metaAds", status: "needs_oauth", healthMessage: "Meta Ads is not connected yet. Connect your Meta ad account at /settings to enable paid-media monitoring.", lastSyncAt: null, tokenLastFour: null },
+  { platform: "instagram", status: "needs_oauth", healthMessage: "Instagram is not connected yet. Connect Instagram at /settings to monitor organic creator signals.", lastSyncAt: null, tokenLastFour: null },
+  { platform: "facebook", status: "needs_oauth", healthMessage: "Facebook page/traffic signals are not connected yet. Connect Meta at /settings.", lastSyncAt: null, tokenLastFour: null },
+  { platform: "tiktok", status: "needs_oauth", healthMessage: "TikTok Ads is not connected yet. OAuth connection is not available in-app yet — contact support to connect TikTok.", lastSyncAt: null, tokenLastFour: null },
+  { platform: "googleAnalytics", status: "needs_oauth", healthMessage: "Google Analytics (GA4) is not connected yet. OAuth connection is not available in-app yet — contact support to connect GA4.", lastSyncAt: null, tokenLastFour: null }
 ];

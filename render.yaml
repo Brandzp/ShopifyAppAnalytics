@@ -41,7 +41,17 @@ services:
     # (/opt/render/.cache/ms-playwright). Without an explicit path the build
     # user's default cache can differ from the runtime resolution, leaving
     # the binary "missing" at launch even though the build installed it.
-    buildCommand: rm -rf node_modules/.prisma && npm ci && npx prisma generate && npx playwright install --with-deps chromium chromium-headless-shell && npm run build
+    #
+    # `rm -rf $PLAYWRIGHT_BROWSERS_PATH/*` purges the cached Chromium binaries
+    # on every build. Playwright pins exact Chromium versions (e.g.
+    # chromium-1223) inside its module; when `npm ci` upgrades Playwright,
+    # the runtime starts looking for a newer Chromium version while the
+    # build cache still holds the OLD one. Clearing the cache forces
+    # `playwright install` to download the version this Playwright build
+    # actually wants. Costs ~30s per build but eliminates an entire class
+    # of "Executable doesn't exist at chromium-XXXX/..." crashes after
+    # Playwright minor-version bumps.
+    buildCommand: rm -rf node_modules/.prisma && rm -rf $PLAYWRIGHT_BROWSERS_PATH/* && npm ci && npx prisma generate && npx playwright install --with-deps chromium chromium-headless-shell && npm run build
     startCommand: npm start
     healthCheckPath: /
     autoDeploy: true

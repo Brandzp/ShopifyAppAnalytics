@@ -367,6 +367,11 @@ async function computeDailySeries(
       const total = net + b.ship + b.tax;
       return {
         date: new Date(`${key}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+        // ISO date key — required for the EnrichedRevenueChart to overlay
+        // per-day Meta / IG / discount context. Without this field the
+        // chart tooltip always says "No events tracked on this day" even
+        // when sync data exists. `key` is already YYYY-MM-DD from keyOf().
+        isoDate: key,
         revenue: total,
         estimatedProfit: net - b.cogs,
         returningCustomerRate: b.orders ? (b.returningOrders / b.orders) * 100 : 0,

@@ -155,7 +155,11 @@ export async function ensureGrowthAgentDefaults(storeId?: string) {
 
   if (db?.platformConnection) {
     const shopifyConnected = Boolean(store.connected);
+    // Reconcile OAuth-gated connectors against their real stored tokens so the Growth
+    // Agent reflects live connection state instead of a static "stub" seed (SA-MED-01).
+    const liveOverrides = await resolveLivePlatformOverrides(db, store.id);
     for (const connection of defaultPlatformConnections) {
+      const override = liveOverrides[connection.platform];
       await db.platformConnection.upsert({
         where: { storeId_platform: { storeId: store.id, platform: connection.platform } },
         update: connection.platform === "shopify"
@@ -164,15 +168,27 @@ export async function ensureGrowthAgentDefaults(storeId?: string) {
               healthMessage: shopifyConnected ? "Shopify ingestion is available." : "Connect Shopify to enable store monitoring.",
               lastSyncAt: shopifyConnected ? new Date() : null
             }
-          : {},
+          : override
+            ? {
+                status: override.status,
+                healthMessage: override.healthMessage,
+                tokenLastFour: override.tokenLastFour ?? null,
+                lastSyncAt: override.lastSyncAt ?? null
+              }
+            : {},
         create: {
           storeId: store.id,
           platform: connection.platform,
-          status: connection.platform === "shopify" ? (shopifyConnected ? "connected" : "not_connected") : connection.status,
+          status: connection.platform === "shopify"
+            ? (shopifyConnected ? "connected" : "not_connected")
+            : override?.status ?? connection.status,
           healthMessage: connection.platform === "shopify"
             ? shopifyConnected ? "Shopify ingestion is available." : "Connect Shopify to enable store monitoring."
-            : connection.healthMessage,
-          lastSyncAt: connection.platform === "shopify" && shopifyConnected ? new Date() : null,
+            : override?.healthMessage ?? connection.healthMessage,
+          tokenLastFour: override?.tokenLastFour ?? null,
+          lastSyncAt: connection.platform === "shopify" && shopifyConnected
+            ? new Date()
+            : override?.lastSyncAt ?? null,
           config: {}
         }
       });
@@ -180,6 +196,91 @@ export async function ensureGrowthAgentDefaults(storeId?: string) {
   }
 
   return store;
+}
+
+type LivePlatformOverride = {
+  status: GrowthPlatformConnection["status"];
+  healthMessage: string;
+  tokenLastFour?: string | null;
+  lastSyncAt?: Date | null;
+};
+
+/**
+ * Reads the real OAuth token tables (MetaAdsConnection, InstagramConnection) for a store and
+ * derives the live Growth Agent connection status. When a token is stored the connector flips
+ * from the "needs_oauth" seed default to "connected" (or "degraded" when the last sync errored).
+ * This is what wires the existing Meta Ads / Instagram tokens into the Growth Agent registry
+ * rather than leaving them as static stubs (SA-MED-01).
+ */
+async function resolveLivePlatformOverrides(
+  db: any,
+  storeId: string
+): Promise<Partial<Record<GrowthPlatform, LivePlatformOverride>>> {
+  const overrides: Partial<Record<GrowthPlatform, LivePlatformOverride>> = {};
+
+  if (db?.metaAdsConnection?.findUnique) {
+    try {
+      const meta = await db.metaAdsConnection.findUnique({ where: { storeId } });
+      if (meta?.accessTokenEnc) {
+        const accountLabel = meta.adAccountName || meta.adAccountId || "Meta ad account";
+        const expired = meta.tokenExpiresAt ? new Date(meta.tokenExpiresAt).getTime() <= Date.now() : false;
+        if (expired) {
+          overrides.metaAds = {
+            status: "degraded",
+            healthMessage: `Meta Ads token for ${accountLabel} is expired. Regenerate it at /settings to resume paid-media monitoring.`,
+            tokenLastFour: meta.tokenLastFour ?? null,
+            lastSyncAt: meta.lastSyncAt ?? null
+          };
+        } else if (meta.syncStatus === "error") {
+          overrides.metaAds = {
+            status: "degraded",
+            healthMessage: meta.lastSyncError
+              ? `Meta Ads (${accountLabel}) connected, but the last sync failed: ${meta.lastSyncError}`
+              : `Meta Ads (${accountLabel}) connected, but the last sync failed. Retry the sync from /settings.`,
+            tokenLastFour: meta.tokenLastFour ?? null,
+            lastSyncAt: meta.lastSyncAt ?? null
+          };
+        } else {
+          overrides.metaAds = {
+            status: "connected",
+            healthMessage: `Meta Ads connected to ${accountLabel}.`,
+            tokenLastFour: meta.tokenLastFour ?? null,
+            lastSyncAt: meta.lastSyncAt ?? null
+          };
+        }
+      }
+    } catch {
+      // Leave metaAds on its seed default if the lookup fails (e.g. table not migrated).
+    }
+  }
+
+  if (db?.instagramConnection?.findUnique) {
+    try {
+      const instagram = await db.instagramConnection.findUnique({ where: { storeId } });
+      if (instagram?.accessTokenEnc) {
+        const handle = instagram.username ? `@${instagram.username}` : "Instagram account";
+        overrides.instagram = instagram.syncStatus === "error"
+          ? {
+              status: "degraded",
+              healthMessage: instagram.lastSyncError
+                ? `Instagram (${handle}) connected, but the last sync failed: ${instagram.lastSyncError}`
+                : `Instagram (${handle}) connected, but the last sync failed. Retry the sync from /settings.`,
+              tokenLastFour: instagram.tokenLastFour ?? null,
+              lastSyncAt: instagram.lastSyncAt ?? null
+            }
+          : {
+              status: "connected",
+              healthMessage: `Instagram connected as ${handle}.`,
+              tokenLastFour: instagram.tokenLastFour ?? null,
+              lastSyncAt: instagram.lastSyncAt ?? null
+            };
+      }
+    } catch {
+      // Leave instagram on its seed default if the lookup fails.
+    }
+  }
+
+  return overrides;
 }
 
 export async function getGrowthAgentSettings(storeId?: string): Promise<GrowthAgentSettings> {
@@ -268,7 +369,7 @@ export async function getGrowthPlatformConnections(storeId?: string): Promise<Gr
 
 export async function saveGrowthPlatformConnection(input: {
   platform: GrowthPlatform;
-  status: "connected" | "not_connected" | "degraded" | "stub";
+  status: "connected" | "not_connected" | "degraded" | "stub" | "needs_oauth";
   config?: Record<string, unknown>;
   healthMessage?: string;
   tokenLastFour?: string | null;
