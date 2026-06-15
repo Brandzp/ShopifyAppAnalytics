@@ -54,28 +54,28 @@ function buildOverviewAlerts(locale: "en" | "he", refundRate: number, discountRa
       {
         id: "overview-alert-refunds",
         severity: "high",
-        title: "×©×™×¢×•×¨ ×”×”×—×–×¨×™× ×’×‘×•×” ×ž×”×¨×’×™×œ",
-        explanation: `×©×™×¢×•×¨ ×”×”×—×–×¨×™× ×¢×•×ž×“ ×¢×œ ${refundRate.toFixed(1)}% ×‘×—×œ×•×Ÿ ×”× ×•×›×—×™.`,
-        suggestedAction: "×‘×“×§×• ××ª ×”×ž×•×¦×¨×™× ×¢× ×”×›×™ ×”×¨×‘×” ×”×—×–×¨×™× ×•××ª ××™×›×•×ª ×”×ž×©×œ×•×— ×•×”×©×™×¨×•×ª.",
-        periodLabel: "30 ×”×™×ž×™× ×”××—×¨×•× ×™×",
+        title: "שיעור ההחזרים גבוה מהרגיל",
+        explanation: `שיעור ההחזרים עומד על ${refundRate.toFixed(1)}% בחלון הנוכחי.`,
+        suggestedAction: "בדקו את המוצרים עם הכי הרבה החזרים ואת איכות המשלוח והשירות.",
+        periodLabel: "30 הימים האחרונים",
         timestamp: new Date().toISOString()
       },
       {
         id: "overview-alert-discounts",
         severity: "medium",
-        title: "×ª×ž×”×™×œ ×”×”× ×—×•×ª ×“×•×¨×© ×‘×“×™×§×”",
-        explanation: `×©×™×¢×•×¨ ×”×”× ×—×•×ª ×”×ž×ž×•×¦×¢ ×¢×•×ž×“ ×¢×œ ${discountRate.toFixed(1)}% ×‘×ª×§×•×¤×” ×”× ×•×›×—×™×ª.`,
-        suggestedAction: "×‘×“×§×• ××™×œ×• ×§×•×“×™× ×ž×™×™×¦×¨×™× ×”×›× ×¡×” ×‘×œ×™ ×œ×¤×’×•×¢ ×™×•×ª×¨ ×ž×“×™ ×‘×¨×•×•×—.",
-        periodLabel: "30 ×”×™×ž×™× ×”××—×¨×•× ×™×",
+        title: "תמהיל ההנחות דורש בדיקה",
+        explanation: `שיעור ההנחות הממוצע עומד על ${discountRate.toFixed(1)}% בתקופה הנוכחית.`,
+        suggestedAction: "בדקו אילו קודים מייצרים הכנסה בלי לפגוע יותר מדי ברווח.",
+        periodLabel: "30 הימים האחרונים",
         timestamp: new Date().toISOString()
       },
       {
         id: "overview-alert-repeat",
         severity: "low",
-        title: "×©×™×¢×•×¨ ×”×œ×§×•×—×•×ª ×”×—×•×–×¨×™× ×¨××•×™ ×œ×ž×¢×§×‘",
-        explanation: `×©×™×¢×•×¨ ×”×œ×§×•×—×•×ª ×”×—×•×–×¨×™× ×›×¨×’×¢ ×”×•× ${returningCustomerRate.toFixed(1)}%.`,
-        suggestedAction: "×¢×‘×¨×• ×¢×œ ×ž×¡×œ×•×œ×™ ×”×–×ž× ×” ×©× ×™×™×” ×•×¢×œ ×ž×•×¦×¨×™ ×”×¨×™×˜× ×©×Ÿ ×”×ž×¨×›×–×™×™×.",
-        periodLabel: "30 ×”×™×ž×™× ×”××—×¨×•× ×™×",
+        title: "שיעור הלקוחות החוזרים ראוי למעקב",
+        explanation: `שיעור הלקוחות החוזרים כרגע הוא ${returningCustomerRate.toFixed(1)}%.`,
+        suggestedAction: "עברו על מסלולי הזמנה שנייה ועל מוצרי הריטנשן המרכזיים.",
+        periodLabel: "30 הימים האחרונים",
         timestamp: new Date().toISOString()
       }
     ];
@@ -155,8 +155,8 @@ export async function getOverviewPayload(): Promise<OverviewPayload> {
     ? buildComparisonMetrics(dailyMetrics, previousPeriodMetrics, {
     revenue: dictionary.overview.revenue,
     estimatedProfit: dictionary.overview.estimatedProfit,
-    returningCustomerRate: locale === "he" ? "×©×™×¢×•×¨ ×œ×§×•×—×•×ª ×—×•×–×¨×™×" : "Returning Customer Rate",
-    discountRate: locale === "he" ? "×©×™×¢×•×¨ ×”× ×—×•×ª" : "Discount Rate"
+    returningCustomerRate: locale === "he" ? "שיעור לקוחות חוזרים" : "Returning Customer Rate",
+    discountRate: locale === "he" ? "שיעור הנחות" : "Discount Rate"
       })
     : [];
   const revenue = cur ? cur.totalSales : sum(dailyMetrics.map((metric) => metric.revenue));
@@ -192,96 +192,96 @@ export async function getOverviewPayload(): Promise<OverviewPayload> {
     kpis: [
       { label: dictionary.overview.revenue, value: revenue, change: comparisonMetrics[0]?.change, format: "currency" },
       { label: dictionary.overview.estimatedProfit, value: estimatedProfit, change: comparisonMetrics[1]?.change, format: "currency" },
-      { label: locale === "he" ? "×©×™×¢×•×¨ ×œ×§×•×—×•×ª ×—×•×–×¨×™×" : "Returning Customer Rate", value: returningCustomerRate, change: comparisonMetrics[2]?.change, format: "percent" },
-      { label: locale === "he" ? "×¢×¨×š ×”×–×ž× ×” ×ž×ž×•×¦×¢" : "Average Order Value", value: averageOrderValue, change: aovChange, format: "currency" },
-      { label: locale === "he" ? "×©×™×¢×•×¨ ×”× ×—×•×ª" : "Discount Rate", value: discountRate, change: comparisonMetrics[3]?.change, format: "percent" },
-      { label: locale === "he" ? "×©×™×¢×•×¨ ×”×—×–×¨×™×" : "Refund Rate", value: refundRate, change: refundChange, format: "percent" }
+      { label: locale === "he" ? "שיעור לקוחות חוזרים" : "Returning Customer Rate", value: returningCustomerRate, change: comparisonMetrics[2]?.change, format: "percent" },
+      { label: locale === "he" ? "ערך הזמנה ממוצע" : "Average Order Value", value: averageOrderValue, change: aovChange, format: "currency" },
+      { label: locale === "he" ? "שיעור הנחות" : "Discount Rate", value: discountRate, change: comparisonMetrics[3]?.change, format: "percent" },
+      { label: locale === "he" ? "שיעור החזרים" : "Refund Rate", value: refundRate, change: refundChange, format: "percent" }
     ],
     dailyMetrics,
     insights: [
       {
-        title: locale === "he" ? "×”×ž×•×¦×¨ ×”×ž×•×‘×™×œ" : "Top performing product",
+        title: locale === "he" ? "המוצר המוביל" : "Top performing product",
         detail: topProduct
           ? locale === "he"
-            ? `${topProduct.productTitle} ×”×•× ×›×¨×’×¢ ×ž× ×•×¢ ×”×”×›× ×¡×•×ª ×”×—×–×§ ×‘×™×•×ª×¨.`
+            ? `${topProduct.productTitle} הוא כרגע מנוע ההכנסות החזק ביותר.`
             : `${topProduct.productTitle} is currently the strongest revenue driver.`
           : locale === "he"
-            ? "×¢×“×™×™×Ÿ ××™×Ÿ × ×ª×•× ×™ ×ž×•×¦×¨×™× ×–×ž×™× ×™×."
+            ? "עדיין אין נתוני מוצרים זמינים."
             : "No product data is available yet.",
-        emphasis: topProduct ? (locale === "he" ? `${Math.round(topProduct.revenue).toLocaleString()} ×”×›× ×¡×•×ª ×‘×ª×§×•×¤×” ×”× ×•×›×—×™×ª` : `${Math.round(topProduct.revenue).toLocaleString()} revenue in the current period`) : undefined
+        emphasis: topProduct ? (locale === "he" ? `${Math.round(topProduct.revenue).toLocaleString()} הכנסות בתקופה הנוכחית` : `${Math.round(topProduct.revenue).toLocaleString()} revenue in the current period`) : undefined
       },
       {
-        title: locale === "he" ? "×”×”× ×—×” ×”×ž×•×‘×™×œ×” ×œ×¤×™ ×©×™×ž×•×©" : "Top discount by usage",
+        title: locale === "he" ? "ההנחה המובילה לפי שימוש" : "Top discount by usage",
         detail: topDiscount
           ? locale === "he"
-            ? `${topDiscount.code} ×”×•× ×ž× ×•×£ ×”×”× ×—×” ×”×‘×•×œ×˜ ×‘×™×•×ª×¨ ×‘×ª×§×•×¤×” ×”× ×•×›×—×™×ª.`
+            ? `${topDiscount.code} הוא מנוף ההנחה הבולט ביותר בתקופה הנוכחית.`
             : `${topDiscount.code} is the most visible discount lever in the current period.`
           : locale === "he"
-            ? "×¢×“×™×™×Ÿ ×œ× × ×¨×©× ×©×™×ž×•×© ×‘×”× ×—×•×ª."
+            ? "עדיין לא נרשם שימוש בהנחות."
             : "No discount usage has been recorded yet.",
-        emphasis: topDiscount ? (locale === "he" ? `${topDiscount.orderCount} ×”×–×ž× ×•×ª ×”×•×©×¤×¢×•` : `${topDiscount.orderCount} influenced orders`) : undefined
+        emphasis: topDiscount ? (locale === "he" ? `${topDiscount.orderCount} הזמנות הושפעו` : `${topDiscount.orderCount} influenced orders`) : undefined
       },
       {
-        title: locale === "he" ? "×”×§×˜×’×•×¨×™×” ×”×¨×•×•×—×™×ª ×‘×™×•×ª×¨" : "Most profitable collection",
+        title: locale === "he" ? "הקטגוריה הרווחית ביותר" : "Most profitable collection",
         detail: mostProfitableCollection
           ? locale === "he"
-            ? `${mostProfitableCollection.collection} ×ž×—×–×™×§×” ×›×¨×’×¢ ××ª ×ž×¨×•×•×— ×”×ª×¨×•×ž×” ×”×ž×©×•×¢×¨ ×”×—×–×§ ×‘×™×•×ª×¨.`
+            ? `${mostProfitableCollection.collection} מחזיקה כרגע את מרווח התרומה המשוער החזק ביותר.`
             : `${mostProfitableCollection.collection} is carrying the best estimated contribution margin.`
           : locale === "he"
-            ? "×‘×™×¦×•×¢×™ ×”×§×˜×’×•×¨×™×•×ª ×™×•×¤×™×¢×• ×œ××—×¨ ×”×¡× ×›×¨×•×Ÿ."
+            ? "ביצועי הקטגוריות יופיעו לאחר הסנכרון."
             : "Collection performance will appear after sync.",
-        emphasis: mostProfitableCollection ? (locale === "he" ? `${Math.round(mostProfitableCollection.estimatedProfit).toLocaleString()} ×¨×•×•×— ×ž×©×•×¢×¨` : `${Math.round(mostProfitableCollection.estimatedProfit).toLocaleString()} estimated profit`) : undefined
+        emphasis: mostProfitableCollection ? (locale === "he" ? `${Math.round(mostProfitableCollection.estimatedProfit).toLocaleString()} רווח משוער` : `${Math.round(mostProfitableCollection.estimatedProfit).toLocaleString()} estimated profit`) : undefined
       },
       {
-        title: locale === "he" ? "×”×™×¨×™×“×” ×”×’×“×•×œ×” ×‘×™×•×ª×¨ ×ž×•×œ ×”×ª×§×•×¤×” ×”×§×•×“×ž×ª" : "Biggest drop vs prior period",
+        title: locale === "he" ? "הירידה הגדולה ביותר מול התקופה הקודמת" : "Biggest drop vs prior period",
         detail: biggestDropMetric
           ? locale === "he"
-            ? `${biggestDropMetric.label} × ×—×œ×© ×ž×•×œ ×—×œ×•×Ÿ ×”×”×©×•×•××” ×”×§×•×“×.`
+            ? `${biggestDropMetric.label} נחלש מול חלון ההשוואה הקודם.`
             : `${biggestDropMetric.label} softened versus the previous comparison window.`
           : locale === "he"
-            ? "×œ× ×–×•×”×ª×” ×™×¨×™×“×” ×ž×”×•×ª×™×ª ×ž×•×œ ×”×ª×§×•×¤×” ×”×§×•×“×ž×ª."
+            ? "לא זוהתה ירידה מהותית מול התקופה הקודמת."
             : "No major downside move versus the previous period.",
-        emphasis: biggestDropMetric ? (locale === "he" ? `×©×™× ×•×™ ×©×œ ${biggestDropMetric.change.toFixed(1)}` : `${biggestDropMetric.change.toFixed(1)} change`) : undefined
+        emphasis: biggestDropMetric ? (locale === "he" ? `שינוי של ${biggestDropMetric.change.toFixed(1)}` : `${biggestDropMetric.change.toFixed(1)} change`) : undefined
       },
       {
-        title: locale === "he" ? "×ª×•×‘× ×ª ×¨×›×™×©×” ×—×•×–×¨×ª" : "Repeat purchase highlight",
+        title: locale === "he" ? "תובנת רכישה חוזרת" : "Repeat purchase highlight",
         detail: locale === "he"
-          ? "×× ×œ×™×˜×™×§×ª ×”×¨×™×˜× ×©×Ÿ × ×©×¢× ×ª ×›×¢×ª ×¢×œ ×”×–×ž× ×•×ª ×•×œ×§×•×—×•×ª ×ž× ×•×¨×ž×œ×™× ×•×œ× ×¨×§ ×¢×œ ×”×¢×¨×›×•×ª ×ž×“×•×ž×•×ª."
+          ? "אנליטיקת הריטנשן נשענת כעת על הזמנות ולקוחות מנורמלים ולא רק על הערכות מדומות."
           : "Retention analytics is now sourced from normalized orders and customer history rather than placeholder estimates.",
-        emphasis: locale === "he" ? `${returningCustomerRate.toFixed(1)}% ×©×™×¢×•×¨ ×—×•×–×¨×™×` : `${returningCustomerRate.toFixed(1)}% returning rate`
+        emphasis: locale === "he" ? `${returningCustomerRate.toFixed(1)}% שיעור חוזרים` : `${returningCustomerRate.toFixed(1)}% returning rate`
       }
     ],
     actionPanel: [
       {
-        title: locale === "he" ? "×ž×” ×”×©×ª× ×” ×”×©×‘×•×¢" : "What changed this week",
+        title: locale === "he" ? "מה השתנה השבוע" : "What changed this week",
         items: [
           locale === "he"
-            ? `×”×”×›× ×¡×•×ª ×”×Ÿ ${comparisonMetrics[0]?.change.toFixed(1) ?? "0.0"}% ×œ×¢×•×ž×ª ×”×ª×§×•×¤×” ×”×§×•×“×ž×ª.`
+            ? `ההכנסות הן ${comparisonMetrics[0]?.change.toFixed(1) ?? "0.0"}% לעומת התקופה הקודמת.`
             : `Revenue is ${comparisonMetrics[0]?.change.toFixed(1) ?? "0.0"}% versus the previous period.`,
           locale === "he"
-            ? `×”×¨×•×•×— ×”×ž×©×•×¢×¨ ×”×•× ${comparisonMetrics[1]?.change.toFixed(1) ?? "0.0"}% ×œ×¢×•×ž×ª ×”×ª×§×•×¤×” ×”×§×•×“×ž×ª.`
+            ? `הרווח המשוער הוא ${comparisonMetrics[1]?.change.toFixed(1) ?? "0.0"}% לעומת התקופה הקודמת.`
             : `Estimated profit is ${comparisonMetrics[1]?.change.toFixed(1) ?? "0.0"}% versus the previous period.`
         ]
       },
       {
-        title: locale === "he" ? "×ž×” ×“×•×¨×© ×ª×©×•×ž×ª ×œ×‘" : "What needs attention",
+        title: locale === "he" ? "מה דורש תשומת לב" : "What needs attention",
         items: [
           locale === "he"
-            ? `×©×™×¢×•×¨ ×”×”× ×—×•×ª ×¢×•×ž×“ ×¢×œ ×ž×ž×•×¦×¢ ×©×œ ${discountRate.toFixed(1)}% ×‘×—×œ×•×Ÿ ×”× ×•×›×—×™.`
+            ? `שיעור ההנחות עומד על ממוצע של ${discountRate.toFixed(1)}% בחלון הנוכחי.`
             : `Discount rate is averaging ${discountRate.toFixed(1)}% across the current window.`,
           locale === "he"
-            ? `×©×™×¢×•×¨ ×”×”×—×–×¨×™× ×¢×•×ž×“ ×¢×œ ×ž×ž×•×¦×¢ ×©×œ ${refundRate.toFixed(1)}% ×‘×—×œ×•×Ÿ ×”× ×•×›×—×™.`
+            ? `שיעור ההחזרים עומד על ממוצע של ${refundRate.toFixed(1)}% בחלון הנוכחי.`
             : `Refund rate is averaging ${refundRate.toFixed(1)}% across the current window.`
         ]
       },
       {
-        title: locale === "he" ? "×¤×¢×•×œ×•×ª ×ž×•×ž×œ×¦×•×ª" : "Recommended actions",
+        title: locale === "he" ? "פעולות מומלצות" : "Recommended actions",
         items: [
           locale === "he"
-            ? "×‘×“×§×• ××ª ×˜×‘×œ×ª ×”×¨×•×•×—×™×•×ª ×‘×¨×ž×ª ×ž×•×¦×¨ ×›×“×™ ×œ×–×”×•×ª ×”×–×ž× ×•×ª ×¢×ž×•×¡×•×ª ×”× ×—×•×ª ×•×ž×•×¦×¨×™× ×¢× ×ž×¨×•×•×— × ×ž×•×š."
+            ? "בדקו את טבלת הרווחיות ברמת מוצר כדי לזהות הזמנות עמוסות הנחות ומוצרים עם מרווח נמוך."
             : "Review the product-level profit table to isolate discount-heavy orders and low-margin products.",
           locale === "he"
-            ? "×”×©×ª×ž×©×• ×‘×‘×§×¨×•×ª ×”×¡× ×›×¨×•×Ÿ ×‘×”×’×“×¨×•×ª ×›×“×™ ×œ×©×ž×•×¨ ××ª ×”×“×™×•×•×— ×ž×¢×•×“×›×Ÿ ×•×ž×•×›×Ÿ ×œ×”×ª×¨××•×ª ×•×œ×¡×™×›×•×ž×™ ×ž×™×™×¡×“."
+            ? "השתמשו בבקרות הסנכרון בהגדרות כדי לשמור את הדיווח מעודכן ומוכן להתראות ולסיכומי מייסד."
             : "Use the sync controls in Settings to keep reporting current and ready for alerts and founder summaries."
         ]
       }
@@ -325,8 +325,8 @@ export async function getProfitAnalyticsPayload(): Promise<ProfitAnalyticsPayloa
       .filter((item) => item.productId && productLookup.has(item.productId))
       .map((item) => ({
         productId: item.productId as string,
-        productTitle: productLookup.get(item.productId as string)?.title ?? (locale === "he" ? "×ž×•×¦×¨ ×œ× ×™×“×•×¢" : "Unknown product"),
-        collection: productLookup.get(item.productId as string)?.collection ?? (locale === "he" ? "×œ×œ× ×§×˜×’×•×¨×™×”" : "Uncategorized"),
+        productTitle: productLookup.get(item.productId as string)?.title ?? (locale === "he" ? "מוצר לא ידוע" : "Unknown product"),
+        collection: productLookup.get(item.productId as string)?.collection ?? (locale === "he" ? "ללא קטגוריה" : "Uncategorized"),
         unitsSold: item.quantity,
         revenue: item.unitPrice * item.quantity,
         estimatedProfit: item.unitPrice * item.quantity - item.discountAmount - item.estimatedCost,
@@ -367,7 +367,7 @@ export async function getRetentionPayload(): Promise<RetentionPayload> {
     secondOrderProducts: [],
     cohortPlaceholder:
       locale === "he"
-        ? "×§×•×”×•×¨×˜×•×ª ×¨×™×˜× ×©×Ÿ ×™×ª××œ×× ×” ×›×©×™×¦×˜×‘×¨ ×™×•×ª×¨ ×”×™×¡×˜×•×¨×™×™×ª ×”×–×ž× ×•×ª ×ž× ×•×¨×ž×œ×ª."
+        ? "קוהורטות ריטנשן יתמלאנה כשיצטבר יותר היסטוריית הזמנות מנורמלת."
         : "Cohort retention modeling will populate once enough normalized order history is available."
   };
 }
