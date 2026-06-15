@@ -7,7 +7,10 @@ import { PlausibleScript } from "@/components/compliance/plausible-script";
 export const metadata: Metadata = {
   title: "Brandzp — Founder Analytics for Shopify",
   description:
-    "Founder-friendly Shopify analytics focused on profit visibility, retention insight, and weekly reporting."
+    "Founder-friendly Shopify analytics focused on profit visibility, retention insight, and weekly reporting.",
+  icons: {
+    icon: "/favicon.ico"
+  }
 };
 
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
