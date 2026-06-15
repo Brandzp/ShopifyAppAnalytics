@@ -44,6 +44,35 @@ const STALE_SYNC_ERROR_MESSAGE = "Previous sync was interrupted before completio
 const SUPERSEDED_SYNC_ERROR_MESSAGE = "This sync was closed after another sync completed for the store.";
 const ACTIVE_SYNC_ERROR_MESSAGE = "A Shopify sync is already running for this store. Wait for it to finish before starting another one.";
 
+// Max in-flight upserts at any moment during a sync. Kept BELOW the Prisma
+// connection-pool size (5, see lib/prisma.ts) so the sync never tries to fetch
+// more connections than the pool can hand out — that exact mismatch is what
+// produced the "Timed out fetching a new connection from the connection pool"
+// failure during initial sync (SA-FIX3). Override with SHOPIFY_SYNC_CONCURRENCY.
+const SYNC_UPSERT_CONCURRENCY = (() => {
+  const n = Number(process.env.SHOPIFY_SYNC_CONCURRENCY);
+  return Number.isFinite(n) && n > 0 ? Math.min(Math.floor(n), 4) : 4;
+})();
+
+/**
+ * Processes `items` through `worker` in fixed-size chunks, awaiting each chunk
+ * before starting the next. This bounds the number of concurrent DB operations
+ * to at most `chunkSize`, so a large initial sync never exhausts the Prisma
+ * connection pool while still being far faster than a strictly serial loop.
+ * Errors propagate (the whole sync fails) exactly as the old serial loop did.
+ */
+async function processInChunks<T>(
+  items: T[],
+  worker: (item: T) => Promise<void>,
+  chunkSize: number = SYNC_UPSERT_CONCURRENCY
+): Promise<void> {
+  const size = Math.max(1, chunkSize);
+  for (let i = 0; i < items.length; i += size) {
+    const chunk = items.slice(i, i + size);
+    await Promise.all(chunk.map((item) => worker(item)));
+  }
+}
+
 function buildUpdatedAfterQuery(updatedAfter?: Date | null) {
   return updatedAfter ? `updated_at:>=${updatedAfter.toISOString()}` : undefined;
 }
@@ -218,11 +247,11 @@ export async function syncProducts(storeId: string, updatedAfter?: Date | null) 
   let created = 0;
   let updated = 0;
 
-  for (const productNode of products) {
+  await processInChunks(products, async (productNode) => {
     const { variants } = await upsertProductFromNode(db, storeId, productNode);
     updated += 1;
     created += variants;
-  }
+  });
 
   await db.shopifyConnection.update({
     where: { storeId },
@@ -368,14 +397,8 @@ export async function syncCustomers(storeId: string, updatedAfter?: Date | null)
   const client = createShopifyClient(credentials);
   const query = buildUpdatedAfterQuery(updatedAfter);
   const customers = await client.paginateConnection<any, { customers: any }>("customers", CUSTOMERS_QUERY, { query });
-  let created = 0;
-  let updated = 0;
 
-  for (const customerNode of customers) {
-    await upsertCustomerFromNode(db, storeId, customerNode);
-    updated += 1;
-    created += 1;
-  }
+  await processInChunks(customers, (customerNode) => upsertCustomerFromNode(db, storeId, customerNode));
 
   await db.shopifyConnection.update({
     where: { storeId },
@@ -384,7 +407,7 @@ export async function syncCustomers(storeId: string, updatedAfter?: Date | null)
     }
   });
 
-  return { created, updated, fetched: customers.length };
+  return { created: customers.length, updated: customers.length, fetched: customers.length };
 }
 
 /**
@@ -551,14 +574,8 @@ export async function syncOrders(storeId: string, updatedAfter?: Date | null) {
   const client = createShopifyClient(credentials);
   const query = buildUpdatedAfterQuery(updatedAfter);
   const orders = await client.paginateConnection<any, { orders: any }>("orders", ORDERS_QUERY, { query });
-  let created = 0;
-  let updated = 0;
 
-  for (const orderNode of orders) {
-    await upsertOrderFromMapped(db, storeId, store, orderNode);
-    updated += 1;
-    created += 1;
-  }
+  await processInChunks(orders, (orderNode) => upsertOrderFromMapped(db, storeId, store, orderNode));
 
   await db.shopifyConnection.update({
     where: { storeId },
@@ -567,7 +584,7 @@ export async function syncOrders(storeId: string, updatedAfter?: Date | null) {
     }
   });
 
-  return { created, updated, fetched: orders.length };
+  return { created: orders.length, updated: orders.length, fetched: orders.length };
 }
 
 /**
@@ -593,11 +610,11 @@ async function bulkSyncProducts(storeId: string, updatedAfter?: Date | null) {
   const productNodes = reassembleByParent(rows, PRODUCT_CHILD_PLAN);
   let created = 0;
   let updated = 0;
-  for (const productNode of productNodes) {
+  await processInChunks(productNodes, async (productNode) => {
     const { variants } = await upsertProductFromNode(db, storeId, productNode);
     updated += 1;
     created += variants;
-  }
+  });
   await db.shopifyConnection.update({
     where: { storeId },
     data: { lastProductsSyncAt: new Date() }
@@ -623,18 +640,12 @@ async function bulkSyncCustomers(storeId: string, updatedAfter?: Date | null) {
   const rows = await fetchBulkJsonl(state.url);
   // No child plan: every customer row is a root node.
   const customerNodes = reassembleByParent(rows, []);
-  let created = 0;
-  let updated = 0;
-  for (const customerNode of customerNodes) {
-    await upsertCustomerFromNode(db, storeId, customerNode);
-    updated += 1;
-    created += 1;
-  }
+  await processInChunks(customerNodes, (customerNode) => upsertCustomerFromNode(db, storeId, customerNode));
   await db.shopifyConnection.update({
     where: { storeId },
     data: { lastCustomersSyncAt: new Date() }
   });
-  return { fetched: customerNodes.length, created, updated };
+  return { fetched: customerNodes.length, created: customerNodes.length, updated: customerNodes.length };
 }
 
 /**
@@ -657,16 +668,12 @@ async function bulkSyncOrders(storeId: string, updatedAfter?: Date | null) {
     { gidMarker: "/LineItem/", field: "lineItems", shape: "connection" }
   ];
   const orderNodes = reassembleByParent(rows, ORDER_CHILD_PLAN);
-  let processed = 0;
-  for (const orderNode of orderNodes) {
-    await upsertOrderFromMapped(db, storeId, store, orderNode);
-    processed++;
-  }
+  await processInChunks(orderNodes, (orderNode) => upsertOrderFromMapped(db, storeId, store, orderNode));
   await db.shopifyConnection.update({
     where: { storeId },
     data: { lastOrdersSyncAt: new Date() }
   });
-  return { fetched: orderNodes.length, created: processed, updated: processed };
+  return { fetched: orderNodes.length, created: orderNodes.length, updated: orderNodes.length };
 }
 
 export async function runFullInitialSync(storeId: string): Promise<SyncRunSummary> {

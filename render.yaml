@@ -77,7 +77,13 @@ services:
 
       # ─── Database (Supabase) ───────────────────────────────────────────
       # Pooled connection for the app. Use Supabase's POOLED endpoint
-      # (port 6543) with ?pgbouncer=true&connection_limit=1.
+      # (port 6543) with ?pgbouncer=true&connection_limit=5&pool_timeout=20.
+      # connection_limit=1 starves the initial Shopify sync and triggers
+      # "Timed out fetching a new connection from the connection pool" (SA-FIX3).
+      # NOTE: lib/prisma.ts also normalises this at runtime — it raises any
+      # connection_limit below 5 and adds pool_timeout if missing — so an older
+      # ...connection_limit=1 value already set in the dashboard is corrected
+      # in-app; still prefer fixing it here for clarity.
       - key: DATABASE_URL
         sync: false
       # Direct connection for migrations only (`prisma db push`). Use the

@@ -5,7 +5,10 @@ generator client {
 datasource db {
   provider = "postgresql"
   // DATABASE_URL → runtime connection. In production point this at the
-  // Supabase POOLED endpoint (port 6543, ?pgbouncer=true&connection_limit=1).
+  // Supabase POOLED endpoint (port 6543,
+  // ?pgbouncer=true&connection_limit=5&pool_timeout=20). connection_limit=1
+  // starves the initial sync (SA-FIX3); lib/prisma.ts normalises a too-small
+  // limit at runtime as a safety net.
   url       = env("DATABASE_URL")
   // DIRECT_URL → migrations only (`prisma migrate` / `prisma db push`).
   // PgBouncer's transaction pooling doesn't support prepared statements,
