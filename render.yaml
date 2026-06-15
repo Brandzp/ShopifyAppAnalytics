@@ -30,27 +30,19 @@ services:
     # (~5s per build) but eliminates an entire class of "deployed code
     # references a model the client doesn't know about" bugs.
     #
-    # `playwright install chromium` downloads the headless Chromium binary
-    # used by the PDF renderer AND the Instagram public crawler. Render's
-    # Node image doesn't ship with it. Without this, every PDF export and
-    # every Instagram crawl fails with "Executable doesn't exist at
-    # /opt/render/.cache/ms-playwright/...".
+    # Playwright Chromium install moved to a `postinstall` script in
+    # package.json (runs automatically as part of `npm ci`). The install
+    # is now part of the npm lifecycle — fewer moving parts in this
+    # buildCommand, no env-var path expansion surprises, and the binary
+    # is always re-downloaded by the EXACT Playwright version pinned in
+    # package-lock.json. We also pinned playwright to an exact (no-^)
+    # version in package.json so it can't silently bump and break the
+    # Chromium version pinning that lives inside the Playwright module.
     #
-    # PLAYWRIGHT_BROWSERS_PATH (set in envVars below) pins both the install
-    # location here AND the runtime lookup location to the same directory
-    # (/opt/render/.cache/ms-playwright). Without an explicit path the build
-    # user's default cache can differ from the runtime resolution, leaving
-    # the binary "missing" at launch even though the build installed it.
-    #
-    # `rm -rf $PLAYWRIGHT_BROWSERS_PATH/*` purges the cached Chromium binaries
-    # on every build. Playwright pins exact Chromium versions (e.g.
-    # chromium-1223) inside its module; when `npm ci` upgrades Playwright,
-    # the runtime starts looking for a newer Chromium version while the
-    # build cache still holds the OLD one. Clearing the cache forces
-    # `playwright install` to download the version this Playwright build
-    # actually wants. Costs ~30s per build but eliminates an entire class
-    # of "Executable doesn't exist at chromium-XXXX/..." crashes after
-    # Playwright minor-version bumps.
+    # PLAYWRIGHT_BROWSERS_PATH (set in envVars below) still pins the
+    # install location to /opt/render/.cache/ms-playwright so the binary
+    # the postinstall hook downloads is exactly where the runtime looks
+    # for it.
     # NODE_OPTIONS=--max-old-space-size=4096 raises the V8 heap ceiling for the
     # `next build` step only. The production build (147 route/page entry points,
     # React 19 + TS type-check, plus heavy deps: recharts/konva/exceljs/xlsx/
@@ -62,7 +54,7 @@ services:
     # back-pressure and risk a cgroup OOM-kill of `next start`. Bump to 6144/8192
     # here if a future build still OOMs. (next.config.ts also enables
     # experimental.webpackMemoryOptimizations to cut peak build memory.)
-    buildCommand: rm -rf node_modules/.prisma && rm -rf $PLAYWRIGHT_BROWSERS_PATH/* && npm ci && npx prisma generate && npx playwright install --with-deps chromium chromium-headless-shell && NODE_OPTIONS=--max-old-space-size=4096 npm run build
+    buildCommand: rm -rf node_modules/.prisma && rm -rf $PLAYWRIGHT_BROWSERS_PATH/* && npm ci && NODE_OPTIONS=--max-old-space-size=4096 npm run build
     startCommand: npm start
     healthCheckPath: /
     autoDeploy: true

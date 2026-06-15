@@ -7,7 +7,7 @@
     "build": "node --max-old-space-size=4096 node_modules/next/dist/bin/next build",
     "start": "next start",
     "lint": "next lint",
-    "postinstall": "prisma generate",
+    "postinstall": "prisma generate && playwright install --with-deps chromium",
     "prisma:generate": "prisma generate",
     "prisma:seed": "tsx prisma/seed.ts"
   },
@@ -32,7 +32,7 @@
     "next": "^15.5.14",
     "p-limit": "^7.3.0",
     "pdf-parse": "^2.2.2",
-    "playwright": "^1.60.0",
+    "playwright": "1.60.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-konva": "^19.2.4",
@@ -45,7 +45,7 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
-    "@playwright/test": "^1.60.0",
+    "@playwright/test": "1.60.0",
     "@types/archiver": "^7.0.0",
     "@types/fluent-ffmpeg": "^2.1.28",
     "@types/node": "^22.14.1",
