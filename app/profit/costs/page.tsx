@@ -33,7 +33,7 @@ export default async function ProductCostsPage() {
           </Link>
           <PageHead
             eyebrow={isHe ? "רווחיות" : "Profit"}
-            title={isHe ? "עלויות מוצרים (COGS)" : "Product costs (COGS)"}
+            title={isHe ? "עלויות מוצרים (COGS / Cost of Goods Sold)" : "Product costs (COGS / Cost of Goods Sold)"}
             description={
               isHe
                 ? "הזינו עלות אמיתית ליחידה לכל מוצר כדי שמספרי הרווח יהיו מדויקים ולא הערכה לפי יחס. אפשר גם לייבא קובץ CSV."

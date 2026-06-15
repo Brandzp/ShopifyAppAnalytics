@@ -74,7 +74,7 @@ function buildOverviewAlerts(locale: "en" | "he", refundRate: number, discountRa
         severity: "low",
         title: "שיעור הלקוחות החוזרים ראוי למעקב",
         explanation: `שיעור הלקוחות החוזרים כרגע הוא ${returningCustomerRate.toFixed(1)}%.`,
-        suggestedAction: "עברו על מסלולי הזמנה שנייה ועל מוצרי הריטנשן המרכזיים.",
+        suggestedAction: "עברו על מסלולי הזמנה שנייה ועל מוצרי שימור הלקוחות המרכזיים.",
         periodLabel: "30 הימים האחרונים",
         timestamp: new Date().toISOString()
       }
@@ -246,7 +246,7 @@ export async function getOverviewPayload(): Promise<OverviewPayload> {
       {
         title: locale === "he" ? "תובנת רכישה חוזרת" : "Repeat purchase highlight",
         detail: locale === "he"
-          ? "אנליטיקת הריטנשן נשענת כעת על הזמנות ולקוחות מנורמלים ולא רק על הערכות מדומות."
+          ? "אנליטיקת שימור הלקוחות נשענת כעת על הזמנות ולקוחות מנורמלים ולא רק על הערכות מדומות."
           : "Retention analytics is now sourced from normalized orders and customer history rather than placeholder estimates.",
         emphasis: locale === "he" ? `${returningCustomerRate.toFixed(1)}% שיעור חוזרים` : `${returningCustomerRate.toFixed(1)}% returning rate`
       }
@@ -367,7 +367,7 @@ export async function getRetentionPayload(): Promise<RetentionPayload> {
     secondOrderProducts: [],
     cohortPlaceholder:
       locale === "he"
-        ? "קוהורטות ריטנשן יתמלאנה כשיצטבר יותר היסטוריית הזמנות מנורמלת."
+        ? "קוהורטות שימור לקוחות יתמלאנה כשיצטבר יותר היסטוריית הזמנות מנורמלת."
         : "Cohort retention modeling will populate once enough normalized order history is available."
   };
 }

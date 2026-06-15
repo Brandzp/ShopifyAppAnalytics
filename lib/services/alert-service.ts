@@ -66,7 +66,7 @@ export async function generateAlerts(): Promise<Alert[]> {
       severity: "medium",
       title: locale === "he" ? "שיעור הלקוחות החוזרים נחלש מול התקופה הקודמת" : "Returning customer rate slipped versus the prior period",
       explanation: locale === "he" ? `ביצועי הרכישה החוזרת זזו ב-${returningMetric.change.toFixed(1)} נקודות.` : `Repeat performance moved ${returningMetric.change.toFixed(1)} points.`,
-      suggestedAction: locale === "he" ? "בדקו את התזמון של הזמנה שנייה ואת מסרי הריטנשן לרוכשים חדשים." : "Review second-order timing and retention messages for recent first-time buyers.",
+      suggestedAction: locale === "he" ? "בדקו את התזמון של הזמנה שנייה ואת מסרי שימור הלקוחות לרוכשים חדשים." : "Review second-order timing and retention messages for recent first-time buyers.",
       periodLabel,
       timestamp: new Date().toISOString()
     });

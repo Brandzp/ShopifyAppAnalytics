@@ -107,7 +107,7 @@ function buildGeneratedSummary(
           items: inputs.discountSpikes.length ? inputs.discountSpikes.map((item) => `${item} הזמנות`) : ["לא זוהתה חריגת הנחות."]
         },
         {
-          title: "תובנות ריטנשן",
+          title: "תובנות שימור לקוחות",
           items: [
             `שיעור הרכישה החוזרת עומד על ${retention.snapshot.repeatPurchaseRate.toFixed(1)}%.`,
             `שיעור ההזמנה השנייה עומד על ${retention.snapshot.secondOrderRate.toFixed(1)}%.`
@@ -117,7 +117,7 @@ function buildGeneratedSummary(
           title: "הצעדים הבאים",
           items: [
             "הריצו סנכרון אינקרמנטלי לפני שיתוף עדכון למייסד.",
-            "עברו על עמודי הרווחיות והריטנשן כדי לזהות לחץ על מרווח והזדמנויות להזמנה שנייה."
+            "עברו על עמודי הרווחיות ושימור הלקוחות כדי לזהות לחץ על מרווח והזדמנויות להזמנה שנייה."
           ]
         }
       ]
