@@ -1,6 +1,8 @@
+import { cookies } from "next/headers";
 import { getDb, withOptionalDb } from "@/lib/server/db";
 import { AppError } from "@/lib/server/errors";
 import { decryptSecret, encryptSecret } from "@/lib/security/encryption";
+import { getAuthContext, ACTIVE_STORE_COOKIE } from "@/lib/auth/session";
 import { createShopifyClient, resolveShopifyAdminAccessToken } from "@/lib/shopify/client";
 import { SHOP_QUERY } from "@/lib/shopify/queries/shop";
 import { normalizeShopDomain, validateOptionalAdminAccessToken } from "@/lib/shopify/validators";
@@ -38,9 +40,34 @@ export async function saveShopifyCredentials(input: ShopifyCredentialInput) {
   const encryptedToken = encryptSecret(tokenToStore);
   const tokenLastFour = adminAccessToken ? adminAccessToken.slice(-4) : "oauth";
 
+  // CRITICAL: bind the new Store to the connecting user's active org.
+  // Without this the row lands with orgId=null and the StoreSwitcher
+  // (which filters `where: { orgId: yourOrgId }`) will NEVER see it —
+  // the store gets connected but is invisible in the UI, which looks
+  // like "I can't connect another store" from the founder's side.
+  // If we're being called from an unauthenticated context (CLI / cron),
+  // skip the bind — those contexts have no org to assign to.
+  let orgId: string | null = null;
+  try {
+    const auth = await getAuthContext();
+    orgId = auth.orgId ?? null;
+  } catch {
+    orgId = null;
+  }
+  if (!orgId) {
+    throw new AppError(
+      "No active organization for the current user. Sign in and try again.",
+      401
+    );
+  }
+
   const store = await db.store.upsert({
     where: { domain: shopDomain },
     update: {
+      // Don't move a store between orgs on a re-save — only set it
+      // when it's currently unassigned (handles the orphan-backfill
+      // case for stores connected before this fix).
+      ...(orgId ? { org: { connect: { id: orgId } } } : {}),
       name: tested.storePreview.name,
       shopifyShopId: tested.storePreview.shopifyShopId,
       currency: tested.storePreview.currency,
@@ -49,6 +76,7 @@ export async function saveShopifyCredentials(input: ShopifyCredentialInput) {
       connected: true
     },
     create: {
+      orgId,
       domain: shopDomain,
       name: tested.storePreview.name,
       shopifyShopId: tested.storePreview.shopifyShopId,
@@ -75,6 +103,21 @@ export async function saveShopifyCredentials(input: ShopifyCredentialInput) {
       tokenLastFour
     }
   });
+
+  // Set the active-store cookie so the founder lands on the brand
+  // they just connected (otherwise they'd need to use the switcher).
+  try {
+    const jar = await cookies();
+    jar.set(ACTIVE_STORE_COOKIE, store.id, {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      path: "/"
+    });
+  } catch {
+    // cookies() throws in non-route contexts (e.g. RSC during build) —
+    // safe to swallow; the user can switch manually if needed.
+  }
 
   return {
     ok: true,

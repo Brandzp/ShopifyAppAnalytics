@@ -1,7 +1,9 @@
 import crypto from "node:crypto";
+import { cookies } from "next/headers";
 import { getDb } from "@/lib/server/db";
 import { AppError } from "@/lib/server/errors";
 import { encryptSecret } from "@/lib/security/encryption";
+import { getAuthContext, ACTIVE_STORE_COOKIE } from "@/lib/auth/session";
 import { createShopifyClient } from "@/lib/shopify/client";
 import { SHOP_QUERY } from "@/lib/shopify/queries/shop";
 import { mapShopMetadata } from "@/lib/shopify/mappers/shopify-mappers";
@@ -402,9 +404,29 @@ export async function persistOauthConnection(input: {
   const encryptedToken = encryptSecret(input.accessToken);
   const tokenLastFour = input.accessToken.slice(-4);
 
+  // Bind to active user's org so the store appears in their switcher.
+  // OAuth callbacks always run inside an authenticated request (the
+  // user clicked "Install via Shopify" while signed in), so we expect
+  // an org here. Fail loudly if missing — that's a real bug, not a
+  // silent orphan.
+  let orgId: string | null = null;
+  try {
+    const auth = await getAuthContext();
+    orgId = auth.orgId ?? null;
+  } catch {
+    orgId = null;
+  }
+  if (!orgId) {
+    throw new AppError(
+      "No active organization for the current user. Sign in and re-install.",
+      401
+    );
+  }
+
   const store = await db.store.upsert({
     where: { domain: input.shopDomain },
     update: {
+      org: { connect: { id: orgId } },
       name: meta.name,
       shopifyShopId: meta.shopifyShopId,
       currency: meta.currency,
@@ -413,6 +435,7 @@ export async function persistOauthConnection(input: {
       connected: true
     },
     create: {
+      orgId,
       domain: input.shopDomain,
       name: meta.name,
       shopifyShopId: meta.shopifyShopId,
@@ -472,6 +495,19 @@ export async function persistOauthConnection(input: {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error(`[shopify-oauth] Webhook registration/persist step failed for ${input.shopDomain}: ${message}`);
+  }
+
+  // Land the founder on the brand they just connected.
+  try {
+    const jar = await cookies();
+    jar.set(ACTIVE_STORE_COOKIE, store.id, {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      path: "/"
+    });
+  } catch {
+    // cookies() is unavailable in some non-route contexts — non-fatal.
   }
 
   return { storeId: store.id, shopDomain: input.shopDomain };
