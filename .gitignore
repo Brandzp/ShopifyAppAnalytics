@@ -29,3 +29,4 @@ tsconfig.tsbuildinfo
 qa-smoke-dev.log
 *.tsbuildinfo
 
+docs/LEARNINGS-RENDER-DEPLOY.md

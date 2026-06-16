@@ -73,8 +73,21 @@ export function createMiddlewareSupabaseClient(req: NextRequest, res: NextRespon
     cookies: {
       getAll: () => req.cookies.getAll(),
       setAll: (cookiesToSet) => {
+        // CRITICAL: do NOT call `req.cookies.set(name, value)` here. In
+        // Next.js 15 nodejs-runtime middleware, mutating the request
+        // cookies after the request has been wrapped by NextRequest
+        // triggers an internal request rebuild that LOCKS the underlying
+        // body ReadableStream. Any downstream route handler that calls
+        // `request.formData()` or `request.json()` then crashes with
+        // "Response body object should not be disturbed or locked"
+        // BEFORE the handler's try/catch can run — browser sees the
+        // server die with ERR_HTTP2_PROTOCOL_ERROR. The req.cookies.set
+        // is only needed so that further code within THIS SAME middleware
+        // run can read the freshly-rotated cookie; our middleware calls
+        // getUser() once and exits, so we don't need it. Setting the
+        // cookie on `res` is enough — that's what tells the browser to
+        // use the new JWT on the next request.
         for (const { name, value, options } of cookiesToSet) {
-          req.cookies.set(name, value);
           res.cookies.set(name, value, options as CookieOptions);
         }
       }
