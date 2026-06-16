@@ -80,7 +80,10 @@ services:
     # attempts to wipe the entire root filesystem. Render's read-only mounts
     # prevent the destruction, but the build still emits thousands of "cannot
     # remove" errors. ALWAYS hardcode the cache path here.
-    buildCommand: rm -rf node_modules/.prisma && rm -rf /opt/render/.cache/ms-playwright/* && npm ci && npx playwright install chromium && NODE_OPTIONS=--max-old-space-size=4096 npm run build
+    # With PLAYWRIGHT_BROWSERS_PATH=0 the Chromium binary installs INSIDE
+    # node_modules during `npm ci` (via the postinstall hook) — no separate
+    # cache to wipe, no env-var expansion risk. Simpler buildCommand.
+    buildCommand: npm ci && NODE_OPTIONS=--max-old-space-size=4096 npm run build
     startCommand: npm start
     healthCheckPath: /
     autoDeploy: true
@@ -100,9 +103,21 @@ services:
       # `sync: false`) so it is always present without manual UI entry; a
       # forgotten value here is exactly what reintroduces the
       # "Executable doesn't exist at /opt/render/.cache/ms-playwright/..."
-      # crash. /opt/render/.cache is Render's persistent build cache dir.
+      # crash.
+      #
+      # `0` is a special value: Playwright installs browsers INSIDE
+      # node_modules/playwright-core/.local-browsers. This ships them with
+      # the deploy artifact instead of relying on Render's separate cache.
+      # Tradeoffs:
+      #   + Bulletproof — what's in node_modules is what runs. Zero
+      #     cache-vs-runtime path drift. No "Executable doesn't exist"
+      #     crashes after Playwright version bumps.
+      #   - Adds ~200MB to node_modules (Chromium binary). Slower
+      #     post-install + slower deploy upload.
+      # Worth it given Render's persistent-cache approach has now broken
+      # 4 times in this project. node_modules is the single source of truth.
       - key: PLAYWRIGHT_BROWSERS_PATH
-        value: /opt/render/.cache/ms-playwright
+        value: "0"
 
       # ─── Database (Supabase) ───────────────────────────────────────────
       # Pooled connection for the app. Use Supabase's POOLED endpoint
