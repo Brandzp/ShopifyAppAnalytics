@@ -36,6 +36,10 @@ type MetaAdsConnectionSummary = {
   } | null;
 };
 
+// NOTE: callers that render this value directly in JSX must add
+// suppressHydrationWarning on the containing element — toLocaleString()
+// uses Node.js locale on the server and the browser locale on the client,
+// which produces different strings and triggers React hydration error #418.
 function formatDateTime(value?: string | null) {
   if (!value) return "Never";
   const date = new Date(value);
@@ -256,14 +260,16 @@ export function MetaAdsConnectionManager({
                 Token: {connection.tokenLastFour ? `ending ${connection.tokenLastFour}` : "saved"}
                 {connection.tokenType ? ` / ${connection.tokenType}` : ""}
               </p>
-              <p>
+              {/* suppressHydrationWarning: formatDateTime() uses toLocaleString() which
+                  resolves differently on the server (Node locale) vs browser (user locale). */}
+              <p suppressHydrationWarning>
                 Token health: {connection.tokenHealth?.label ?? "Expiry unknown"}
                 {connection.tokenExpiresAt ? ` (${formatDateTime(connection.tokenExpiresAt)})` : ""}
               </p>
               {connection.tokenScopes?.length ? (
                 <p>Scopes: {connection.tokenScopes.slice(0, 8).join(", ")}{connection.tokenScopes.length > 8 ? "..." : ""}</p>
               ) : null}
-              <p>Last sync: {formatDateTime(connection.lastSyncAt)}</p>
+              <p suppressHydrationWarning>Last sync: {formatDateTime(connection.lastSyncAt)}</p>
               {connection.latestRun ? (
                 <p>
                   Latest run: {connection.latestRun.status}, created {connection.latestRun.recordsCreated}, updated {connection.latestRun.recordsUpdated}

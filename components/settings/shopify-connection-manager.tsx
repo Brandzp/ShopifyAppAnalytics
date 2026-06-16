@@ -357,7 +357,9 @@ export function ShopifyConnectionManager({
 
           <div className="rounded-2xl border border-border/70 bg-background/70 p-4 text-sm">
             <p className="font-semibold">{labels.connectionState}: {connectionStateLabel}</p>
-            <p className="mt-2 text-muted-foreground">
+            {/* suppressHydrationWarning: toLocaleString() uses system locale on the server
+                but the browser locale on the client — intentional timezone display difference. */}
+            <p className="mt-2 text-muted-foreground" suppressHydrationWarning>
               {syncStatus.connection?.lastSyncAt
                 ? `${labels.lastSync}: ${new Date(syncStatus.connection.lastSyncAt).toLocaleString()}`
                 : labels.noSyncYet}
@@ -421,7 +423,9 @@ export function ShopifyConnectionManager({
                     <p className="font-semibold">
                       {labels.syncModes[run.mode]} · {labels.syncStatuses[run.status]}
                     </p>
-                    <p className="text-muted-foreground">{new Date(run.startedAt).toLocaleString()}</p>
+                    {/* suppressHydrationWarning: toLocaleString() uses Node locale on server,
+                        browser locale on client — intentional timezone display difference. */}
+                    <p className="text-muted-foreground" suppressHydrationWarning>{new Date(run.startedAt).toLocaleString()}</p>
                   </div>
                   <p className="mt-2 text-muted-foreground">
                     {labels.created}: {run.recordsCreated} · {labels.updated}: {run.recordsUpdated} · {labels.failed}: {run.recordsFailed}
