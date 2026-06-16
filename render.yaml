@@ -287,6 +287,11 @@ services:
       # store load (e.g. "3600000" for hourly on a high-volume tenant).
       - key: DATA_REFRESH_CRON_MS
         value: "7200000"
+      # Meta Ads token expiry check: daily at 09:00–11:00 UTC. Raises in-app
+      # alerts and sends email notifications when a MetaAdsConnection token is
+      # NULL or within 7 days of expiry. Disable with META_ADS_TOKEN_CHECK_CRON_DISABLED=1.
+      - key: META_ADS_TOKEN_CHECK_CRON_MS
+        value: "3600000"
       # ─── Daily digest → Telegram ──────────────────────────────────────────
       # Morning PDF report sent at ~08:00 Asia/Jerusalem to the owner's Telegram.
       # Get TELEGRAM_BOT_TOKEN from @BotFather; TELEGRAM_CHAT_ID from @userinfobot.

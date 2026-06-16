@@ -47,4 +47,6 @@ export async function register() {
   startOutcomeMeasurementCron();
   const { startDailyReportCron } = await import("@/lib/server/daily-report-cron");
   startDailyReportCron();
+  const { startMetaAdsTokenCheckCron } = await import("@/lib/server/meta-ads-token-check-cron");
+  startMetaAdsTokenCheckCron();
 }
