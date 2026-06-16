@@ -20,7 +20,19 @@
 
 export function getInternalBaseUrl(request: Request): string {
   const url = new URL(request.url);
-  return `${url.protocol}//${url.host}`;
+  // Force http:// for loopback addresses — Render's reverse proxy sets
+  // request.url to `https://localhost:10000` because it propagates the
+  // public-facing https scheme even though the internal listener is
+  // plain HTTP. Headless browsers (PDF renderer) then fail with
+  // ERR_SSL_PROTOCOL_ERROR trying to negotiate TLS against a localhost
+  // socket that has no certificate. Loopback hostnames never need TLS.
+  const isLoopback =
+    url.hostname === "localhost" ||
+    url.hostname === "127.0.0.1" ||
+    url.hostname === "[::1]" ||
+    url.hostname === "::1";
+  const protocol = isLoopback ? "http:" : url.protocol;
+  return `${protocol}//${url.host}`;
 }
 
 export function getPublicBaseUrl(fallback?: string): string {
