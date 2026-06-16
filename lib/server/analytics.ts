@@ -116,21 +116,30 @@ export function buildRetentionSnapshot(
     customersInPeriod.add(customerId);
     if (history.length > 1) returningCustomers += 1;
 
-    // ─── avg-days-to-second-order ──────────────────────────────────
-    // Question the UI claims to answer: "of people who tried us this
-    // period, how long until they came back?". So we GATE by
-    // "lifetime first order is in the window" — NOT by "second order
-    // is in the window too". The original bug required both orders
-    // to fall inside the window, which capped the metric at the
-    // window length and made a perfume brand (2-month cadence) read
-    // as "~3 days" because only sample-buyers contributed.
-    if (!ordersInWindow.has(history[0])) continue;
-    firstTimeBuyersInWindow += 1;
-    if (history.length < 2) continue;
-    firstTimeBuyersWhoCameBack += 1;
+    // ─── secondOrderRate denominator ──────────────────────────────
+    // Of customers whose FIRST EVER order landed in the window, how
+    // many went on to a 2nd order (ever). Different question than
+    // avg-days-to-second below.
+    if (ordersInWindow.has(history[0])) {
+      firstTimeBuyersInWindow += 1;
+      if (history.length >= 2) firstTimeBuyersWhoCameBack += 1;
+    }
 
-    // Look up dates from the LIFETIME order map — the second order
-    // may legitimately fall outside the current window.
+    // ─── avg-days-to-second-order ──────────────────────────────────
+    // GATE by "this customer's 2nd lifetime order is in the window".
+    // i.e. the people coming back RIGHT NOW — regardless of when
+    // their first order was. This is the question a founder actually
+    // wants ("how long does it take customers to come back?") and
+    // produces the real cadence (~60 days for a perfume brand)
+    // instead of selection-biasing to fast repeaters.
+    //
+    // The earlier attempt gated by "first order in window" which
+    // looked unbiased on paper but in practice only counted customers
+    // who came back FAST (since slower repeaters haven't reached
+    // their 2nd order yet by "now"). That kept the perfume brand
+    // reading ~5 days instead of the real ~60.
+    if (history.length < 2) continue;
+    if (!ordersInWindow.has(history[1])) continue;
     const first = allOrdersById.get(history[0]);
     const second = allOrdersById.get(history[1]);
     if (!first || !second) continue;
