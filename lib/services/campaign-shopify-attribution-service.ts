@@ -85,13 +85,14 @@ export async function buildCampaignShopifyAttribution(
   }
 
   // 1) Meta side: aggregate spend + purchases per campaign for the window.
+  // Filter by dateStart only — Meta's `dateStop` is the EXCLUSIVE start
+  // of the next day, so `dateStop <= end` drops the last day.
   const metaRows = await db.metaAdsCampaignInsight.findMany({
     where: {
       storeId: input.storeId,
       adAccountId: connection.adAccountId,
       level: "campaign",
-      dateStart: { gte: input.start },
-      dateStop: { lte: input.end }
+      dateStart: { gte: input.start, lte: input.end }
     },
     select: {
       campaignId: true,
@@ -129,13 +130,13 @@ export async function buildCampaignShopifyAttribution(
 
   // 2) Meta ads → which campaign each ad belongs to. Used to resolve
   //    utm_content matches when utm_campaign is missing.
+  // Same dateStart-range filter as above.
   const adRows = await db.metaAdsCampaignInsight.findMany({
     where: {
       storeId: input.storeId,
       adAccountId: connection.adAccountId,
       level: "ad",
-      dateStart: { gte: input.start },
-      dateStop: { lte: input.end }
+      dateStart: { gte: input.start, lte: input.end }
     },
     select: {
       adName: true,

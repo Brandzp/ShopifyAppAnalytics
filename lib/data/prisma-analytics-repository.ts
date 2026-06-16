@@ -849,11 +849,11 @@ export async function getRetentionAnalyticsFromDb() {
   ]);
   const normalizedOrders = mapOrders(orders);
   const allNormalizedOrders = mapOrders(allOrders);
-  const snapshot = buildRetentionSnapshot(normalizedOrders, history);
+  const orderLookup = new Map<string, Order>(allNormalizedOrders.map((order) => [order.id, order]));
+  const snapshot = buildRetentionSnapshot(normalizedOrders, history, orderLookup);
 
   const firstOrderProducts = new Map<string, number>();
   const secondOrderProducts = new Map<string, number>();
-  const orderLookup = new Map<string, Order>(allNormalizedOrders.map((order) => [order.id, order]));
   const productLookup = new Map<string, string>(products.map((product: any) => [product.id as string, product.title as string]));
 
   for (const [, orderIds] of history.entries()) {

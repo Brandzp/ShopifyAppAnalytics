@@ -273,8 +273,11 @@ export async function buildMetaAdsWeeklyReport(
         storeId: input.storeId,
         adAccountId: connection.adAccountId,
         level: "campaign",
-        dateStart: { gte: input.start },
-        dateStop: { lte: input.end }
+        // Filter by dateStart only — Meta's `dateStop` is the EXCLUSIVE
+        // start of the next day, so `dateStop <= end` silently drops the
+        // last day of the window. Filtering by dateStart range gives
+        // the inclusive window the caller expects.
+        dateStart: { gte: input.start, lte: input.end }
       }
     }),
     db.metaAdsCampaignInsight.findMany({
@@ -282,8 +285,7 @@ export async function buildMetaAdsWeeklyReport(
         storeId: input.storeId,
         adAccountId: connection.adAccountId,
         level: "ad",
-        dateStart: { gte: input.start },
-        dateStop: { lte: input.end }
+        dateStart: { gte: input.start, lte: input.end }
       }
     })
   ]);

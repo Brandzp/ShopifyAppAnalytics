@@ -210,6 +210,9 @@ async function measureRestockHeroOutcome(input: {
     };
   }
   const since = alert.resolvedAt as Date;
+  // Pull refundedQuantity + refundedSubtotal alongside the raw totals so
+  // the "win" verdict reflects NET sales (post-refund) — otherwise the
+  // ledger claims success on orders that bounced.
   const agg = (await db.orderLineItem.aggregate({
     where: {
       storeId: input.storeId,
@@ -221,10 +224,21 @@ async function measureRestockHeroOutcome(input: {
         test: false
       }
     },
-    _sum: { quantity: true, lineSubtotal: true }
+    _sum: {
+      quantity: true,
+      lineSubtotal: true,
+      refundedQuantity: true,
+      refundedSubtotal: true
+    }
   })) as any;
-  const units = Number(agg._sum.quantity ?? 0);
-  const revenue = Number(agg._sum.lineSubtotal ?? 0);
+  const units = Math.max(
+    Number(agg._sum.quantity ?? 0) - Number(agg._sum.refundedQuantity ?? 0),
+    0
+  );
+  const revenue = Math.max(
+    Number(agg._sum.lineSubtotal ?? 0) - Number(agg._sum.refundedSubtotal ?? 0),
+    0
+  );
   const title = alert.title as string;
   // Strip "חזר למלאי" etc. from the original title to get a clean product name
   const productName = (alert.payloadJson?.sku as string) || title;
@@ -286,6 +300,8 @@ async function measureStockoutImminentOutcome(input: {
     if (v.inventoryQuantity != null) currentInventory += v.inventoryQuantity;
   }
   // Did it sell since resolution?
+  // Subtract refundedQuantity so the "reorder worked" verdict isn't
+  // claimed against units that got returned.
   const agg = (await db.orderLineItem.aggregate({
     where: {
       storeId: input.storeId,
@@ -297,9 +313,12 @@ async function measureStockoutImminentOutcome(input: {
         test: false
       }
     },
-    _sum: { quantity: true }
+    _sum: { quantity: true, refundedQuantity: true }
   })) as any;
-  const unitsSold = Number(agg._sum.quantity ?? 0);
+  const unitsSold = Math.max(
+    Number(agg._sum.quantity ?? 0) - Number(agg._sum.refundedQuantity ?? 0),
+    0
+  );
   // Threshold logic: if we've got stock AND we're selling, the reorder
   // worked. If inventory still zero and we missed sales → miss. Otherwise
   // neutral (couldn't tell).

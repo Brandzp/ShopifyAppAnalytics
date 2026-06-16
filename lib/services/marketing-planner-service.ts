@@ -367,8 +367,14 @@ export async function buildPreviousMonthBaseline(
     .map(([code, stats]) => `${code} (${stats.orders})`);
 
   const averageOrderValue = filteredOrders.length ? revenue / filteredOrders.length : 0;
-  const discountRate = revenue ? (discounts / revenue) * 100 : 0;
-  const refundRate = revenue ? (refunds / revenue) * 100 : 0;
+  // Denominator is GROSS sales (pre-discount, pre-refund) — matches the
+  // Shopify Admin Sales report definition. Previously divided by net
+  // revenue (post-discount), so a ₪100 order with ₪10 discount read
+  // 11.1% instead of the true 10%.
+  const grossDiscountBase = revenue + discounts;
+  const grossRefundBase = revenue + refunds;
+  const discountRate = grossDiscountBase ? (discounts / grossDiscountBase) * 100 : 0;
+  const refundRate = grossRefundBase ? (refunds / grossRefundBase) * 100 : 0;
   const returningCustomerRate = filteredOrders.length ? (returningOrders / filteredOrders.length) * 100 : 0;
 
   const summaryLines = [

@@ -137,13 +137,14 @@ export async function buildReconciliationReport(
   let metaDaysWithData = 0;
 
   if (connection) {
+    // Filter by dateStart only — Meta's `dateStop` is the EXCLUSIVE
+    // start of the next day; `dateStop <= end` drops the last day.
     const metaRows = await db.metaAdsCampaignInsight.findMany({
       where: {
         storeId: input.storeId,
         adAccountId: connection.adAccountId,
         level: "campaign",
-        dateStart: { gte: input.start },
-        dateStop: { lte: input.end }
+        dateStart: { gte: input.start, lte: input.end }
       },
       select: {
         spend: true,

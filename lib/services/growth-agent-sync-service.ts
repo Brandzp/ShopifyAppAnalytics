@@ -59,11 +59,23 @@ export async function runGrowthAgentManualSync(storeId?: string) {
   const currentMetric = dailyMetrics[dailyMetrics.length - 1] ?? dailyMetrics[0];
   const yesterdayMetric = dailyMetrics[dailyMetrics.length - 2] ?? currentMetric;
   const priorSeven = dailyMetrics.slice(-8, -1);
+  // Per-day metrics like revenue/orders/sessions can be averaged across
+  // days (they have a meaningful "per-day" interpretation). Rates can't —
+  // average-of-daily-rates skews toward off-days. Compute AOV and
+  // returningCustomerRate as sum(numerator) / sum(denominator) instead.
+  const priorTotalOrders = priorSeven.reduce((sum, m) => sum + m.orders, 0);
+  const priorTotalRevenue = priorSeven.reduce((sum, m) => sum + m.revenue, 0);
+  // Daily metrics only carry the rate, not the raw returning-orders
+  // count — reconstruct it from rate × orders for the weighted sum.
+  const priorReturningOrders = priorSeven.reduce(
+    (sum, m) => sum + Math.round(m.orders * (m.returningCustomerRate / 100)),
+    0
+  );
   const last7Days = {
     revenue: avg(priorSeven.map((metric) => metric.revenue)),
     orders: avg(priorSeven.map((metric) => metric.orders)),
-    averageOrderValue: avg(priorSeven.map((metric) => metric.averageOrderValue)),
-    returningCustomerRate: avg(priorSeven.map((metric) => metric.returningCustomerRate)),
+    averageOrderValue: priorTotalOrders ? priorTotalRevenue / priorTotalOrders : 0,
+    returningCustomerRate: priorTotalOrders ? (priorReturningOrders / priorTotalOrders) * 100 : 0,
     conversionRate: avg(priorSeven.map((metric) => metric.orders / Math.max(estimateSessions(metric.orders, metric.revenue), 1))),
     sessions: avg(priorSeven.map((metric) => estimateSessions(metric.orders, metric.revenue)))
   };

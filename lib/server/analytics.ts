@@ -93,30 +93,51 @@ export function buildDailyMetrics(
 
 export function buildRetentionSnapshot(
   orders: Order[],
-  customerOrderHistory: Map<string, string[]>
+  customerOrderHistory: Map<string, string[]>,
+  // Lifetime order lookup (id -> Order). Needed so we can read the date
+  // of a customer's SECOND lifetime order even when it falls OUTSIDE
+  // the reporting window — otherwise the avg-days-to-second metric
+  // collapses to "fast repeaters only" (see comment below).
+  allOrdersById: Map<string, Order>
 ): RetentionSnapshot {
+  const ordersInWindow = new Set<string>(orders.map((o) => o.id));
   const customersInPeriod = new Set<string>();
   let returningCustomers = 0;
-  let secondOrderCustomers = 0;
   let totalDaysToSecondOrder = 0;
   let customersWithSecondOrder = 0;
+  let firstTimeBuyersInWindow = 0;
+  let firstTimeBuyersWhoCameBack = 0;
 
   for (const [customerId, history] of customerOrderHistory.entries()) {
-    const periodOrders = history.filter((orderId) => orders.some((order) => order.id === orderId));
-    if (!periodOrders.length) continue;
+    // Did this customer order at all during the window? (Used for the
+    // headline customer-mix and lifetime repeat-rate.)
+    const orderedInWindow = history.some((orderId) => ordersInWindow.has(orderId));
+    if (!orderedInWindow) continue;
     customersInPeriod.add(customerId);
     if (history.length > 1) returningCustomers += 1;
-    if (history.length > 1) {
-      secondOrderCustomers += 1;
-      const firstOrder = orders.find((order) => order.id === history[0]);
-      const secondOrder = orders.find((order) => order.id === history[1]);
-      if (firstOrder && secondOrder) {
-        totalDaysToSecondOrder +=
-          (new Date(secondOrder.createdAt).getTime() - new Date(firstOrder.createdAt).getTime()) /
-          (1000 * 60 * 60 * 24);
-        customersWithSecondOrder += 1;
-      }
-    }
+
+    // ─── avg-days-to-second-order ──────────────────────────────────
+    // Question the UI claims to answer: "of people who tried us this
+    // period, how long until they came back?". So we GATE by
+    // "lifetime first order is in the window" — NOT by "second order
+    // is in the window too". The original bug required both orders
+    // to fall inside the window, which capped the metric at the
+    // window length and made a perfume brand (2-month cadence) read
+    // as "~3 days" because only sample-buyers contributed.
+    if (!ordersInWindow.has(history[0])) continue;
+    firstTimeBuyersInWindow += 1;
+    if (history.length < 2) continue;
+    firstTimeBuyersWhoCameBack += 1;
+
+    // Look up dates from the LIFETIME order map — the second order
+    // may legitimately fall outside the current window.
+    const first = allOrdersById.get(history[0]);
+    const second = allOrdersById.get(history[1]);
+    if (!first || !second) continue;
+    totalDaysToSecondOrder +=
+      (new Date(second.createdAt).getTime() - new Date(first.createdAt).getTime()) /
+      (1000 * 60 * 60 * 24);
+    customersWithSecondOrder += 1;
   }
 
   const totalCustomers = customersInPeriod.size;
@@ -126,7 +147,13 @@ export function buildRetentionSnapshot(
     newCustomers,
     returningCustomers,
     repeatPurchaseRate: totalCustomers ? (returningCustomers / totalCustomers) * 100 : 0,
-    secondOrderRate: totalCustomers ? (secondOrderCustomers / totalCustomers) * 100 : 0,
+    // secondOrderRate now matches its UI tooltip ("first-time buyers
+    // who came back") — % of customers whose FIRST lifetime order
+    // landed in the window who went on to make a 2nd lifetime order
+    // (regardless of when that 2nd order happened).
+    secondOrderRate: firstTimeBuyersInWindow
+      ? (firstTimeBuyersWhoCameBack / firstTimeBuyersInWindow) * 100
+      : 0,
     averageDaysToSecondOrder: customersWithSecondOrder ? totalDaysToSecondOrder / customersWithSecondOrder : 0
   };
 }

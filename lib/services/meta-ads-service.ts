@@ -1149,8 +1149,10 @@ export async function buildMarketingPlannerMetaAds(
       adAccountId: connection.adAccountId,
       ...(hasExplicitRange
         ? {
-            dateStart: { gte: options.start as Date },
-            dateStop: { lte: options.end as Date }
+            // Filter by dateStart only — Meta's `dateStop` is the
+            // EXCLUSIVE start of the next day; `dateStop <= end` drops
+            // the last day of the window.
+            dateStart: { gte: options.start as Date, lte: options.end as Date }
           }
         : {
             datePreset,

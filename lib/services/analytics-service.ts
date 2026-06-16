@@ -20,6 +20,13 @@ function average(values: number[]) {
   return values.length ? sum(values) / values.length : 0;
 }
 
+// Legacy comparison builder — used ONLY when the Shopify-parity layer is
+// unavailable (no DB / disconnected store). The rate metrics it produces
+// here are mathematically wrong (averages of daily rates rather than
+// sum-of-numerators / sum-of-denominators) but the parity-fed path is
+// preferred everywhere a real Shopify connection exists, so this only
+// affects the legacy / fallback signal. Do NOT extend this — fix the
+// underlying parity-fed path instead.
 function buildComparisonMetrics(
   currentMetrics: DailyMetric[],
   previousMetrics: DailyMetric[],
@@ -45,6 +52,33 @@ function buildComparisonMetrics(
     { label: labels.estimatedProfit, current: profitCurrent, previous: profitPrevious, change: calcChange(profitCurrent, profitPrevious) },
     { label: labels.returningCustomerRate, current: retentionCurrent, previous: retentionPrevious, change: retentionCurrent - retentionPrevious },
     { label: labels.discountRate, current: discountCurrent, previous: discountPrevious, change: discountCurrent - discountPrevious }
+  ];
+}
+
+// Build comparison metrics directly from Shopify-parity period summaries
+// (cur + prev objects). The parity layer already computes rates as
+// sum(numerators)/sum(denominators) across the window, so no rate-of-rates
+// trap here. Used when both sides of the comparison have parity data.
+function buildComparisonMetricsFromParity(
+  cur: NonNullable<Awaited<ReturnType<typeof getShopifyParityOverview>>>["current"],
+  prev: NonNullable<Awaited<ReturnType<typeof getShopifyParityOverview>>>["previous"],
+  labels: {
+    revenue: string;
+    estimatedProfit: string;
+    returningCustomerRate: string;
+    discountRate: string;
+  }
+): ComparisonMetric[] {
+  const calcChange = (current: number, previous: number) =>
+    previous === 0 ? 0 : ((current - previous) / previous) * 100;
+  return [
+    { label: labels.revenue, current: cur.totalSales, previous: prev.totalSales, change: calcChange(cur.totalSales, prev.totalSales) },
+    { label: labels.estimatedProfit, current: cur.estimatedProfit, previous: prev.estimatedProfit, change: calcChange(cur.estimatedProfit, prev.estimatedProfit) },
+    // Rates compare as percentage-point deltas (absolute), not relative
+    // percent change, to match the parity-fed AOV/refund delta pattern
+    // already used below.
+    { label: labels.returningCustomerRate, current: cur.returningCustomerRate, previous: prev.returningCustomerRate, change: cur.returningCustomerRate - prev.returningCustomerRate },
+    { label: labels.discountRate, current: cur.discountRate, previous: prev.discountRate, change: cur.discountRate - prev.discountRate }
   ];
 }
 
@@ -151,13 +185,20 @@ export async function getOverviewPayload(): Promise<OverviewPayload> {
         ? await repository.getPreviousPeriodMetrics()
         : [];
 
-  const comparisonMetrics = comparisonEnabled
-    ? buildComparisonMetrics(dailyMetrics, previousPeriodMetrics, {
+  // Prefer the parity-fed comparison when both sides have parity data —
+  // its rates are sum-of-numerators / sum-of-denominators across the
+  // window (correct). Fall back to the legacy buildComparisonMetrics
+  // path only when no parity is available (disconnected/preview store).
+  const comparisonLabels = {
     revenue: dictionary.overview.revenue,
     estimatedProfit: dictionary.overview.estimatedProfit,
     returningCustomerRate: locale === "he" ? "שיעור לקוחות חוזרים" : "Returning Customer Rate",
     discountRate: locale === "he" ? "שיעור הנחות" : "Discount Rate"
-      })
+  };
+  const comparisonMetrics = comparisonEnabled
+    ? cur && prev
+      ? buildComparisonMetricsFromParity(cur, prev, comparisonLabels)
+      : buildComparisonMetrics(dailyMetrics, previousPeriodMetrics, comparisonLabels)
     : [];
   const revenue = cur ? cur.totalSales : sum(dailyMetrics.map((metric) => metric.revenue));
   const estimatedProfit = cur ? cur.estimatedProfit : sum(dailyMetrics.map((metric) => metric.estimatedProfit));

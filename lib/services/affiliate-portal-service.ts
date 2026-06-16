@@ -55,6 +55,20 @@ function toNumber(value: unknown) {
   return Number.isFinite(numeric) ? numeric : 0;
 }
 
+// Refund-adjustment factor for a single affiliate attribution row.
+// Returns 1 for un-refunded orders, 0 for fully refunded, fractional
+// for partial. Used to shrink sales / commission proportionally so the
+// dashboard doesn't claim revenue (or owe commission) on bounced orders.
+// Without this every chart and KPI in the affiliate portal over-reports
+// in proportion to the store's refund rate.
+function refundedFraction(order: { totalPrice?: unknown; totalRefunds?: unknown } | null | undefined) {
+  if (!order) return 0;
+  const total = toNumber(order.totalPrice);
+  const refunds = toNumber(order.totalRefunds);
+  if (total <= 0 || refunds <= 0) return 0;
+  return Math.min(refunds / total, 1);
+}
+
 function buildProgramName(storeName?: string | null) {
   return storeName ? `${storeName} Affiliate Program` : "Affiliate Program";
 }
@@ -617,8 +631,11 @@ async function loadAffiliateDashboardSnapshot() {
       fallbackName: row.affiliateMember ? `${row.affiliateMember.firstName} ${row.affiliateMember.lastName}` : row.affiliateMemberId
     });
     if (!profile) continue;
-    profile.sales += toNumber(row.salesAmount);
-    profile.commission += toNumber(row.commissionAmount);
+    // Shrink sales + commission by the order's refund fraction so refunded
+    // orders don't continue to show as "owed commission" or affiliate revenue.
+    const netFactor = 1 - refundedFraction(row.order);
+    profile.sales += toNumber(row.salesAmount) * netFactor;
+    profile.commission += toNumber(row.commissionAmount) * netFactor;
     profile.orders += Number(row.ordersCount ?? 0);
   }
 
@@ -685,7 +702,9 @@ async function loadTrendFromDb(
     context.attributionRows.forEach((row: any) => {
       const bucket = buckets.get(toDayKey(row.occurredAt));
       if (!bucket) return;
-      bucket.sales += toNumber(row.salesAmount);
+      // Same refund-shrink as the snapshot loop — otherwise a $5k Day-1
+      // spike stays $5k forever in the trend chart even after refunds.
+      bucket.sales += toNumber(row.salesAmount) * (1 - refundedFraction(row.order));
       bucket.orders += Number(row.ordersCount ?? 0);
       bucket.clicks += Number(row.clicks ?? 0);
     });
@@ -713,7 +732,12 @@ async function loadTopProductsFromDb(
     context.orderRows.forEach((order: any) => {
       order.lineItems.forEach((item: any) => {
         const name = item.product?.title ?? item.title;
-        grouped.set(name, (grouped.get(name) ?? 0) + toNumber(item.lineSubtotal));
+        // Subtract refundedSubtotal so the "top affiliate products"
+        // ranking reflects what stayed sold, not what was ordered then
+        // returned. OrderLineItem.refundedSubtotal is a column on the
+        // model so it's already on the row (no select change needed).
+        const net = Math.max(toNumber(item.lineSubtotal) - toNumber(item.refundedSubtotal), 0);
+        grouped.set(name, (grouped.get(name) ?? 0) + net);
       });
     });
 
