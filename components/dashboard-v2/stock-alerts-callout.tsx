@@ -3,9 +3,10 @@ import { ArrowRight, ShieldAlert } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { StockBadge } from "@/components/dashboard-v2/stock-badge";
 import type { ProductStockRow } from "@/lib/domain/types";
+import type { AppLocale } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
-export function StockAlertsCallout({ stock }: { stock: ProductStockRow[] }) {
+export function StockAlertsCallout({ stock, locale = "en" }: { stock: ProductStockRow[]; locale?: AppLocale }) {
   const red = stock.filter((row) => row.flag === "red");
   const yellow = stock.filter((row) => row.flag === "yellow");
   const green = stock.filter((row) => row.flag === "green").length;
@@ -78,7 +79,7 @@ export function StockAlertsCallout({ stock }: { stock: ProductStockRow[] }) {
                   className="flex items-center justify-between gap-3 py-2"
                 >
                   <p className="min-w-0 truncate text-sm font-medium">{row.productTitle}</p>
-                  <StockBadge quantity={row.inventoryQuantity} flag={row.flag} />
+                  <StockBadge quantity={row.inventoryQuantity} flag={row.flag} locale={locale} />
                 </li>
               ))}
             </ul>

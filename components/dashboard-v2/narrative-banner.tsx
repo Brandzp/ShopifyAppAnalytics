@@ -1,5 +1,6 @@
 import { Sparkles, TrendingDown, TrendingUp } from "lucide-react";
 import type { OverviewPayload } from "@/lib/domain/types";
+import type { AppLocale } from "@/lib/i18n";
 import { formatCurrency } from "@/lib/utils";
 
 /**
@@ -12,7 +13,8 @@ export function NarrativeBanner({
   context,
   body,
   tone = "neutral",
-  toneLabel
+  toneLabel,
+  locale = "en"
 }: {
   eyebrow: string;
   headline: string;
@@ -20,6 +22,7 @@ export function NarrativeBanner({
   body?: string;
   tone?: "up" | "down" | "neutral";
   toneLabel?: string;
+  locale?: AppLocale;
 }) {
   const Icon = tone === "up" ? TrendingUp : tone === "down" ? TrendingDown : null;
   const pillClass =
@@ -55,7 +58,14 @@ export function NarrativeBanner({
               className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold ${pillClass}`}
             >
               <Icon className="h-3.5 w-3.5" />
-              {toneLabel ?? (tone === "up" ? "Trending up" : "Trending down")}
+              {toneLabel ??
+                (tone === "up"
+                  ? locale === "he"
+                    ? "מגמת עלייה"
+                    : "Trending up"
+                  : locale === "he"
+                    ? "מגמת ירידה"
+                    : "Trending down")}
             </span>
           </div>
         ) : null}

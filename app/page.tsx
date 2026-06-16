@@ -339,6 +339,7 @@ export default async function CommandCenterPage() {
           />
           <StyledTable
             numbered
+            locale={locale}
             rowKey={(row) => row.productId}
             rows={topProducts}
             columns={[
@@ -358,7 +359,7 @@ export default async function CommandCenterPage() {
                 key: "inventoryQuantity",
                 label: lang("במלאי", "In stock"),
                 align: "end",
-                render: (row) => <StockBadge quantity={row.inventoryQuantity} />
+                render: (row) => <StockBadge quantity={row.inventoryQuantity} locale={locale} />
               },
               {
                 key: "revenue",

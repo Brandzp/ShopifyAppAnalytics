@@ -45,8 +45,12 @@ export default async function SettingsPage() {
   const isConnected = chrome.store.connected;
   const tone = isConnected ? "up" : "neutral";
   const headline = isConnected
-    ? `Shopify connected — pulling data for ${chrome.store.domain}.`
-    : `Connect your Shopify store to start surfacing real data.`;
+    ? locale === "he"
+      ? `Shopify מחובר — מושכים נתונים מ-${chrome.store.domain}.`
+      : `Shopify connected — pulling data for ${chrome.store.domain}.`
+    : locale === "he"
+      ? `חברו את חנות ה-Shopify כדי להתחיל לראות נתונים אמיתיים.`
+      : `Connect your Shopify store to start surfacing real data.`;
 
   return (
     <AppShell store={chrome.store} controls={chrome.controls}>
@@ -58,20 +62,36 @@ export default async function SettingsPage() {
         />
 
         <NarrativeBanner
-          eyebrow="Setup status"
+          eyebrow={locale === "he" ? "סטטוס הגדרה" : "Setup status"}
           headline={headline}
-          body="The Shopify connection on the left feeds every other page. The reporting block on the right shapes how profit and comparisons are calculated."
+          body={
+            locale === "he"
+              ? "חיבור ה-Shopify בצד שמאל מזין את כל שאר העמודים. בלוק הדיווח בצד ימין קובע איך מחושבים הרווח וההשוואות."
+              : "The Shopify connection on the left feeds every other page. The reporting block on the right shapes how profit and comparisons are calculated."
+          }
           tone={tone}
-          toneLabel={isConnected ? "Connected" : "Action needed"}
+          toneLabel={
+            isConnected
+              ? locale === "he"
+                ? "מחובר"
+                : "Connected"
+              : locale === "he"
+                ? "נדרשת פעולה"
+                : "Action needed"
+          }
         />
 
         {setupHealth ? <SetupHealthChecklist report={setupHealth} locale={locale} /> : null}
 
         <section className="space-y-3">
           <SectionHead
-            eyebrow="Step 1"
-            title="Connect your data sources"
-            hint="The store connection is required. Creator accounts are optional — they unlock Creator Commerce."
+            eyebrow={locale === "he" ? "שלב 1" : "Step 1"}
+            title={locale === "he" ? "חברו את מקורות הנתונים" : "Connect your data sources"}
+            hint={
+              locale === "he"
+                ? "חיבור החנות הוא חובה. חשבונות יוצרים הם רשות — הם פותחים את Creator Commerce."
+                : "The store connection is required. Creator accounts are optional — they unlock Creator Commerce."
+            }
           />
           <div className="grid items-start gap-4 xl:grid-cols-[1.4fr_1fr]">
             <div className="space-y-4">
@@ -159,7 +179,11 @@ export default async function SettingsPage() {
                       <Wrench className="h-3.5 w-3.5" aria-hidden />
                     </span>
                     <CardTitle className="text-base">{dictionary.settings.futureTitle}</CardTitle>
-                    <HelpTip>What we'll wire up next. Honest about what's not built yet.</HelpTip>
+                    <HelpTip>
+                      {locale === "he"
+                        ? "מה נחבר בהמשך. בכנות לגבי מה שעוד לא בנוי."
+                        : "What we'll wire up next. Honest about what's not built yet."}
+                    </HelpTip>
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-2">

@@ -1,6 +1,7 @@
 import * as React from "react";
 import { HelpCircle, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
+import type { AppLocale } from "@/lib/i18n";
 
 type Side = "top" | "bottom" | "left" | "right";
 type Align = "start" | "center" | "end";
@@ -14,6 +15,7 @@ export interface HelpTipProps {
   className?: string;
   iconClassName?: string;
   width?: "sm" | "md" | "lg";
+  locale?: AppLocale;
 }
 
 const sideClasses: Record<Side, string> = {
@@ -52,18 +54,20 @@ export function HelpTip({
   variant = "help",
   className,
   iconClassName,
-  width = "md"
+  width = "md",
+  locale = "en"
 }: HelpTipProps) {
   const Icon = variant === "info" ? Info : HelpCircle;
   const positionClass = side === "left" || side === "right"
     ? sideClasses[side]
     : cn(sideClasses[side], alignClasses[side][align]);
+  const defaultLabel = locale === "he" ? "הצג מידע נוסף" : "Show more info";
 
   return (
     <span className={cn("group/tip relative inline-flex align-middle", className)}>
       <button
         type="button"
-        aria-label={label ?? "Show more info"}
+        aria-label={label ?? defaultLabel}
         className="inline-flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground/70 transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:text-foreground"
       >
         <Icon className={cn("h-3.5 w-3.5", iconClassName)} aria-hidden />

@@ -32,16 +32,35 @@ export default async function RetentionPage() {
   // Narrative
   const repeatRate = snap.repeatPurchaseRate;
   const tone = repeatRate >= 30 ? "up" : repeatRate >= 15 ? "neutral" : "down";
-  const headline = `Repeat-purchase rate is ${repeatRate.toFixed(1)}% — ${
-    repeatRate >= 30 ? "healthy" : repeatRate >= 15 ? "growing" : "needs work"
-  }.`;
+  const repeatStateLabel =
+    locale === "he"
+      ? repeatRate >= 30
+        ? "בריא"
+        : repeatRate >= 15
+          ? "במגמת שיפור"
+          : "דורש טיפול"
+      : repeatRate >= 30
+        ? "healthy"
+        : repeatRate >= 15
+          ? "growing"
+          : "needs work";
+  const headline =
+    locale === "he"
+      ? `שיעור הרכישה החוזרת עומד על ${repeatRate.toFixed(1)}% — ${repeatStateLabel}.`
+      : `Repeat-purchase rate is ${repeatRate.toFixed(1)}% — ${repeatStateLabel}.`;
   const body = [
-    `${formatNumber(snap.newCustomers)} new customers and ${formatNumber(snap.returningCustomers)} returning customers ordered in this window.`,
+    locale === "he"
+      ? `${formatNumber(snap.newCustomers)} לקוחות חדשים ו־${formatNumber(snap.returningCustomers)} לקוחות חוזרים הזמינו בחלון הזמן הזה.`
+      : `${formatNumber(snap.newCustomers)} new customers and ${formatNumber(snap.returningCustomers)} returning customers ordered in this window.`,
     snap.averageDaysToSecondOrder > 0
-      ? `Returning buyers come back after about ${snap.averageDaysToSecondOrder.toFixed(0)} days on average.`
+      ? locale === "he"
+        ? `לקוחות חוזרים שבים בממוצע אחרי ${snap.averageDaysToSecondOrder.toFixed(0)} ימים.`
+        : `Returning buyers come back after about ${snap.averageDaysToSecondOrder.toFixed(0)} days on average.`
       : null,
     snap.secondOrderRate > 0
-      ? `Second-order rate is ${snap.secondOrderRate.toFixed(1)}% — that's how many first-time buyers came back for a second order.`
+      ? locale === "he"
+        ? `שיעור ההזמנה השנייה הוא ${snap.secondOrderRate.toFixed(1)}% — כך נראה אחוז הלקוחות שחזרו להזמנה נוספת אחרי הראשונה.`
+        : `Second-order rate is ${snap.secondOrderRate.toFixed(1)}% — that's how many first-time buyers came back for a second order.`
       : null
   ]
     .filter(Boolean)
@@ -57,18 +76,34 @@ export default async function RetentionPage() {
         />
 
         <NarrativeBanner
-          eyebrow="Retention pulse"
+          eyebrow={locale === "he" ? "דופק השימור" : "Retention pulse"}
           headline={headline}
           body={body}
           tone={tone}
-          toneLabel={tone === "up" ? "Healthy" : tone === "down" ? "At risk" : "Watch closely"}
+          toneLabel={
+            tone === "up"
+              ? locale === "he"
+                ? "בריא"
+                : "Healthy"
+              : tone === "down"
+                ? locale === "he"
+                  ? "בסיכון"
+                  : "At risk"
+                : locale === "he"
+                  ? "לעקוב מקרוב"
+                  : "Watch closely"
+          }
         />
 
         <section className="space-y-3">
           <SectionHead
-            eyebrow="Step 1"
-            title="Customer mix this period"
-            hint="Five numbers that tell you if buyers come back. Hover any ? for the calculation."
+            eyebrow={locale === "he" ? "שלב 1" : "Step 1"}
+            title={locale === "he" ? "תמהיל הלקוחות בתקופה" : "Customer mix this period"}
+            hint={
+              locale === "he"
+                ? "חמישה מספרים שמספרים אם הלקוחות חוזרים. ריחוף על ? יציג את הנוסחה."
+                : "Five numbers that tell you if buyers come back. Hover any ? for the calculation."
+            }
           />
           <div className="grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
             <StatTile
@@ -76,44 +111,48 @@ export default async function RetentionPage() {
               value={formatNumber(snap.newCustomers)}
               icon={UserPlus}
               tooltip={tips.newCustomers}
-              hint="First-ever orders in this window."
+              hint={locale === "he" ? "הזמנות ראשונות אי פעם בחלון הזה." : "First-ever orders in this window."}
             />
             <StatTile
               label={dictionary.retention.returningCustomers}
               value={formatNumber(snap.returningCustomers)}
               icon={Users2}
               tooltip={tips.returningCustomers}
-              hint="Already had at least one prior order."
+              hint={locale === "he" ? "כבר הייתה להם לפחות הזמנה קודמת אחת." : "Already had at least one prior order."}
             />
             <StatTile
               label={dictionary.retention.repeatPurchaseRate}
               value={`${snap.repeatPurchaseRate.toFixed(1)}%`}
               icon={Repeat}
               tooltip={tips.repeatRate}
-              hint="Higher = stickier brand."
+              hint={locale === "he" ? "גבוה יותר = מותג דביק יותר." : "Higher = stickier brand."}
             />
             <StatTile
               label={dictionary.retention.secondOrderRate}
               value={`${snap.secondOrderRate.toFixed(1)}%`}
               icon={TrendingUp}
               tooltip={tips.secondOrderRate}
-              hint="First-time buyers who came back."
+              hint={locale === "he" ? "לקוחות חדשים שחזרו להזמין שוב." : "First-time buyers who came back."}
             />
             <StatTile
               label={dictionary.retention.avgDaysToSecondOrder}
               value={formatNumber(snap.averageDaysToSecondOrder)}
               icon={CalendarClock}
               tooltip={tips.avgDaysToSecond}
-              hint="Days between order #1 and #2."
+              hint={locale === "he" ? "ימים בין הזמנה ראשונה לשנייה." : "Days between order #1 and #2."}
             />
           </div>
         </section>
 
         <section className="space-y-3">
           <SectionHead
-            eyebrow="Step 2"
-            title="Returning customer trend"
-            hint="Indigo area shows the daily share of orders coming from existing customers. Watch for sustained drops."
+            eyebrow={locale === "he" ? "שלב 2" : "Step 2"}
+            title={locale === "he" ? "מגמת הלקוחות החוזרים" : "Returning customer trend"}
+            hint={
+              locale === "he"
+                ? "האזור הסגול מציג את אחוז ההזמנות היומי שמגיע מלקוחות קיימים. שווה לעקוב אחרי ירידות מתמשכות."
+                : "Indigo area shows the daily share of orders coming from existing customers. Watch for sustained drops."
+            }
           />
           <Card>
             <CardHeader className="pb-2">
@@ -127,9 +166,17 @@ export default async function RetentionPage() {
 
         <section className="space-y-3">
           <SectionHead
-            eyebrow="Step 3"
-            title="What customers buy first vs. what brings them back"
-            hint="Left = best acquisition products. Right = best retention products. Different SKUs are normal — and often very revealing."
+            eyebrow={locale === "he" ? "שלב 3" : "Step 3"}
+            title={
+              locale === "he"
+                ? "מה לקוחות קונים ראשון לעומת מה שמחזיר אותם"
+                : "What customers buy first vs. what brings them back"
+            }
+            hint={
+              locale === "he"
+                ? "שמאל = המוצרים הטובים ביותר לרכישת לקוחות חדשים. ימין = המוצרים שהכי משמרים. SKU-ים שונים בכל צד זה תקין — ולרוב מאוד מגלה."
+                : "Left = best acquisition products. Right = best retention products. Different SKUs are normal — and often very revealing."
+            }
           />
           <div className="grid items-start gap-4 lg:grid-cols-2">
             <Card>
@@ -145,7 +192,7 @@ export default async function RetentionPage() {
                   dataKey="orders"
                   xKey="title"
                   format="number"
-                  valueLabel="First orders"
+                  valueLabel={locale === "he" ? "הזמנות ראשונות" : "First orders"}
                 />
               </CardContent>
             </Card>
@@ -164,7 +211,7 @@ export default async function RetentionPage() {
                   xKey="title"
                   color="#0080FF"
                   format="number"
-                  valueLabel="Second orders"
+                  valueLabel={locale === "he" ? "הזמנות שניות" : "Second orders"}
                 />
               </CardContent>
             </Card>
@@ -173,9 +220,17 @@ export default async function RetentionPage() {
 
         <section className="space-y-3">
           <SectionHead
-            eyebrow="Step 4"
-            title="Cohort retention — do customers come back?"
-            hint="Each row is a group of customers acquired in the same month. Columns show what percent of that cohort ordered again N months later. Darker = better retention. Compare recent rows (top) to older rows (bottom): if recent cohorts retain worse, marketing is buying first-order tourists."
+            eyebrow={locale === "he" ? "שלב 4" : "Step 4"}
+            title={
+              locale === "he"
+                ? "שימור קוהורטים — האם הלקוחות חוזרים?"
+                : "Cohort retention — do customers come back?"
+            }
+            hint={
+              locale === "he"
+                ? "כל שורה היא קבוצת לקוחות שנרכשה באותו חודש. העמודות מציגות איזה אחוז מהקוהורט הזמין שוב N חודשים לאחר מכן. כהה יותר = שימור טוב יותר. שווה להשוות שורות עדכניות (למעלה) לשורות ישנות (למטה) — אם הקוהורטים החדשים משמרים פחות, השיווק מביא לקוחות חד־פעמיים."
+                : "Each row is a group of customers acquired in the same month. Columns show what percent of that cohort ordered again N months later. Darker = better retention. Compare recent rows (top) to older rows (bottom): if recent cohorts retain worse, marketing is buying first-order tourists."
+            }
           />
           <Card>
             <CardHeader className="pb-2">

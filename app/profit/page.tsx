@@ -41,12 +41,18 @@ export default async function ProfitPage() {
   const watchlistFirst = profit.lowProducts[0];
 
   const narrativeBody = [
-    `Margin landed near ${margin.toFixed(1)}% — every ₪100 in revenue kept ${formatCurrency((totalProfit / Math.max(totalRevenue, 1)) * 100, currency)}.`,
+    locale === "he"
+      ? `המרווח נחת סביב ${margin.toFixed(1)}% — מכל ₪100 הכנסה נשארו ${formatCurrency((totalProfit / Math.max(totalRevenue, 1)) * 100, currency)}.`
+      : `Margin landed near ${margin.toFixed(1)}% — every ₪100 in revenue kept ${formatCurrency((totalProfit / Math.max(totalRevenue, 1)) * 100, currency)}.`,
     topProduct
-      ? `${topProduct.productTitle} is your top profit driver at ${formatCurrency(topProduct.estimatedProfit, currency)}.`
+      ? locale === "he"
+        ? `${topProduct.productTitle} הוא מנוע הרווח המוביל שלך עם ${formatCurrency(topProduct.estimatedProfit, currency)}.`
+        : `${topProduct.productTitle} is your top profit driver at ${formatCurrency(topProduct.estimatedProfit, currency)}.`
       : null,
     watchlistFirst
-      ? `Watchlist: ${watchlistFirst.productTitle} is the lowest-margin SKU and worth a pricing review.`
+      ? locale === "he"
+        ? `מעקב: ${watchlistFirst.productTitle} הוא ה־SKU עם המרווח הנמוך ביותר ומומלץ לבחון תמחור.`
+        : `Watchlist: ${watchlistFirst.productTitle} is the lowest-margin SKU and worth a pricing review.`
       : null
   ]
     .filter(Boolean)
@@ -62,19 +68,35 @@ export default async function ProfitPage() {
         />
 
         <NarrativeBanner
-          eyebrow="Profit at a glance"
-          headline={`Estimated profit this period: ${formatCurrency(totalProfit, currency)} on ${formatCurrency(totalRevenue, currency)} revenue.`}
+          eyebrow={locale === "he" ? "רווחיות במבט מהיר" : "Profit at a glance"}
+          headline={
+            locale === "he"
+              ? `רווח משוער בתקופה: ${formatCurrency(totalProfit, currency)} מתוך ${formatCurrency(totalRevenue, currency)} הכנסה.`
+              : `Estimated profit this period: ${formatCurrency(totalProfit, currency)} on ${formatCurrency(totalRevenue, currency)} revenue.`
+          }
           body={narrativeBody}
           tone={totalProfit > 0 ? "up" : "down"}
-          toneLabel={totalProfit > 0 ? "Profit positive" : "Margin pressure"}
+          toneLabel={
+            totalProfit > 0
+              ? locale === "he"
+                ? "רווח חיובי"
+                : "Profit positive"
+              : locale === "he"
+                ? "לחץ על המרווח"
+                : "Margin pressure"
+          }
         />
 
         {/* Charts row */}
         <section className="space-y-3">
           <SectionHead
-            eyebrow="Step 1"
-            title="Where revenue and margin live"
-            hint="Left chart = which products bring in the money. Right chart = which collections keep the most after costs."
+            eyebrow={locale === "he" ? "שלב 1" : "Step 1"}
+            title={locale === "he" ? "איפה נמצאים ההכנסה והמרווח" : "Where revenue and margin live"}
+            hint={
+              locale === "he"
+                ? "הגרף משמאל = אילו מוצרים מביאים את הכסף. הגרף מימין = אילו קולקציות משאירות הכי הרבה אחרי עלויות."
+                : "Left chart = which products bring in the money. Right chart = which collections keep the most after costs."
+            }
           />
           <div className="grid items-start gap-4 lg:grid-cols-2">
             <Card>
@@ -92,7 +114,7 @@ export default async function ProfitPage() {
                   xKey="title"
                   format="currency"
                   currency={currency}
-                  valueLabel="Revenue"
+                  valueLabel={locale === "he" ? "הכנסה" : "Revenue"}
                 />
               </CardContent>
             </Card>
@@ -135,7 +157,7 @@ export default async function ProfitPage() {
                   color="#0080FF"
                   format="currency"
                   currency={currency}
-                  valueLabel="Estimated profit"
+                  valueLabel={locale === "he" ? "רווח משוער" : "Estimated profit"}
                 />
               </CardContent>
             </Card>
@@ -145,9 +167,13 @@ export default async function ProfitPage() {
         {/* Tables row */}
         <section className="space-y-3">
           <SectionHead
-            eyebrow="Step 2"
-            title="The full breakdown"
-            hint="Sortable, paginated tables. Use the page-size toggle if you want to see more rows at once."
+            eyebrow={locale === "he" ? "שלב 2" : "Step 2"}
+            title={locale === "he" ? "הפירוט המלא" : "The full breakdown"}
+            hint={
+              locale === "he"
+                ? "טבלאות עם מיון ועימוד. השתמש במחליף גודל-עמוד כדי לראות יותר שורות בבת אחת."
+                : "Sortable, paginated tables. Use the page-size toggle if you want to see more rows at once."
+            }
             cta={{
               href: "/profit/costs",
               label: locale === "he" ? "עריכת עלויות מוצרים (COGS) →" : "Edit product costs (COGS) →"
@@ -166,7 +192,10 @@ export default async function ProfitPage() {
                 {
                   key: "collection",
                   label: dictionary.profit.collection,
-                  tooltip: "Every Shopify collection the product belongs to.",
+                  tooltip:
+                    locale === "he"
+                      ? "כל קולקציית Shopify שהמוצר משתייך אליה."
+                      : "Every Shopify collection the product belongs to.",
                   render: (row) => <CollectionChips collections={row.collections} fallback={row.collection} />
                 },
                 {
@@ -258,26 +287,31 @@ export default async function ProfitPage() {
         {/* Top + watchlist row */}
         <section className="space-y-3">
           <SectionHead
-            eyebrow="Step 3"
-            title="Heroes & watchlist"
-            hint="Heroes drove margin this period. Watchlist needs your attention next — pricing, bundles, or refund review."
+            eyebrow={locale === "he" ? "שלב 3" : "Step 3"}
+            title={locale === "he" ? "מובילים ומעקב" : "Heroes & watchlist"}
+            hint={
+              locale === "he"
+                ? "המובילים הניעו את המרווח בתקופה. הרשימה למעקב דורשת תשומת לב הבאה — תמחור, באנדלים או בחינת החזרים."
+                : "Heroes drove margin this period. Watchlist needs your attention next — pricing, bundles, or refund review."
+            }
           />
           <div className="grid items-start gap-4 lg:grid-cols-2">
             <StyledTable
               numbered
+              locale={locale}
               rowKey={(row) => row.productId}
               rows={profit.topProducts}
               columns={[
-                { key: "productTitle", label: "Product" },
+                { key: "productTitle", label: locale === "he" ? "מוצר" : "Product" },
                 {
                   key: "revenue",
-                  label: "Revenue",
+                  label: locale === "he" ? "הכנסה" : "Revenue",
                   align: "end",
                   render: (row) => formatCurrency(row.revenue, currency)
                 },
                 {
                   key: "estimatedProfit",
-                  label: "Est. profit",
+                  label: locale === "he" ? "רווח משוער" : "Est. profit",
                   align: "end",
                   emphasis: true,
                   render: (row) => formatCurrency(row.estimatedProfit, currency)
@@ -294,7 +328,9 @@ export default async function ProfitPage() {
               </CardHeader>
               <CardContent className="space-y-3">
                 {profit.lowProducts.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No watchlist items in this window.</p>
+                  <p className="text-sm text-muted-foreground">
+                    {locale === "he" ? "אין פריטים למעקב בתקופה זו." : "No watchlist items in this window."}
+                  </p>
                 ) : null}
                 {profit.lowProducts.map((item) => (
                   <div
@@ -334,9 +370,17 @@ export default async function ProfitPage() {
         {/* Bundle / refund placeholders */}
         <section className="space-y-3">
           <SectionHead
-            eyebrow="Coming next"
-            title="Bundles & refunds — what we'll surface here"
-            hint="Currently placeholders. They'll light up once we ingest bundle composition and refund reasons."
+            eyebrow={locale === "he" ? "בקרוב" : "Coming next"}
+            title={
+              locale === "he"
+                ? "באנדלים והחזרים — מה נציג כאן"
+                : "Bundles & refunds — what we'll surface here"
+            }
+            hint={
+              locale === "he"
+                ? "כרגע מקומות שמורים. הם יידלקו ברגע שניקלוט הרכבי באנדלים וסיבות החזר."
+                : "Currently placeholders. They'll light up once we ingest bundle composition and refund reasons."
+            }
           />
           <div className="grid items-start gap-4 md:grid-cols-2">
             <Card>

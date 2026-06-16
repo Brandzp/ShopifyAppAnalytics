@@ -1,5 +1,6 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { HelpTip } from "@/components/ui/help-tip";
+import type { AppLocale } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
 export interface StyledColumn<T> {
@@ -22,8 +23,9 @@ export function StyledTable<T extends object>({
   columns,
   rows,
   numbered = false,
-  emptyMessage = "No data available yet.",
-  rowKey
+  emptyMessage,
+  rowKey,
+  locale = "en"
 }: {
   columns: StyledColumn<T>[];
   rows: T[];
@@ -31,7 +33,10 @@ export function StyledTable<T extends object>({
   numbered?: boolean;
   emptyMessage?: string;
   rowKey?: (row: T, index: number) => string;
+  locale?: AppLocale;
 }) {
+  const resolvedEmptyMessage =
+    emptyMessage ?? (locale === "he" ? "אין עדיין נתונים להצגה." : "No data available yet.");
   return (
     <Card>
       <CardContent className="p-0">
@@ -60,7 +65,7 @@ export function StyledTable<T extends object>({
                     colSpan={columns.length + (numbered ? 1 : 0)}
                     className="px-4 py-6 text-center text-sm text-muted-foreground"
                   >
-                    {emptyMessage}
+                    {resolvedEmptyMessage}
                   </td>
                 </tr>
               ) : null}

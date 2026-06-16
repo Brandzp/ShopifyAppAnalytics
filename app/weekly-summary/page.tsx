@@ -22,7 +22,7 @@ import {
   buildWeeklyAgentInsights,
   type WeeklyAgentInsightsPayload
 } from "@/lib/services/weekly-summary-insights-service";
-import { getAppLocale, getDictionary } from "@/lib/i18n";
+import { getAppLocale, getDictionary, type AppLocale } from "@/lib/i18n";
 import { formatCurrency, formatNumber } from "@/lib/utils";
 
 function getDirectionClasses(direction: MarketingPlannerDirection) {
@@ -32,18 +32,24 @@ function getDirectionClasses(direction: MarketingPlannerDirection) {
 function InfluencerWeeklyEvidence({
   influencer,
   direction,
-  currency
+  currency,
+  locale = "en"
 }: {
   influencer: MarketingPlannerInfluencerIntelligence | null;
   direction: MarketingPlannerDirection;
   currency: string;
+  locale?: AppLocale;
 }) {
   return (
     <Card dir={direction} className={getDirectionClasses(direction)}>
       <CardHeader className="pb-3">
-        <CardTitle className="text-base">Influencer performance evidence</CardTitle>
+        <CardTitle className="text-base">
+          {locale === "he" ? "ראיות לביצועי משפיענים" : "Influencer performance evidence"}
+        </CardTitle>
         <p className="text-sm text-muted-foreground">
-          Affiliate sales, clicks, and creator content filtered to the current weekly-summary date window.
+          {locale === "he"
+            ? "מכירות אפיליאציה, קליקים ותוכן יוצרים, מסוננים לחלון התאריכים של הסיכום השבועי."
+            : "Affiliate sales, clicks, and creator content filtered to the current weekly-summary date window."}
         </p>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -51,30 +57,32 @@ function InfluencerWeeklyEvidence({
           <>
             <div className="grid gap-3 grid-cols-2 md:grid-cols-3 xl:grid-cols-5">
               <div className="rounded-xl border border-border/70 bg-background/70 p-3">
-                <p className="text-xs text-muted-foreground">Period</p>
+                <p className="text-xs text-muted-foreground">{locale === "he" ? "תקופה" : "Period"}</p>
                 <p className="mt-1 font-semibold">{influencer.periodLabel}</p>
               </div>
               <div className="rounded-xl border border-border/70 bg-background/70 p-3">
-                <p className="text-xs text-muted-foreground">Active creators</p>
+                <p className="text-xs text-muted-foreground">{locale === "he" ? "יוצרים פעילים" : "Active creators"}</p>
                 <p className="mt-1 font-semibold">{formatNumber(influencer.activeCreators)} / {formatNumber(influencer.totalCreators)}</p>
               </div>
               <div className="rounded-xl border border-border/70 bg-background/70 p-3">
-                <p className="text-xs text-muted-foreground">Sales</p>
+                <p className="text-xs text-muted-foreground">{locale === "he" ? "מכירות" : "Sales"}</p>
                 <p className="mt-1 font-semibold">{formatCurrency(influencer.totalSales, currency)}</p>
               </div>
               <div className="rounded-xl border border-border/70 bg-background/70 p-3">
-                <p className="text-xs text-muted-foreground">Orders</p>
+                <p className="text-xs text-muted-foreground">{locale === "he" ? "הזמנות" : "Orders"}</p>
                 <p className="mt-1 font-semibold">{formatNumber(influencer.totalOrders)}</p>
               </div>
               <div className="rounded-xl border border-border/70 bg-background/70 p-3">
-                <p className="text-xs text-muted-foreground">Clicks</p>
+                <p className="text-xs text-muted-foreground">{locale === "he" ? "קליקים" : "Clicks"}</p>
                 <p className="mt-1 font-semibold">{formatNumber(influencer.totalClicks)}</p>
               </div>
             </div>
 
             <div className="grid gap-4 lg:grid-cols-2">
               <div className="rounded-2xl border border-border/70 bg-background/70 p-4">
-                <p className="text-sm font-semibold text-foreground">Creators to scale</p>
+                <p className="text-sm font-semibold text-foreground">
+                  {locale === "he" ? "יוצרים להגדיל" : "Creators to scale"}
+                </p>
                 {influencer.topCreators.length ? (
                   <div className="mt-3 space-y-3">
                     {influencer.topCreators.slice(0, 4).map((creator) => (
@@ -84,19 +92,25 @@ function InfluencerWeeklyEvidence({
                           <Badge>{creator.role}</Badge>
                         </div>
                         <p className="mt-1 text-muted-foreground">
-                          {formatCurrency(creator.sales, currency)} - {formatNumber(creator.orders)} orders - code {creator.couponCode ?? creator.affiliateCode}
+                          {formatCurrency(creator.sales, currency)} - {formatNumber(creator.orders)} {locale === "he" ? "הזמנות" : "orders"} - {locale === "he" ? "קוד" : "code"} {creator.couponCode ?? creator.affiliateCode}
                         </p>
                         <p className="mt-2 leading-6 text-muted-foreground">{creator.reason}</p>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <p className="mt-3 text-sm text-muted-foreground">No creator has attributed sales in this date window yet.</p>
+                  <p className="mt-3 text-sm text-muted-foreground">
+                    {locale === "he"
+                      ? "אין עדיין יוצר עם מכירות מיוחסות בחלון התאריכים הזה."
+                      : "No creator has attributed sales in this date window yet."}
+                  </p>
                 )}
               </div>
 
               <div className="rounded-2xl border border-border/70 bg-background/70 p-4">
-                <p className="text-sm font-semibold text-foreground">Creators to check / pause</p>
+                <p className="text-sm font-semibold text-foreground">
+                  {locale === "he" ? "יוצרים לבדוק / להשהות" : "Creators to check / pause"}
+                </p>
                 {influencer.watchCreators.length ? (
                   <div className="mt-3 space-y-3">
                     {influencer.watchCreators.slice(0, 4).map((creator) => (
@@ -106,21 +120,27 @@ function InfluencerWeeklyEvidence({
                           <Badge className="border-amber-200 bg-amber-50 text-amber-700">{creator.role}</Badge>
                         </div>
                         <p className="mt-1 text-muted-foreground">
-                          {formatCurrency(creator.sales, currency)} - {formatNumber(creator.orders)} orders - {formatNumber(creator.clicks)} clicks
+                          {formatCurrency(creator.sales, currency)} - {formatNumber(creator.orders)} {locale === "he" ? "הזמנות" : "orders"} - {formatNumber(creator.clicks)} {locale === "he" ? "קליקים" : "clicks"}
                         </p>
                         <p className="mt-2 leading-6 text-muted-foreground">{creator.reason}</p>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <p className="mt-3 text-sm text-muted-foreground">No creator needs a warning flag in this date window.</p>
+                  <p className="mt-3 text-sm text-muted-foreground">
+                    {locale === "he"
+                      ? "אין יוצר שדורש דגל אזהרה בחלון התאריכים הזה."
+                      : "No creator needs a warning flag in this date window."}
+                  </p>
                 )}
               </div>
             </div>
 
             {influencer.suggestedActions.length ? (
               <div className="rounded-2xl border border-border/70 bg-background/70 p-4">
-                <p className="text-sm font-semibold text-foreground">Actions to carry into planning</p>
+                <p className="text-sm font-semibold text-foreground">
+                  {locale === "he" ? "פעולות להעביר לתכנון" : "Actions to carry into planning"}
+                </p>
                 <div className="mt-3 grid gap-3 xl:grid-cols-2">
                   {influencer.suggestedActions.map((action, index) => (
                     <div key={`weekly-influencer-action-${index}`} className="rounded-xl border border-border/60 bg-background p-3 text-sm">
@@ -130,7 +150,7 @@ function InfluencerWeeklyEvidence({
                       </div>
                       <p className="mt-2 leading-6 text-muted-foreground">{action.why}</p>
                       <p className="mt-2 text-xs text-muted-foreground">
-                        <strong className="text-foreground">Where:</strong> {action.ganttPlacement}
+                        <strong className="text-foreground">{locale === "he" ? "איפה:" : "Where:"}</strong> {action.ganttPlacement}
                       </p>
                     </div>
                   ))}
@@ -140,7 +160,9 @@ function InfluencerWeeklyEvidence({
 
             {influencer.dataWarnings.length ? (
               <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-                <p className="font-semibold">Influencer data warnings</p>
+                <p className="font-semibold">
+                  {locale === "he" ? "אזהרות נתוני משפיענים" : "Influencer data warnings"}
+                </p>
                 <ul className="mt-2 space-y-2 leading-6">
                   {influencer.dataWarnings.map((warning, index) => (
                     <li key={`weekly-influencer-warning-${index}`}>{warning}</li>
@@ -151,7 +173,9 @@ function InfluencerWeeklyEvidence({
           </>
         ) : (
           <p className="text-sm text-muted-foreground">
-            Influencer data is not available for this store yet. Add affiliates, Instagram handles, and run the crawler/sync to populate this proof layer.
+            {locale === "he"
+              ? "אין עדיין נתוני משפיענים לחנות הזו. הוסיפו אפיליאטים, ידיות אינסטגרם והריצו את הקראולר/סנכרון כדי לאכלס את שכבת ההוכחה."
+              : "Influencer data is not available for this store yet. Add affiliates, Instagram handles, and run the crawler/sync to populate this proof layer."}
           </p>
         )}
       </CardContent>
@@ -161,15 +185,17 @@ function InfluencerWeeklyEvidence({
 
 function WeeklyAgentInsightsPanel({
   payload,
-  direction
+  direction,
+  locale = "en"
 }: {
   payload: WeeklyAgentInsightsPayload;
   direction: MarketingPlannerDirection;
+  locale?: AppLocale;
 }) {
   const channelLabel = {
     meta_ads: "Meta Ads",
     instagram: "Instagram",
-    history: "History"
+    history: locale === "he" ? "היסטוריה" : "History"
   } satisfies Record<string, string>;
 
   const severityClass = {
@@ -181,15 +207,21 @@ function WeeklyAgentInsightsPanel({
   return (
     <section className="space-y-3">
       <SectionHead
-        eyebrow="Agent thinking"
-        title="What the agent thinks about Meta Ads and Instagram"
-        hint={`Generated from this date window plus prior Growth Agent memory: ${payload.dateRangeLabel}.`}
+        eyebrow={locale === "he" ? "חשיבת הסוכן" : "Agent thinking"}
+        title={locale === "he" ? "מה הסוכן חושב על Meta Ads ואינסטגרם" : "What the agent thinks about Meta Ads and Instagram"}
+        hint={locale === "he"
+          ? `נוצר על בסיס חלון התאריכים הזה ועל סמך זיכרון קודם של סוכן הצמיחה: ${payload.dateRangeLabel}.`
+          : `Generated from this date window plus prior Growth Agent memory: ${payload.dateRangeLabel}.`}
       />
       <Card dir={direction} className={getDirectionClasses(direction)}>
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">Weekly growth insights</CardTitle>
+          <CardTitle className="text-base">
+            {locale === "he" ? "תובנות צמיחה שבועיות" : "Weekly growth insights"}
+          </CardTitle>
           <p className="text-sm text-muted-foreground">
-            These are not just raw metrics. The agent compares current Meta/Instagram signals with historical findings and stores this week's conclusions for the next readout.
+            {locale === "he"
+              ? "אלה לא רק מספרים גולמיים. הסוכן משווה את האיתותים הנוכחיים מ־Meta ומאינסטגרם לממצאים היסטוריים, ושומר את המסקנות של השבוע לקראת הקריאה הבאה."
+              : "These are not just raw metrics. The agent compares current Meta/Instagram signals with historical findings and stores this week's conclusions for the next readout."}
           </p>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -200,21 +232,27 @@ function WeeklyAgentInsightsPanel({
                   <p className="font-semibold">{insight.title}</p>
                   <div className="flex flex-wrap gap-2">
                     <Badge className="bg-white/70 text-current">{channelLabel[insight.channel]}</Badge>
-                    <Badge className="bg-white/70 text-current">{Math.round(insight.confidenceScore * 100)}% confidence</Badge>
+                    <Badge className="bg-white/70 text-current">
+                      {Math.round(insight.confidenceScore * 100)}% {locale === "he" ? "ביטחון" : "confidence"}
+                    </Badge>
                   </div>
                 </div>
                 <p className="mt-3 leading-6">{insight.whatAgentThinks}</p>
                 <div className="mt-3 rounded-xl border border-white/70 bg-white/60 p-3">
-                  <p className="text-xs font-semibold uppercase tracking-wider opacity-80">Evidence</p>
+                  <p className="text-xs font-semibold uppercase tracking-wider opacity-80">
+                    {locale === "he" ? "ראיות" : "Evidence"}
+                  </p>
                   <p className="mt-1 leading-6">{insight.evidence}</p>
                 </div>
                 <div className="mt-3 rounded-xl border border-white/70 bg-white/60 p-3">
-                  <p className="text-xs font-semibold uppercase tracking-wider opacity-80">Recommended action</p>
+                  <p className="text-xs font-semibold uppercase tracking-wider opacity-80">
+                    {locale === "he" ? "פעולה מומלצת" : "Recommended action"}
+                  </p>
                   <p className="mt-1 leading-6">{insight.recommendation}</p>
                 </div>
                 {insight.learnedFromHistory ? (
                   <p className="mt-3 text-xs font-medium opacity-85">
-                    Learned from history: {insight.learnedFromHistory}
+                    {locale === "he" ? "נלמד מההיסטוריה: " : "Learned from history: "}{insight.learnedFromHistory}
                   </p>
                 ) : null}
               </div>
@@ -223,8 +261,14 @@ function WeeklyAgentInsightsPanel({
 
           <div className="rounded-2xl border border-border/70 bg-background/70 p-4 text-sm">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="font-semibold text-foreground">History used by the agent</p>
-              <Badge>{payload.memorySaved ? "Saved to memory" : "Memory save skipped"}</Badge>
+              <p className="font-semibold text-foreground">
+                {locale === "he" ? "היסטוריה שבה הסוכן השתמש" : "History used by the agent"}
+              </p>
+              <Badge>
+                {payload.memorySaved
+                  ? (locale === "he" ? "נשמר בזיכרון" : "Saved to memory")
+                  : (locale === "he" ? "שמירת זיכרון דולגה" : "Memory save skipped")}
+              </Badge>
             </div>
             <ul className="mt-2 space-y-1 leading-6 text-muted-foreground">
               {payload.historySignals.map((signal, index) => (
@@ -303,32 +347,40 @@ export default async function WeeklySummaryPage() {
         </div>
 
         <NarrativeBanner
-          eyebrow="Weekly readout"
+          eyebrow={locale === "he" ? "קריאה שבועית" : "Weekly readout"}
           headline={summary.headline}
-          body={`Generated ${new Date(summary.generatedAt).toLocaleString()} — share this with your team or copy it into Slack.`}
+          body={locale === "he"
+            ? `נוצר ב־${new Date(summary.generatedAt).toLocaleString()} — שתפו עם הצוות או העתיקו לסלאק.`
+            : `Generated ${new Date(summary.generatedAt).toLocaleString()} — share this with your team or copy it into Slack.`}
           tone="up"
-          toneLabel="Ready to share"
+          toneLabel={locale === "he" ? "מוכן לשיתוף" : "Ready to share"}
         />
 
-        <WeeklyAgentInsightsPanel payload={weeklyAgentInsights} direction={direction} />
+        <WeeklyAgentInsightsPanel payload={weeklyAgentInsights} direction={direction} locale={locale} />
 
         <section className="space-y-3">
           <SectionHead
-            eyebrow="Live data proof"
-            title="Instagram, influencers, and Meta Ads"
-            hint={`These evidence blocks read stored data only inside ${dateRangeLabel}, so the weekly summary matches the selected dates.`}
+            eyebrow={locale === "he" ? "הוכחה מנתונים חיים" : "Live data proof"}
+            title={locale === "he" ? "אינסטגרם, משפיענים ו־Meta Ads" : "Instagram, influencers, and Meta Ads"}
+            hint={locale === "he"
+              ? `בלוקי הראיות האלה קוראים נתונים שמורים רק בתוך ${dateRangeLabel}, כך שהסיכום השבועי תואם לתאריכים שבחרתם.`
+              : `These evidence blocks read stored data only inside ${dateRangeLabel}, so the weekly summary matches the selected dates.`}
           />
           {influencerIntelligence?.instagramCrawl ? (
             <InstagramCrawlEvidencePanel
               instagram={influencerIntelligence.instagramCrawl}
               direction={direction}
               dateRangeLabel={dateRangeLabel}
-              description="Static proof layer for the brand page and affiliate Instagram handles. Recent posts below follow the weekly-summary date range."
+              description={locale === "he"
+                ? "שכבת הוכחה סטטית לעמוד המותג ולידיות האינסטגרם של האפיליאטים. הפוסטים האחרונים מטה תואמים לחלון התאריכים של הסיכום השבועי."
+                : "Static proof layer for the brand page and affiliate Instagram handles. Recent posts below follow the weekly-summary date range."}
             />
           ) : (
             <Card>
               <CardContent className="pt-6 text-sm text-muted-foreground">
-                Instagram crawl evidence is not available yet for this store. Add affiliate Instagram handles and run the public crawler to populate this section.
+                {locale === "he"
+                  ? "אין עדיין ראיות מקראול אינסטגרם לחנות הזו. הוסיפו ידיות אינסטגרם של אפיליאטים והריצו את הקראולר הציבורי כדי לאכלס את הקטע הזה."
+                  : "Instagram crawl evidence is not available yet for this store. Add affiliate Instagram handles and run the public crawler to populate this section."}
               </CardContent>
             </Card>
           )}
@@ -336,6 +388,7 @@ export default async function WeeklySummaryPage() {
             influencer={influencerIntelligence}
             direction={direction}
             currency={chrome.store.currency}
+            locale={locale}
           />
           <MetaAdsIntelligencePanel
             metaAds={metaAds}
@@ -346,9 +399,11 @@ export default async function WeeklySummaryPage() {
 
         <section className="space-y-3">
           <SectionHead
-            eyebrow="Step 1"
-            title="The week's narrative"
-            hint="Each block is a self-contained section you can copy into your weekly stand-up."
+            eyebrow={locale === "he" ? "שלב 1" : "Step 1"}
+            title={locale === "he" ? "הנרטיב של השבוע" : "The week's narrative"}
+            hint={locale === "he"
+              ? "כל בלוק הוא קטע עצמאי שאפשר להעתיק לסטנדאפ השבועי."
+              : "Each block is a self-contained section you can copy into your weekly stand-up."}
           />
           <div className="grid gap-4 lg:grid-cols-2">
             {summary.sections.map((section) => (
@@ -375,16 +430,22 @@ export default async function WeeklySummaryPage() {
 
         <section className="space-y-3">
           <SectionHead
-            eyebrow="Roadmap"
-            title="What's next for weekly summaries"
-            hint="What this surface will do once these dependencies are wired up. Nothing here is built yet — it's transparency about the plan."
+            eyebrow={locale === "he" ? "מפת דרכים" : "Roadmap"}
+            title={locale === "he" ? "מה הבא לסיכומים השבועיים" : "What's next for weekly summaries"}
+            hint={locale === "he"
+              ? "מה המסך הזה יעשה ברגע שהתלויות יחוברו. כלום כאן עדיין לא נבנה — זו שקיפות לגבי התכנון."
+              : "What this surface will do once these dependencies are wired up. Nothing here is built yet — it's transparency about the plan."}
           />
           <div className="grid gap-4 md:grid-cols-3">
             <Card>
               <CardHeader className="pb-2">
                 <div className="flex items-center gap-1.5">
                   <CardTitle className="text-base">{dictionary.weeklySummary.generationTitle}</CardTitle>
-                  <HelpTip>AI-generated summary using real reporting deltas, profit context, and retention insights.</HelpTip>
+                  <HelpTip>
+                    {locale === "he"
+                      ? "סיכום שנוצר על ידי AI ומבוסס על דלתאות דיווח אמיתיות, הקשר רווחיות ותובנות שימור לקוחות."
+                      : "AI-generated summary using real reporting deltas, profit context, and retention insights."}
+                  </HelpTip>
                 </div>
               </CardHeader>
               <CardContent>
@@ -395,7 +456,11 @@ export default async function WeeklySummaryPage() {
               <CardHeader className="pb-2">
                 <div className="flex items-center gap-1.5">
                   <CardTitle className="text-base">{dictionary.weeklySummary.deliveryTitle}</CardTitle>
-                  <HelpTip>Email, WhatsApp, and Slack adapters for scheduled founder digests.</HelpTip>
+                  <HelpTip>
+                    {locale === "he"
+                      ? "מתאמי מייל, וואטסאפ וסלאק לדיג'סטים שבועיים מתוזמנים למייסד."
+                      : "Email, WhatsApp, and Slack adapters for scheduled founder digests."}
+                  </HelpTip>
                 </div>
               </CardHeader>
               <CardContent>
@@ -406,7 +471,11 @@ export default async function WeeklySummaryPage() {
               <CardHeader className="pb-2">
                 <div className="flex items-center gap-1.5">
                   <CardTitle className="text-base">{dictionary.weeklySummary.dependenciesTitle}</CardTitle>
-                  <HelpTip>Shopify OAuth and Admin API ingestion so summaries operate on fresh store data.</HelpTip>
+                  <HelpTip>
+                    {locale === "he"
+                      ? "OAuth של Shopify וקליטה דרך Admin API כדי שהסיכומים יעבדו על נתוני חנות טריים."
+                      : "Shopify OAuth and Admin API ingestion so summaries operate on fresh store data."}
+                  </HelpTip>
                 </div>
               </CardHeader>
               <CardContent>

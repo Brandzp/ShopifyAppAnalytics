@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Calendar, ChevronDown, GitCompareArrows, Check, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import type { AppLocale } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
 import { DualCalendar } from "@/components/layout/calendar";
 
@@ -22,44 +23,57 @@ type RangePreset =
 
 type ComparisonMode = "none" | "prev_period" | "prev_year" | "prev_year_dow" | "custom";
 
-const PRESET_GROUPS: Array<{ heading: string; presets: Array<{ value: RangePreset; label: string }> }> = [
-  {
-    heading: "Day",
-    presets: [
-      { value: "today", label: "Today" },
-      { value: "yesterday", label: "Yesterday" }
-    ]
-  },
-  {
-    heading: "Last",
-    presets: [
-      { value: "last_7", label: "Last 7 days" },
-      { value: "last_30", label: "Last 30 days" },
-      { value: "last_90", label: "Last 90 days" }
-    ]
-  },
-  {
-    heading: "Period to date",
-    presets: [
-      { value: "wtd", label: "Week to date" },
-      { value: "mtd", label: "Month to date" },
-      { value: "qtd", label: "Quarter to date" },
-      { value: "ytd", label: "Year to date" }
-    ]
-  },
-  {
-    heading: "Year",
-    presets: [{ value: "last_year", label: "Last year" }]
-  }
-];
+function getPresetGroups(
+  locale: AppLocale
+): Array<{ heading: string; presets: Array<{ value: RangePreset; label: string }> }> {
+  const isHe = locale === "he";
+  return [
+    {
+      heading: isHe ? "יום" : "Day",
+      presets: [
+        { value: "today", label: isHe ? "היום" : "Today" },
+        { value: "yesterday", label: isHe ? "אתמול" : "Yesterday" }
+      ]
+    },
+    {
+      heading: isHe ? "אחרונים" : "Last",
+      presets: [
+        { value: "last_7", label: isHe ? "7 הימים האחרונים" : "Last 7 days" },
+        { value: "last_30", label: isHe ? "30 הימים האחרונים" : "Last 30 days" },
+        { value: "last_90", label: isHe ? "90 הימים האחרונים" : "Last 90 days" }
+      ]
+    },
+    {
+      heading: isHe ? "מתחילת התקופה" : "Period to date",
+      presets: [
+        { value: "wtd", label: isHe ? "מתחילת השבוע" : "Week to date" },
+        { value: "mtd", label: isHe ? "מתחילת החודש" : "Month to date" },
+        { value: "qtd", label: isHe ? "מתחילת הרבעון" : "Quarter to date" },
+        { value: "ytd", label: isHe ? "מתחילת השנה" : "Year to date" }
+      ]
+    },
+    {
+      heading: isHe ? "שנה" : "Year",
+      presets: [{ value: "last_year", label: isHe ? "השנה שעברה" : "Last year" }]
+    }
+  ];
+}
 
-const COMPARISON_OPTIONS: Array<{ value: ComparisonMode; label: string }> = [
-  { value: "none", label: "No comparison" },
-  { value: "prev_period", label: "Previous period" },
-  { value: "prev_year", label: "Previous year" },
-  { value: "prev_year_dow", label: "Previous year (match day of week)" },
-  { value: "custom", label: "Custom" }
-];
+function getComparisonOptions(
+  locale: AppLocale
+): Array<{ value: ComparisonMode; label: string }> {
+  const isHe = locale === "he";
+  return [
+    { value: "none", label: isHe ? "ללא השוואה" : "No comparison" },
+    { value: "prev_period", label: isHe ? "תקופה קודמת" : "Previous period" },
+    { value: "prev_year", label: isHe ? "שנה קודמת" : "Previous year" },
+    {
+      value: "prev_year_dow",
+      label: isHe ? "שנה קודמת (התאמת יום בשבוע)" : "Previous year (match day of week)"
+    },
+    { value: "custom", label: isHe ? "טווח מותאם" : "Custom" }
+  ];
+}
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -80,16 +94,17 @@ function toInputDate(date: Date | null): string {
   return `${y}-${m}-${d}`;
 }
 
-function formatDate(value: string | null) {
+function formatDate(value: string | null, locale: AppLocale) {
   if (!value) return "";
   const d = parseInputDate(value);
   if (!d) return "";
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  const intlLocale = locale === "he" ? "he-IL" : "en-US";
+  return d.toLocaleDateString(intlLocale, { month: "short", day: "numeric", year: "numeric" });
 }
 
-function rangeSummary(start: string, end: string) {
-  const a = formatDate(start);
-  const b = formatDate(end);
+function rangeSummary(start: string, end: string, locale: AppLocale) {
+  const a = formatDate(start, locale);
+  const b = formatDate(end, locale);
   if (!a || !b) return "";
   if (a === b) return a;
   return `${a} – ${b}`;
@@ -171,9 +186,14 @@ export interface ReportingPickerProps {
   initialRangeLabel: string;
   initialComparisonLabel: string;
   exportLabel?: string;
+  locale?: AppLocale;
 }
 
 export function ReportingPicker(props: ReportingPickerProps) {
+  const locale: AppLocale = props.locale ?? "en";
+  const isHe = locale === "he";
+  const PRESET_GROUPS = getPresetGroups(locale);
+  const COMPARISON_OPTIONS = getComparisonOptions(locale);
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [rangeOpen, setRangeOpen] = useState(false);
@@ -347,13 +367,17 @@ export function ReportingPicker(props: ReportingPickerProps) {
   }
 
   const rangeButtonLabel =
-    preset === "custom" ? rangeSummary(start, end) || props.initialRangeLabel : props.initialRangeLabel;
+    preset === "custom" ? rangeSummary(start, end, locale) || props.initialRangeLabel : props.initialRangeLabel;
 
   const isLoading = isPending || syncing;
   const loadingLabel = syncing
-    ? "Syncing Shopify, Meta & Instagram…"
+    ? isHe
+      ? "מסנכרן את Shopify, Meta ו־Instagram…"
+      : "Syncing Shopify, Meta & Instagram…"
     : isPending
-      ? "Applying new range — this may take up to a minute"
+      ? isHe
+        ? "מחיל טווח חדש — יכול להימשך עד דקה"
+        : "Applying new range — this may take up to a minute"
       : "";
 
   return (
@@ -396,7 +420,7 @@ export function ReportingPicker(props: ReportingPickerProps) {
           className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3.5 py-2 text-sm font-medium text-muted-foreground shadow-sm"
         >
           <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-          Syncing Shopify, Meta &amp; Instagram…
+          {isHe ? "מסנכרן את Shopify, Meta ו־Instagram…" : "Syncing Shopify, Meta & Instagram…"}
         </span>
       ) : null}
 
@@ -470,7 +494,7 @@ export function ReportingPicker(props: ReportingPickerProps) {
                     pendingPreset === "custom" ? "bg-muted font-medium" : "hover:bg-muted/60"
                   )}
                 >
-                  <span>Custom range</span>
+                  <span>{isHe ? "טווח מותאם" : "Custom range"}</span>
                   {pendingPreset === "custom" ? (
                     <Check className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
                   ) : null}
@@ -487,7 +511,7 @@ export function ReportingPicker(props: ReportingPickerProps) {
                   onChange={(e) => handleStartTextChange(e.target.value)}
                   max={endText || undefined}
                   className="min-w-0 flex-1 sm:flex-none sm:w-[150px] rounded-lg border border-border bg-background px-3 py-2 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-ring/40"
-                  aria-label="Start date"
+                  aria-label={isHe ? "תאריך התחלה" : "Start date"}
                 />
                 <span className="text-muted-foreground" aria-hidden>
                   →
@@ -498,7 +522,7 @@ export function ReportingPicker(props: ReportingPickerProps) {
                   onChange={(e) => handleEndTextChange(e.target.value)}
                   min={startText || undefined}
                   className="min-w-0 flex-1 sm:flex-none sm:w-[150px] rounded-lg border border-border bg-background px-3 py-2 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-ring/40"
-                  aria-label="End date"
+                  aria-label={isHe ? "תאריך סיום" : "End date"}
                 />
               </div>
 
@@ -512,7 +536,7 @@ export function ReportingPicker(props: ReportingPickerProps) {
 
               <div className="mt-5 flex items-center justify-end gap-2 border-t border-border/70 pt-4">
                 <Button type="button" variant="secondary" size="sm" onClick={() => setRangeOpen(false)}>
-                  Cancel
+                  {isHe ? "ביטול" : "Cancel"}
                 </Button>
                 <Button
                   type="button"
@@ -520,7 +544,17 @@ export function ReportingPicker(props: ReportingPickerProps) {
                   disabled={isPending || syncing || !pendingStart || !pendingEnd}
                   onClick={handleApplyRange}
                 >
-                  {syncing ? "Syncing data…" : isPending ? "Applying…" : "Apply"}
+                  {syncing
+                    ? isHe
+                      ? "מסנכרן נתונים…"
+                      : "Syncing data…"
+                    : isPending
+                      ? isHe
+                        ? "מחיל…"
+                        : "Applying…"
+                      : isHe
+                        ? "החל"
+                        : "Apply"}
                 </Button>
               </div>
             </div>
@@ -571,7 +605,9 @@ export function ReportingPicker(props: ReportingPickerProps) {
                 >
                   <span>{option.label}</span>
                   {active ? <Check className="h-3.5 w-3.5 text-muted-foreground" aria-hidden /> : committed ? (
-                    <span className="text-[10px] uppercase tracking-wider text-muted-foreground">current</span>
+                    <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                      {isHe ? "פעיל" : "current"}
+                    </span>
                   ) : null}
                 </button>
               );
@@ -581,7 +617,7 @@ export function ReportingPicker(props: ReportingPickerProps) {
               <div className="mt-2 space-y-2 border-t border-border/70 px-3 pt-3">
                 <div className="flex flex-col gap-1">
                   <label className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-                    From
+                    {isHe ? "מתאריך" : "From"}
                   </label>
                   <input
                     type="date"
@@ -592,7 +628,7 @@ export function ReportingPicker(props: ReportingPickerProps) {
                 </div>
                 <div className="flex flex-col gap-1">
                   <label className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-                    To
+                    {isHe ? "עד תאריך" : "To"}
                   </label>
                   <input
                     type="date"
@@ -613,7 +649,7 @@ export function ReportingPicker(props: ReportingPickerProps) {
                 onClick={() => setCompareOpen(false)}
                 disabled={isPending || syncing}
               >
-                Cancel
+                {isHe ? "ביטול" : "Cancel"}
               </Button>
               <Button
                 type="button"
@@ -627,7 +663,7 @@ export function ReportingPicker(props: ReportingPickerProps) {
                 }
                 onClick={handleApplyComparison}
               >
-                {isPending || syncing ? "Applying…" : "Apply"}
+                {isPending || syncing ? (isHe ? "מחיל…" : "Applying…") : isHe ? "החל" : "Apply"}
               </Button>
             </div>
           </div>

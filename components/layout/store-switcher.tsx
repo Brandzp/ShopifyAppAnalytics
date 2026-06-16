@@ -3,6 +3,7 @@
 import { useState, useTransition, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronDown, Check, Plus, Loader2 } from "lucide-react";
+import type { AppLocale } from "@/lib/i18n";
 
 // Multi-brand operator switcher. Renders the current brand as a clickable
 // pill; clicking opens a dropdown of every installed brand. Picking one
@@ -24,13 +25,15 @@ export interface StoreSwitcherStore {
 export function StoreSwitcher({
   currentStoreId,
   stores,
-  installHref = "/connect-brand"
+  installHref = "/connect-brand",
+  locale = "en"
 }: {
   currentStoreId: string;
   stores: StoreSwitcherStore[];
   // Where "+ Connect another brand" links to. Defaults to settings;
   // once OAuth is live this can point at /api/shopify/oauth/install.
   installHref?: string;
+  locale?: AppLocale;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -66,13 +69,21 @@ export function StoreSwitcher({
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok || !body?.ok) {
-        throw new Error(body?.error ?? "Failed to switch store.");
+        throw new Error(
+          body?.error ?? (locale === "he" ? "החלפת החנות נכשלה." : "Failed to switch store.")
+        );
       }
       setOpen(false);
       // Refresh all server components so the new active store flows through.
       startTransition(() => router.refresh());
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Unexpected error.");
+      setError(
+        e instanceof Error
+          ? e.message
+          : locale === "he"
+          ? "אירעה שגיאה לא צפויה."
+          : "Unexpected error."
+      );
     } finally {
       setSwitchingId(null);
     }
@@ -88,7 +99,7 @@ export function StoreSwitcher({
         className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
       >
         <Plus className="h-3 w-3" />
-        Connect another brand
+        {locale === "he" ? "חיבור מותג נוסף" : "Connect another brand"}
       </a>
     );
   }
@@ -103,7 +114,7 @@ export function StoreSwitcher({
         aria-expanded={open}
       >
         {pending ? <Loader2 className="h-3 w-3 animate-spin" aria-hidden /> : null}
-        <span>{current?.name ?? "Pick brand"}</span>
+        <span>{current?.name ?? (locale === "he" ? "בחר מותג" : "Pick brand")}</span>
         <ChevronDown className="h-3 w-3" aria-hidden />
       </button>
 
@@ -129,7 +140,7 @@ export function StoreSwitcher({
                       <p className="truncate font-semibold">{s.name}</p>
                       <p className="truncate text-[10px] text-muted-foreground">
                         {s.domain}
-                        {!s.connected ? " · not connected" : ""}
+                        {!s.connected ? (locale === "he" ? " · לא מחובר" : " · not connected") : ""}
                       </p>
                     </div>
                     {isLoading ? (
@@ -148,7 +159,7 @@ export function StoreSwitcher({
               className="flex items-center gap-2 px-3 py-2 text-xs font-medium text-muted-foreground hover:bg-accent hover:text-foreground"
             >
               <Plus className="h-3.5 w-3.5" aria-hidden />
-              Connect another brand
+              {locale === "he" ? "חיבור מותג נוסף" : "Connect another brand"}
             </a>
           </div>
           {error ? (

@@ -1,5 +1,6 @@
 import { AlertTriangle, CheckCircle2, HelpCircle, ShieldAlert } from "lucide-react";
 import type { StockFlag } from "@/lib/domain/types";
+import type { AppLocale } from "@/lib/i18n";
 import { cn, formatNumber } from "@/lib/utils";
 
 export const STOCK_THRESHOLDS = { red: 20, yellow: 50 } as const;
@@ -29,12 +30,14 @@ export function StockBadge({
   quantity,
   flag: providedFlag,
   size = "sm",
-  showCount = true
+  showCount = true,
+  locale = "en"
 }: {
   quantity: number | null | undefined;
   flag?: StockFlag;
   size?: "sm" | "md";
   showCount?: boolean;
+  locale?: AppLocale;
 }) {
   const flag = providedFlag ?? classifyStock(quantity);
   const Icon = FLAG_ICON[flag];
@@ -45,14 +48,22 @@ export function StockBadge({
 
   const label =
     flag === "unknown"
-      ? "Not tracked"
+      ? locale === "he"
+        ? "לא במעקב"
+        : "Not tracked"
       : showCount && quantity !== null && quantity !== undefined
         ? formatNumber(quantity)
         : flag === "red"
-          ? "Critical"
+          ? locale === "he"
+            ? "קריטי"
+            : "Critical"
           : flag === "yellow"
-            ? "Low"
-            : "Healthy";
+            ? locale === "he"
+              ? "נמוך"
+              : "Low"
+            : locale === "he"
+              ? "תקין"
+              : "Healthy";
 
   return (
     <span

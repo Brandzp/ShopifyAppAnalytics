@@ -37,7 +37,7 @@ export default async function AffiliatePortalDashboardPage() {
     .join(" ");
 
   return (
-    <AppShell store={chrome.store} controls={chrome.controls} localeOverride="en">
+    <AppShell store={chrome.store} controls={chrome.controls}>
       <div className="space-y-6 sm:space-y-8">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <PageHead

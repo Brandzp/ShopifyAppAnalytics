@@ -69,7 +69,7 @@ export async function Topbar({
           </Badge>
           <p className="text-sm text-muted-foreground truncate max-w-full">{store.domain}</p>
           {allStores ? (
-            <StoreSwitcher currentStoreId={store.id} stores={allStores} />
+            <StoreSwitcher currentStoreId={store.id} stores={allStores} locale={locale === "he" ? "he" : "en"} />
           ) : null}
         </div>
         <div className="min-w-0">
@@ -101,6 +101,7 @@ export async function Topbar({
           initialRangeLabel={controls?.dateRangeLabel ?? "Last 30 days"}
           initialComparisonLabel={controls?.comparisonLabel ?? "Previous period"}
           exportLabel={labels.common.exportSummary}
+          locale={locale === "he" ? "he" : "en"}
         />
       </div>
     </div>
