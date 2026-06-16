@@ -53,7 +53,22 @@ export interface StockoutImminentReport {
   productsConsidered: number;
   productsSkippedNoVelocity: number;
   productsSkippedNoInventory: number;
+  // Snapshot age — null if no sync has ever run. UI uses this to warn
+  // the founder that the underlying inventory numbers may be stale, and
+  // the report builder DOWNGRADES alert severity by one tier when the
+  // snapshot is older than INVENTORY_STALE_HOURS — a "10 days to OOS"
+  // claim against 5-day-old data is really "5 days" and shouldn't read
+  // as critical without that caveat.
+  inventorySyncedAt: string | null;
+  inventoryStaleHours: number | null;
+  inventoryIsStale: boolean;
 }
+
+// Beyond this age, stockout forecasts are downgraded and the UI shows a
+// staleness warning. Set to ~2× the data-refresh cron interval (currently
+// 2h) so a single missed cron tick doesn't trigger the warning, but a
+// failed/disabled cron does.
+const INVENTORY_STALE_HOURS = 6;
 
 export interface BuildStockoutImminentInput {
   storeId: string;
@@ -74,6 +89,23 @@ export async function buildStockoutImminentReport(
   const windowEnd = new Date(asOf);
   const windowStart = new Date(asOf);
   windowStart.setUTCDate(windowStart.getUTCDate() - VELOCITY_WINDOW_DAYS);
+
+  // How fresh is the inventory snapshot we're about to forecast off?
+  // Shopify's product.updated_at doesn't bump for inventory-only changes,
+  // so the only signal that our cached `ProductVariant.inventoryQuantity`
+  // is current is the timestamp of the last full product re-sync — which
+  // the data-refresh cron runs every 2h. If that cron is disabled or
+  // failing, the inventory we're forecasting against could be days old.
+  const connection = await db.shopifyConnection.findFirst({
+    where: { storeId: input.storeId },
+    select: { lastProductsSyncAt: true }
+  });
+  const inventorySyncedAt = connection?.lastProductsSyncAt ?? null;
+  const inventoryStaleHours = inventorySyncedAt
+    ? Math.max(0, (asOf.getTime() - inventorySyncedAt.getTime()) / (60 * 60 * 1000))
+    : null;
+  const inventoryIsStale =
+    inventoryStaleHours === null || inventoryStaleHours > INVENTORY_STALE_HOURS;
 
   // Step 1 — aggregate the last 14 days of orders per product. We pull
   // (productId, units sold, revenue) for everything that sold even once
@@ -109,7 +141,10 @@ export async function buildStockoutImminentReport(
       flags: [],
       productsConsidered: sold.length,
       productsSkippedNoVelocity: skippedNoVelocity,
-      productsSkippedNoInventory: 0
+      productsSkippedNoInventory: 0,
+      inventorySyncedAt: inventorySyncedAt ? inventorySyncedAt.toISOString() : null,
+      inventoryStaleHours,
+      inventoryIsStale
     };
   }
 
@@ -164,8 +199,17 @@ export async function buildStockoutImminentReport(
     const daysToStockout = inventoryTotal / dailyVelocity;
     if (daysToStockout > HEALTHY_THRESHOLD_DAYS) continue;
 
-    const severity: AlertSeverity =
+    // Base severity tier from the forecasted days-to-stockout.
+    let severity: AlertSeverity =
       daysToStockout <= 7 ? "critical" : daysToStockout <= 14 ? "high" : "medium";
+    // Stale inventory snapshot → downgrade one tier. A "critical" claim
+    // built on inventory we last saw N hours ago is dishonest; surface
+    // it as high or medium so the founder still sees it but understands
+    // it's not real-time. The freshness banner on the page makes this
+    // explicit to the user.
+    if (inventoryIsStale) {
+      severity = severity === "critical" ? "high" : severity === "high" ? "medium" : "low";
+    }
 
     const sku = product.variants.find((v) => v.sku)?.sku ?? null;
     const reorderUnits = Math.max(
@@ -247,6 +291,9 @@ export async function buildStockoutImminentReport(
     flags,
     productsConsidered: sold.length,
     productsSkippedNoVelocity: skippedNoVelocity,
-    productsSkippedNoInventory: skippedNoInventory
+    productsSkippedNoInventory: skippedNoInventory,
+    inventorySyncedAt: inventorySyncedAt ? inventorySyncedAt.toISOString() : null,
+    inventoryStaleHours,
+    inventoryIsStale
   };
 }

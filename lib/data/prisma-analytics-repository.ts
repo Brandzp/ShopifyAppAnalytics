@@ -70,9 +70,19 @@ function mapOrders(records: any[]): Order[] {
 }
 
 function withAnalyticsOrderFilters(where: Record<string, unknown>) {
-  // No analytics-side order exclusions: Shopify's reports count every order,
-  // so we do too. (Previously this dropped fulfilled orders <= 20.)
-  return where;
+  // Exclude cancelled and test orders. Shopify Admin's Sales report excludes
+  // both — counting them in our analytics is what made the Overview-fallback
+  // and Profit pages disagree with Shopify Admin for stores that had any
+  // cancellations or were created with test mode on. The reference correct
+  // pattern is `computeSalesSummary` which has always applied this filter.
+  // (NOTE: this was previously a no-op; the prior comment said "Shopify's
+  // reports count every order" but Shopify's reports DON'T — they explicitly
+  // exclude cancelled+test. The previous behavior was the bug, not a feature.)
+  return {
+    ...where,
+    cancelledAt: null,
+    test: false
+  };
 }
 
 function mapSummary(summary: any): Summary {
@@ -907,6 +917,52 @@ export async function getProfitAnalyticsFromDb() {
     ])
   );
   const productPerformance = buildProductPerformance(normalizedOrders, productLookup);
+
+  // Allocate affiliate commission per product so the "Estimated profit"
+  // column actually means "what the brand keeps". Previously a 40%-margin
+  // product paying 10% affiliate read as 40% margin in this page even
+  // though the contribution-margin service already subtracts the same
+  // commission in its own totals. Allocation: split each order's commission
+  // across its line items in proportion to line revenue.
+  const orderIds = normalizedOrders.map((o) => o.id);
+  const attributions = orderIds.length
+    ? await withOptionalDb(
+        (db) =>
+          db.affiliateAttribution.findMany({
+            where: { orderId: { in: orderIds } },
+            select: { orderId: true, commissionAmount: true }
+          }),
+        []
+      )
+    : [];
+  const commByOrder = new Map<string, number>();
+  for (const a of attributions as Array<{ orderId: string | null; commissionAmount: unknown }>) {
+    if (!a.orderId) continue;
+    commByOrder.set(a.orderId, (commByOrder.get(a.orderId) ?? 0) + toNumber(a.commissionAmount));
+  }
+  if (commByOrder.size > 0) {
+    const commByProduct = new Map<string, number>();
+    for (const order of normalizedOrders) {
+      const orderComm = commByOrder.get(order.id) ?? 0;
+      if (orderComm <= 0) continue;
+      const orderRev = order.lineItems.reduce(
+        (sum, li) => sum + li.unitPrice * li.quantity,
+        0
+      );
+      if (orderRev <= 0) continue;
+      for (const li of order.lineItems) {
+        if (!li.productId) continue;
+        const lineRev = li.unitPrice * li.quantity;
+        const lineComm = orderComm * (lineRev / orderRev);
+        commByProduct.set(li.productId, (commByProduct.get(li.productId) ?? 0) + lineComm);
+      }
+    }
+    for (const row of productPerformance) {
+      const c = commByProduct.get(row.productId);
+      if (c) row.estimatedProfit -= c;
+    }
+  }
+
   const collectionPerformance = await prismaAnalyticsRepository.getCollectionPerformance();
   const discountUsage = buildDiscountUsage(normalizedOrders);
 

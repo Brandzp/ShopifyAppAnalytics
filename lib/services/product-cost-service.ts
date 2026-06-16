@@ -135,7 +135,20 @@ export async function listProductCosts(storeId: string): Promise<{
     const price = toNumber(p.price);
     const estimatedCost = toNumber(p.estimatedCost);
     const override = p.costOverrideAmount == null ? null : toNumber(p.costOverrideAmount);
-    const effectiveUnitCost = override != null ? override : estimatedCost;
+    // If no override AND no per-product estimatedCost has been written,
+    // fall back to price × defaultCostRatio — the same rule the sync
+    // pipeline uses when costing NEW line items. Previously this
+    // editor showed "100% margin" on every un-costed product because
+    // estimatedCost is a Decimal that defaults to 0; meanwhile the
+    // Profit page silently applied defaultCostRatio at the line-item
+    // level. Same product, two pages, two completely different
+    // "truths" — fixed by aligning the editor's view to the sync rule.
+    const effectiveUnitCost =
+      override != null
+        ? override
+        : estimatedCost > 0
+          ? estimatedCost
+          : price * defaultCostRatio;
     const sales = salesMap.get(p.id) ?? { units: 0, revenue: 0 };
     const primarySku = p.variants.find((v) => v.sku && v.sku.trim())?.sku?.trim() ?? null;
     return {

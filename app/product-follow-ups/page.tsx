@@ -9,6 +9,9 @@ import { CollectionChips } from "@/components/dashboard-v2/collection-chips";
 import { DataTable } from "@/components/shared/data-table";
 import { getAppChromeData } from "@/lib/services/analytics-service";
 import { getAnalyticsRepository } from "@/lib/repositories";
+import { getDb } from "@/lib/server/db";
+import { resolveActiveStoreId } from "@/lib/services/offline-sales-service";
+import { getAppLocale } from "@/lib/i18n";
 import { formatNumber } from "@/lib/utils";
 import type { ProductStockRow } from "@/lib/domain/types";
 
@@ -45,7 +48,52 @@ const STOCK_COLUMNS = (label: string) => [
 
 export default async function ProductFollowUpsPage() {
   const repository = await getAnalyticsRepository();
-  const [chrome, stock] = await Promise.all([getAppChromeData(), repository.getProductStock()]);
+  const [chrome, stock, locale, storeId] = await Promise.all([
+    getAppChromeData(),
+    repository.getProductStock(),
+    getAppLocale(),
+    resolveActiveStoreId()
+  ]);
+
+  // Inventory freshness — Shopify doesn't bump product.updated_at on
+  // inventory-only changes, so the only signal of "is this number
+  // current?" is the timestamp of the last FULL product re-sync.
+  // The data-refresh cron pulls it every 2h; if that cron is off /
+  // failing, this page would otherwise show stale numbers as if they
+  // were live. Surface a freshness chip so the founder can see when
+  // the snapshot is older than expected.
+  const db = getDb();
+  const connection = storeId
+    ? await db.shopifyConnection.findFirst({
+        where: { storeId },
+        select: { lastProductsSyncAt: true }
+      })
+    : null;
+  const lastSyncedAt = connection?.lastProductsSyncAt ?? null;
+  const syncAgeMinutes = lastSyncedAt
+    ? Math.max(0, Math.round((Date.now() - lastSyncedAt.getTime()) / 60000))
+    : null;
+  const freshnessLabel = (() => {
+    if (syncAgeMinutes === null) {
+      return locale === "he" ? "מלאי טרם סונכרן" : "Inventory never synced";
+    }
+    if (syncAgeMinutes < 1) {
+      return locale === "he" ? "מלאי מסונכרן כעת" : "Inventory synced just now";
+    }
+    if (syncAgeMinutes < 60) {
+      return locale === "he"
+        ? `מלאי סונכרן לפני ${syncAgeMinutes} דק'`
+        : `Inventory synced ${syncAgeMinutes} min ago`;
+    }
+    const hours = Math.round(syncAgeMinutes / 60);
+    return locale === "he"
+      ? `מלאי סונכרן לפני ${hours} שעות`
+      : `Inventory synced ${hours}h ago`;
+  })();
+  // Anything older than 6 hours is "stale" — see INVENTORY_STALE_HOURS in
+  // stockout-imminent-service.ts. At that age the cron has plausibly failed
+  // and numbers may be wrong; we color the chip amber.
+  const freshnessIsStale = syncAgeMinutes === null || syncAgeMinutes > 6 * 60;
 
   const red = stock.filter((row) => row.flag === "red");
   const yellow = stock.filter((row) => row.flag === "yellow");
@@ -77,6 +125,23 @@ export default async function ProductFollowUpsPage() {
           title="Stock alerts & restock queue"
           description="Active SKUs only — drafts and archived products are filtered out. Red flag below 20, yellow flag below 50, sorted with the most urgent on top."
         />
+
+        <div className="flex items-center gap-2">
+          <span
+            className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium ${
+              freshnessIsStale
+                ? "border-amber-300 bg-amber-50 text-amber-900"
+                : "border-emerald-200 bg-emerald-50 text-emerald-900"
+            }`}
+            title={
+              lastSyncedAt
+                ? `Last full Shopify product sync: ${lastSyncedAt.toLocaleString()}`
+                : "No product sync has run yet for this store."
+            }
+          >
+            {freshnessLabel}
+          </span>
+        </div>
 
         <NarrativeBanner
           eyebrow="Stock pulse"
