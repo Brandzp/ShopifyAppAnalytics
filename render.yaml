@@ -287,12 +287,21 @@ services:
       # store load (e.g. "3600000" for hourly on a high-volume tenant).
       - key: DATA_REFRESH_CRON_MS
         value: "7200000"
+      # ─── Daily digest → Telegram ──────────────────────────────────────────
+      # Morning PDF report sent at ~08:00 Asia/Jerusalem to the owner's Telegram.
+      # Get TELEGRAM_BOT_TOKEN from @BotFather; TELEGRAM_CHAT_ID from @userinfobot.
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_CHAT_ID
+        sync: false
+
       # ─── Optional cron / provider tuning overrides ─────────────────────
       # All of the following have safe in-code defaults — set only to override.
       # Cron intervals (ms) and self-ping URLs: SHOPIFY_SYNC_CRON_MS,
       #   SHOPIFY_SYNC_CRON_URL, CREATIVE_JOB_CRON_MS, CREATIVE_JOB_CRON_URL,
       #   WEEKLY_REPORT_CRON_MS, WEEKLY_REPORT_CRON_URL, DATA_REFRESH_CRON_URL,
       #   OUTCOME_MEASUREMENT_CRON_MS, OUTCOME_MEASUREMENT_CRON_URL,
+      #   DAILY_REPORT_CRON_MS, DAILY_REPORT_CRON_URL,
       #   SHOPIFY_SYNC_STALE_THRESHOLD_MIN, ENABLE_SHOPIFY_SYNC_CRON.
       # Creative provider/model overrides: CREATIVE_MAX_JOBS_PER_DAY (see below),
       #   CREATIVE_IMAGE_MODEL_DEFAULT, CREATIVE_IMAGE_MODEL_FAST,

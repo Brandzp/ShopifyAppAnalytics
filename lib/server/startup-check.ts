@@ -75,6 +75,16 @@ const OPTIONAL_ENV: Array<EnvRequirement & { feature: string }> = [
     label: "Report from-address",
     names: ["REPORT_FROM_EMAIL"],
     feature: "weekly/monthly email reports + digests"
+  },
+  {
+    label: "Telegram bot token",
+    names: ["TELEGRAM_BOT_TOKEN"],
+    feature: "daily morning PDF digest to owner Telegram"
+  },
+  {
+    label: "Telegram chat ID",
+    names: ["TELEGRAM_CHAT_ID"],
+    feature: "daily morning PDF digest to owner Telegram"
   }
 ];
 

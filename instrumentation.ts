@@ -45,4 +45,6 @@ export async function register() {
   startWeeklyReportCron();
   const { startOutcomeMeasurementCron } = await import("@/lib/server/outcome-measurement-cron");
   startOutcomeMeasurementCron();
+  const { startDailyReportCron } = await import("@/lib/server/daily-report-cron");
+  startDailyReportCron();
 }
