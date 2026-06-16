@@ -12,7 +12,9 @@
 //
 //   grossSales           (Σ OrderLineItem.lineSubtotal)
 // − discounts            (Σ OrderLineItem.lineDiscountAmount)
-// − refunds              (Σ Refund.refundedLineItemsAmount)
+// − refunds              (Σ Refund.refundedLineItemsAmount — line items only,
+//                         attributed to the original order's date to match
+//                         Shopify Admin's Sales report)
 // = netSales             ← what the brand actually earned from products
 // − cogs                 (Σ OrderLineItem.estimatedCostAmount)
 // − affiliateCommission  (Σ AffiliateAttribution.commissionAmount)
@@ -194,7 +196,11 @@ export async function buildContributionMargin(
     costCoverage >= 0.9 ? "high" : costCoverage >= 0.6 ? "medium" : "low";
 
   // ── Contribution margin walk ──────────────────────────────────────
-  const netSales = parity.grossSales - parity.discounts - parity.returns;
+  // Use `returnsLineItems` (line-items-only refund total) — NOT `returns`
+  // (which includes shipping + tax refund portions). grossSales is a
+  // line-item-level metric; mixing in shipping/tax refunds would under-
+  // state margin by ~the shipping/tax refund amount. See ShopifySalesSummary.
+  const netSales = parity.grossSales - parity.discounts - parity.returnsLineItems;
   const contributionMargin = netSales - parity.cogs - affiliateCommission;
   const contributionMarginRate =
     parity.grossSales > 0 ? contributionMargin / parity.grossSales : 0;
@@ -212,7 +218,10 @@ export async function buildContributionMargin(
     totals: {
       revenue: parity.grossSales,
       discounts: parity.discounts,
-      refunds: parity.returns,
+      // refunds reported here is the line-items-only amount, consistent
+      // with how netSales/contributionMargin are computed above (they use
+      // grossSales which excludes shipping + tax revenue).
+      refunds: parity.returnsLineItems,
       cogs: parity.cogs,
       affiliateCommission,
       attributedAdSpend: 0, // Tier 2

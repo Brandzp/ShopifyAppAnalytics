@@ -186,7 +186,14 @@ export interface ShopifySalesSummary {
   orders: number;
   grossSales: number;
   discounts: number;
+  // Full refund amount (line items + shipping + tax) — used in the
+  // Shopify Total Sales formula: gross − discounts − returns + tax + ship.
   returns: number;
+  // Line-items-only refund amount — used by contribution margin, where
+  // the gross sales base also excludes shipping + tax. Mixing the two
+  // (deducting shipping/tax refunds from a base that lacks shipping/tax
+  // revenue) would under-state margin.
+  returnsLineItems: number;
   netSales: number;
   shipping: number;
   taxes: number;
@@ -224,9 +231,19 @@ async function computeSalesSummary(
       _sum: { lineSubtotal: true, lineDiscountAmount: true, estimatedCostAmount: true, quantity: true }
     }),
     db.refund.aggregate({
-      // Returns of cancelled/test orders don't count in Shopify's report.
-      where: { storeId, createdAt: { gte: start, lte: end }, order: { cancelledAt: null, test: false } },
-      _sum: { refundedLineItemsAmount: true }
+      // Match Shopify Admin "Sales report" attribution: filter refunds by
+      // their ORIGINAL order's createdAt (not the refund createdAt). A
+      // refund of a Jan order processed in Feb reduces January sales.
+      //
+      // Sum BOTH the full refund (refundedAmount, includes shipping + tax
+      // portions) for the Total Sales formula and the line-items-only sum
+      // (refundedLineItemsAmount) for contribution margin. See comment on
+      // ShopifySalesSummary.returnsLineItems for why these can't share.
+      where: {
+        storeId,
+        order: { createdAt: { gte: start, lte: end }, cancelledAt: null, test: false }
+      },
+      _sum: { refundedAmount: true, refundedLineItemsAmount: true }
     }),
     // Set-based: one grouped scan for each customer's first-ever order, then a
     // hash join. (A per-row correlated EXISTS here took 60-190s on 31k orders.)
@@ -252,7 +269,8 @@ async function computeSalesSummary(
   const discounts = num(lineAgg._sum?.lineDiscountAmount);
   const cogs = num(lineAgg._sum?.estimatedCostAmount);
   const unitsSold = num(lineAgg._sum?.quantity);
-  const returns = num(refundAgg._sum?.refundedLineItemsAmount);
+  const returns = num(refundAgg._sum?.refundedAmount);
+  const returnsLineItems = num(refundAgg._sum?.refundedLineItemsAmount);
   const shipping = num(orderAgg._sum?.totalShipping);
   const taxes = num(orderAgg._sum?.totalTax);
   const netSales = grossSales - discounts - returns;
@@ -264,6 +282,7 @@ async function computeSalesSummary(
     grossSales,
     discounts,
     returns,
+    returnsLineItems,
     netSales,
     shipping,
     taxes,
@@ -331,11 +350,26 @@ async function computeDailySeries(
       timeZone
     ),
     db.$queryRawUnsafe(
-      `SELECT (r."createdAt" AT TIME ZONE 'UTC' AT TIME ZONE $4)::date AS d,
-              SUM(r."refundedLineItemsAmount") AS returns
+      // Bucket refunds by the ORIGINAL order date (not the refund date) to
+      // match Shopify Admin's "Sales report" attribution. A Jan order refunded
+      // in Feb reduces January's revenue — same as Shopify's UI. Previously we
+      // bucketed by r."createdAt" (refund date), which matched Shopify's
+      // "Payments / Cashflow" report instead and showed a different daily total.
+      //
+      // Also use refundedAmount (full refund, including refunded shipping +
+      // tax portions) rather than refundedLineItemsAmount (line items only).
+      // refundedLineItemsAmount under-counted returns whenever a customer got
+      // a partial shipping or tax refund, leaving our daily total slightly
+      // above Shopify's. refundedAmount is what Shopify deducts.
+      //
+      // The window filter uses o."createdAt" too — that's the bucketing key,
+      // so the result set must align with it. (A refund created today for an
+      // order from 2 months ago is correctly excluded from this window.)
+      `SELECT (o."createdAt" AT TIME ZONE 'UTC' AT TIME ZONE $4)::date AS d,
+              SUM(r."refundedAmount") AS returns
        FROM "Refund" r
        JOIN "Order" o ON o."id" = r."orderId"
-       WHERE r."storeId" = $1 AND r."createdAt" >= $2 AND r."createdAt" <= $3
+       WHERE r."storeId" = $1 AND o."createdAt" >= $2 AND o."createdAt" <= $3
          AND o."cancelledAt" IS NULL AND o."test" = false
        GROUP BY 1`,
       storeId,
