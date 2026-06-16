@@ -108,12 +108,23 @@ export async function middleware(req: NextRequest) {
   // Stamp the current pathname onto a request header so server components
   // downstream (especially AppShell's paywall gate) can read it without
   // resorting to global state hacks.
-  const requestHeaders = new Headers(req.headers);
-  requestHeaders.set("x-pathname", req.nextUrl.pathname);
-
-  // Start with the default "pass through" response. The Supabase client
-  // will attach Set-Cookie headers to this response if it rotates a JWT.
-  const res = NextResponse.next({ request: { headers: requestHeaders } });
+  //
+  // BUT: passing `request: { headers }` to NextResponse.next() is a known
+  // Next.js 15 nodejs-runtime bug — it locks the underlying request body
+  // stream, which breaks any route handler that later calls
+  // `request.formData()` or `request.json()` ("Response body object should
+  // not be disturbed or locked"). API routes never read the x-pathname
+  // header (only page RSCs do, via AppShell), so we skip the rewrite for
+  // /api/* and only mutate request headers on page routes.
+  const isApiRoute = req.nextUrl.pathname.startsWith("/api/");
+  let res: NextResponse;
+  if (isApiRoute) {
+    res = NextResponse.next();
+  } else {
+    const requestHeaders = new Headers(req.headers);
+    requestHeaders.set("x-pathname", req.nextUrl.pathname);
+    res = NextResponse.next({ request: { headers: requestHeaders } });
+  }
 
   // Refresh session on every request — Supabase's helper handles the
   // token rotation. We never need to call this explicitly; just having
