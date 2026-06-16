@@ -74,7 +74,13 @@ services:
     # on Render's no-sudo build user. Chromium runs fine without those libs
     # in headless mode (the GTK/WebKit deps are only needed for non-headless
     # or for Firefox/WebKit which we don't use).
-    buildCommand: rm -rf node_modules/.prisma && rm -rf $PLAYWRIGHT_BROWSERS_PATH/* && npm ci && npx playwright install chromium && NODE_OPTIONS=--max-old-space-size=4096 npm run build
+    # DANGER NOTE — DO NOT use $PLAYWRIGHT_BROWSERS_PATH directly in rm here.
+    # If the env var is unset (Render UI overrides can drop it silently), the
+    # shell expands `rm -rf $PLAYWRIGHT_BROWSERS_PATH/*` to `rm -rf /*` which
+    # attempts to wipe the entire root filesystem. Render's read-only mounts
+    # prevent the destruction, but the build still emits thousands of "cannot
+    # remove" errors. ALWAYS hardcode the cache path here.
+    buildCommand: rm -rf node_modules/.prisma && rm -rf /opt/render/.cache/ms-playwright/* && npm ci && npx playwright install chromium && NODE_OPTIONS=--max-old-space-size=4096 npm run build
     startCommand: npm start
     healthCheckPath: /
     autoDeploy: true
