@@ -54,25 +54,27 @@ services:
     # back-pressure and risk a cgroup OOM-kill of `next start`. Bump to 6144/8192
     # here if a future build still OOMs. (next.config.ts also enables
     # experimental.webpackMemoryOptimizations to cut peak build memory.)
-    # Belt-and-suspenders: postinstall in package.json runs `playwright install`
-    # automatically via npm lifecycle BUT some npm configurations (`npm config
-    # set ignore-scripts true`, certain CI envs) skip it silently. So we ALSO
-    # run it explicitly here. Echo statements before/after surface in Render's
-    # build logs so you can confirm what actually executed — search the logs
-    # for "PLAYWRIGHT_DIAG" to find this section.
-    buildCommand: |
-      set -e
-      echo "PLAYWRIGHT_DIAG: PLAYWRIGHT_BROWSERS_PATH=$PLAYWRIGHT_BROWSERS_PATH"
-      rm -rf node_modules/.prisma
-      rm -rf $PLAYWRIGHT_BROWSERS_PATH/*
-      echo "PLAYWRIGHT_DIAG: cache cleared"
-      npm ci
-      echo "PLAYWRIGHT_DIAG: npm ci done — running explicit playwright install (belt + suspenders)"
-      npx playwright install --with-deps chromium
-      echo "PLAYWRIGHT_DIAG: explicit playwright install done — listing browser dir:"
-      ls -la $PLAYWRIGHT_BROWSERS_PATH || echo "PLAYWRIGHT_DIAG: ls failed - path missing"
-      echo "PLAYWRIGHT_DIAG: starting next build"
-      NODE_OPTIONS=--max-old-space-size=4096 npm run build
+    # Single-line buildCommand so it can be pasted directly into Render's
+    # UI Build Command field (multi-line YAML scripts don't always survive
+    # the UI's text field). Keep the YAML and UI commands IDENTICAL — drift
+    # between them is what caused the "Playwright Executable doesn't exist"
+    # crash to come back after we thought we'd fixed it (Render was running
+    # an older UI-set command that lacked the cache-clear + chromium pin).
+    #
+    # Order matters:
+    #   1. rm -rf node_modules/.prisma  — forces fresh Prisma client generate
+    #   2. rm -rf $PLAYWRIGHT_BROWSERS_PATH/*  — forces fresh Chromium download
+    #   3. npm ci  — also runs the `postinstall` hook in package.json which
+    #               runs `prisma generate && playwright install chromium`
+    #   4. npx playwright install chromium  — belt-and-suspenders; runs even
+    #                                          if postinstall was skipped
+    #   5. NODE_OPTIONS heap bump + next build  — large dep tree needs >4GB
+    #
+    # NOTE: NO `--with-deps` flag — that runs `sudo apt install` which fails
+    # on Render's no-sudo build user. Chromium runs fine without those libs
+    # in headless mode (the GTK/WebKit deps are only needed for non-headless
+    # or for Firefox/WebKit which we don't use).
+    buildCommand: rm -rf node_modules/.prisma && rm -rf $PLAYWRIGHT_BROWSERS_PATH/* && npm ci && npx playwright install chromium && NODE_OPTIONS=--max-old-space-size=4096 npm run build
     startCommand: npm start
     healthCheckPath: /
     autoDeploy: true
