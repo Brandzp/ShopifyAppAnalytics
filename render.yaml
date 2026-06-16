@@ -54,7 +54,25 @@ services:
     # back-pressure and risk a cgroup OOM-kill of `next start`. Bump to 6144/8192
     # here if a future build still OOMs. (next.config.ts also enables
     # experimental.webpackMemoryOptimizations to cut peak build memory.)
-    buildCommand: rm -rf node_modules/.prisma && rm -rf $PLAYWRIGHT_BROWSERS_PATH/* && npm ci && NODE_OPTIONS=--max-old-space-size=4096 npm run build
+    # Belt-and-suspenders: postinstall in package.json runs `playwright install`
+    # automatically via npm lifecycle BUT some npm configurations (`npm config
+    # set ignore-scripts true`, certain CI envs) skip it silently. So we ALSO
+    # run it explicitly here. Echo statements before/after surface in Render's
+    # build logs so you can confirm what actually executed — search the logs
+    # for "PLAYWRIGHT_DIAG" to find this section.
+    buildCommand: |
+      set -e
+      echo "PLAYWRIGHT_DIAG: PLAYWRIGHT_BROWSERS_PATH=$PLAYWRIGHT_BROWSERS_PATH"
+      rm -rf node_modules/.prisma
+      rm -rf $PLAYWRIGHT_BROWSERS_PATH/*
+      echo "PLAYWRIGHT_DIAG: cache cleared"
+      npm ci
+      echo "PLAYWRIGHT_DIAG: npm ci done — running explicit playwright install (belt + suspenders)"
+      npx playwright install --with-deps chromium
+      echo "PLAYWRIGHT_DIAG: explicit playwright install done — listing browser dir:"
+      ls -la $PLAYWRIGHT_BROWSERS_PATH || echo "PLAYWRIGHT_DIAG: ls failed - path missing"
+      echo "PLAYWRIGHT_DIAG: starting next build"
+      NODE_OPTIONS=--max-old-space-size=4096 npm run build
     startCommand: npm start
     healthCheckPath: /
     autoDeploy: true
