@@ -7,7 +7,7 @@
     "build": "node --max-old-space-size=4096 node_modules/next/dist/bin/next build",
     "start": "next start",
     "lint": "next lint",
-    "postinstall": "prisma generate && playwright install --with-deps chromium",
+    "postinstall": "prisma generate && playwright install chromium",
     "prisma:generate": "prisma generate",
     "prisma:seed": "tsx prisma/seed.ts"
   },
