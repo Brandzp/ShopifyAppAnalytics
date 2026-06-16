@@ -428,62 +428,6 @@ export default async function WeeklySummaryPage() {
           </div>
         </section>
 
-        <section className="space-y-3">
-          <SectionHead
-            eyebrow={locale === "he" ? "מפת דרכים" : "Roadmap"}
-            title={locale === "he" ? "מה הבא לסיכומים השבועיים" : "What's next for weekly summaries"}
-            hint={locale === "he"
-              ? "מה המסך הזה יעשה ברגע שהתלויות יחוברו. כלום כאן עדיין לא נבנה — זו שקיפות לגבי התכנון."
-              : "What this surface will do once these dependencies are wired up. Nothing here is built yet — it's transparency about the plan."}
-          />
-          <div className="grid gap-4 md:grid-cols-3">
-            <Card>
-              <CardHeader className="pb-2">
-                <div className="flex items-center gap-1.5">
-                  <CardTitle className="text-base">{dictionary.weeklySummary.generationTitle}</CardTitle>
-                  <HelpTip>
-                    {locale === "he"
-                      ? "סיכום שנוצר על ידי AI ומבוסס על דלתאות דיווח אמיתיות, הקשר רווחיות ותובנות שימור לקוחות."
-                      : "AI-generated summary using real reporting deltas, profit context, and retention insights."}
-                  </HelpTip>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm leading-6 text-muted-foreground">{dictionary.weeklySummary.generationTodo}</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="pb-2">
-                <div className="flex items-center gap-1.5">
-                  <CardTitle className="text-base">{dictionary.weeklySummary.deliveryTitle}</CardTitle>
-                  <HelpTip>
-                    {locale === "he"
-                      ? "מתאמי מייל, וואטסאפ וסלאק לדיג'סטים שבועיים מתוזמנים למייסד."
-                      : "Email, WhatsApp, and Slack adapters for scheduled founder digests."}
-                  </HelpTip>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm leading-6 text-muted-foreground">{dictionary.weeklySummary.deliveryTodo}</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="pb-2">
-                <div className="flex items-center gap-1.5">
-                  <CardTitle className="text-base">{dictionary.weeklySummary.dependenciesTitle}</CardTitle>
-                  <HelpTip>
-                    {locale === "he"
-                      ? "OAuth של Shopify וקליטה דרך Admin API כדי שהסיכומים יעבדו על נתוני חנות טריים."
-                      : "Shopify OAuth and Admin API ingestion so summaries operate on fresh store data."}
-                  </HelpTip>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm leading-6 text-muted-foreground">{dictionary.weeklySummary.dependenciesTodo}</p>
-              </CardContent>
-            </Card>
-          </div>
-        </section>
       </div>
     </AppShell>
   );

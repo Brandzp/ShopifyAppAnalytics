@@ -1,6 +1,7 @@
 import { getDb, withOptionalDb } from "@/lib/server/db";
 import {
   buildStorageKey,
+  deleteObject,
   getReadableUrl,
   putObject,
   readObject,
@@ -547,6 +548,54 @@ export async function listProjectsForStore(storeId: string): Promise<CreativePro
     }
     return out;
   }, []);
+}
+
+/**
+ * Hard-delete a creative project — removes the DB row (sources + assets
+ * cascade via the schema), then best-effort cleans up the R2/local
+ * storage objects so we don't leave orphans behind. Storage cleanup is
+ * non-fatal: a failed object delete logs and continues so a transient
+ * R2 hiccup doesn't block the user from clearing a stuck project.
+ */
+export async function deleteProject(storeId: string, projectId: string): Promise<void> {
+  const db = getDb();
+  // Pull the project (scoped to storeId — prevents tenant-crossing) +
+  // every storage key in one query, BEFORE the delete cascade, so we
+  // can clean up storage afterwards.
+  const project = await db.creativeProject.findFirst({
+    where: { id: projectId, storeId },
+    include: {
+      sources: { select: { storageKey: true } },
+      assets: { select: { storageKey: true, thumbStorageKey: true } }
+    }
+  });
+  if (!project) {
+    throw new Error("Project not found.");
+  }
+
+  const storageKeys = new Set<string>();
+  for (const s of project.sources) {
+    if (s.storageKey) storageKeys.add(s.storageKey);
+  }
+  for (const a of project.assets) {
+    if (a.storageKey) storageKeys.add(a.storageKey);
+    if (a.thumbStorageKey) storageKeys.add(a.thumbStorageKey);
+  }
+
+  // Cascade-delete the project. Schema-level onDelete: Cascade on
+  // sources/assets handles the children; this single call wipes them all.
+  await db.creativeProject.delete({ where: { id: projectId } });
+
+  // Best-effort storage cleanup. Don't throw — orphaned objects are a
+  // cost issue, not a correctness one, and the user has already seen
+  // the project disappear from the UI.
+  for (const key of storageKeys) {
+    try {
+      await deleteObject(key);
+    } catch (err) {
+      console.error("[creative] failed to delete storage object", key, err);
+    }
+  }
 }
 
 export async function getProjectDetail(
