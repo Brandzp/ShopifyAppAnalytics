@@ -54,7 +54,9 @@ const PUBLIC_PATHS = new Set([
   "/welcome",
   // /accept-invite handles its own auth gate — it redirects to /signin
   // with the right `next` if the user isn't signed in. Treat as public.
-  "/accept-invite"
+  "/accept-invite",
+  // Public marketing comparison page (Hebrew) — HEB-CONTENT-DEV-01.
+  "/compare-he"
 ]);
 
 const PUBLIC_PREFIXES = [
