@@ -107,40 +107,47 @@ export async function middleware(req: NextRequest) {
   const cronReject = requireCronSecret(req);
   if (cronReject) return cronReject;
 
-  // Stamp the current pathname onto a request header so server components
-  // downstream (especially AppShell's paywall gate) can read it without
-  // resorting to global state hacks.
-  //
-  // BUT: passing `request: { headers }` to NextResponse.next() is a known
-  // Next.js 15 nodejs-runtime bug — it locks the underlying request body
-  // stream, which breaks any route handler that later calls
-  // `request.formData()` or `request.json()` ("Response body object should
-  // not be disturbed or locked"). API routes never read the x-pathname
-  // header (only page RSCs do, via AppShell), so we skip the rewrite for
-  // /api/* and only mutate request headers on page routes.
   const isApiRoute = req.nextUrl.pathname.startsWith("/api/");
-  let res: NextResponse;
+
+  // ───────── /api/* SHORT-CIRCUIT ─────────
+  // API routes get a bare NextResponse.next() with NO Supabase auth call,
+  // NO cookie writes, NO header rewrites. Reasoning: the Next.js 15
+  // nodejs-runtime middleware body-lock bug has at least four observed
+  // triggers (header rewrite, req.cookies.set, res.cookies.set during
+  // Supabase rotation, and apparently just supabase.auth.getUser() itself
+  // under certain code paths — possibly the rate-limit retry logic).
+  // Disarming triggers one-by-one was whack-a-mole; the cleanest fix is
+  // to keep middleware OUT of every API request entirely.
+  //
+  // What we lose: middleware-level auth gating for /api/*. Route handlers
+  // already self-auth via getAuthContext() / resolveActiveStoreId() so
+  // protected routes still return 401/400 on no-user; an API redirect to
+  // /signin was the wrong response anyway (clients want JSON, not HTML).
+  // Session refresh continues to work: page routes still call Supabase
+  // below and rotate the JWT cookie on every page nav, so the user stays
+  // signed in for as long as they navigate pages.
   if (isApiRoute) {
-    res = NextResponse.next();
-  } else {
-    const requestHeaders = new Headers(req.headers);
-    requestHeaders.set("x-pathname", req.nextUrl.pathname);
-    res = NextResponse.next({ request: { headers: requestHeaders } });
+    return NextResponse.next();
   }
 
-  // Refresh session on every request — Supabase's helper handles the
-  // token rotation. For /api/* routes pass dropSetAll: true so the
-  // rotated cookie write is SKIPPED — that res.cookies.set call is
-  // the third known trigger of the Next.js 15 nodejs-middleware body
-  // lock, and it fires unpredictably (only when Supabase happens to
-  // rotate). Page routes will refresh the cookie on the next render.
+  // ───────── PAGE ROUTES ─────────
+  // Stamp the current pathname onto a request header so server components
+  // downstream (especially AppShell's paywall gate) can read it.
+  const requestHeaders = new Headers(req.headers);
+  requestHeaders.set("x-pathname", req.nextUrl.pathname);
+  const res = NextResponse.next({ request: { headers: requestHeaders } });
+
+  // Refresh the Supabase session.
   let user: { id: string } | null = null;
   try {
-    const supabase = createMiddlewareSupabaseClient(req, res, { dropSetAll: isApiRoute });
+    const supabase = createMiddlewareSupabaseClient(req, res);
     const { data } = await supabase.auth.getUser();
     user = data?.user ? { id: data.user.id } : null;
   } catch {
-    // Supabase env not configured (e.g. CI). Treat as anonymous.
+    // Supabase env not configured (e.g. CI) OR rate-limited (429). Treat
+    // as anonymous — the user will hit the signin redirect below. The
+    // 429 catch path used to render the entire app unusable when Supabase
+    // got slow; now it just adds one extra signin round-trip.
     user = null;
   }
 
