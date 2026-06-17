@@ -424,7 +424,12 @@ export function CreativeProjectDetailView({
                           </Button>
                         ) : null}
                         {asset.fileUrl ? (
-                          <a href={asset.fileUrl} download>
+                          // Use the same-origin download proxy. The raw
+                          // asset.fileUrl is a cross-origin R2 presigned URL,
+                          // for which the HTML `download` attribute is silently
+                          // ignored by the browser — clicking it opened the
+                          // image in a new tab instead of saving it.
+                          <a href={`/api/creative/projects/${project.id}/assets/${asset.id}/download`} download>
                             <Button variant="secondary" size="sm">
                               <Download className={cn("h-3.5 w-3.5", isHe ? "ml-1.5" : "mr-1.5")} />
                               {isHe ? "הורד" : "Download"}
