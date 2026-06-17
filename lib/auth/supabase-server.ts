@@ -68,27 +68,32 @@ export async function createRouteHandlerSupabaseClient() {
 }
 
 // ─── 3. Middleware client (request + response cookie bridge) ──────
-export function createMiddlewareSupabaseClient(req: NextRequest, res: NextResponse) {
+export function createMiddlewareSupabaseClient(
+  req: NextRequest,
+  res: NextResponse,
+  options: { dropSetAll?: boolean } = {}
+) {
   return createServerClient(envUrl(), envAnonKey(), {
     cookies: {
       getAll: () => req.cookies.getAll(),
       setAll: (cookiesToSet) => {
-        // CRITICAL: do NOT call `req.cookies.set(name, value)` here. In
-        // Next.js 15 nodejs-runtime middleware, mutating the request
-        // cookies after the request has been wrapped by NextRequest
-        // triggers an internal request rebuild that LOCKS the underlying
-        // body ReadableStream. Any downstream route handler that calls
-        // `request.formData()` or `request.json()` then crashes with
-        // "Response body object should not be disturbed or locked"
-        // BEFORE the handler's try/catch can run — browser sees the
-        // server die with ERR_HTTP2_PROTOCOL_ERROR. The req.cookies.set
-        // is only needed so that further code within THIS SAME middleware
-        // run can read the freshly-rotated cookie; our middleware calls
-        // getUser() once and exits, so we don't need it. Setting the
-        // cookie on `res` is enough — that's what tells the browser to
-        // use the new JWT on the next request.
-        for (const { name, value, options } of cookiesToSet) {
-          res.cookies.set(name, value, options as CookieOptions);
+        // KNOWN BODY-LOCK TRIGGERS in Next.js 15 nodejs-runtime middleware:
+        //   1. `req.cookies.set(...)` — request-cookie mutation. Removed
+        //      below by NOT calling it.
+        //   2. `NextResponse.next({ request: { headers } })` — request-
+        //      header rewrite. Handled in middleware.ts (skipped for /api).
+        //   3. `res.cookies.set(...)` — response-cookie mutation. This
+        //      ALSO locks the request body, but only fires when Supabase
+        //      rotates a JWT (sporadic — looks intermittent). For /api/*
+        //      routes we don't need to write the rotated cookie back at
+        //      all; the next page-route hit will rotate again. Page
+        //      routes still need the write so the user stays signed in.
+        //
+        // When dropSetAll=true, swallow the rotation. Otherwise behave
+        // as before and write the cookie onto `res`.
+        if (options.dropSetAll) return;
+        for (const { name, value, options: cookieOptions } of cookiesToSet) {
+          res.cookies.set(name, value, cookieOptions as CookieOptions);
         }
       }
     }

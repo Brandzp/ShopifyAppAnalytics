@@ -91,7 +91,19 @@ export async function buildAffiliateDeepDive(
           id: true,
           customerId: true,
           customer: { select: { isReturning: true } },
-          lineItems: { select: { title: true, quantity: true, discountedTotal: true } }
+          // `discountedTotal` does not exist on OrderLineItem — fields are
+          // lineSubtotal (gross) / lineDiscountAmount / refundedSubtotal.
+          // Use net-of-discount-and-refunds as the per-line revenue figure
+          // to match how affiliate KPIs are computed elsewhere.
+          lineItems: {
+            select: {
+              title: true,
+              quantity: true,
+              lineSubtotal: true,
+              lineDiscountAmount: true,
+              refundedSubtotal: true
+            }
+          }
         }
       }
     }
@@ -165,7 +177,12 @@ export async function buildAffiliateDeepDive(
         const title = String(li.title ?? "").trim() || "(untitled)";
         const cur = acc.productTotals.get(title) ?? { units: 0, revenue: 0 };
         cur.units += Number(li.quantity ?? 0);
-        cur.revenue += Number(li.discountedTotal ?? 0);
+        // Net revenue = lineSubtotal - lineDiscountAmount - refundedSubtotal.
+        const net =
+          Number(li.lineSubtotal ?? 0) -
+          Number(li.lineDiscountAmount ?? 0) -
+          Number(li.refundedSubtotal ?? 0);
+        cur.revenue += Math.max(net, 0);
         acc.productTotals.set(title, cur);
       }
     }

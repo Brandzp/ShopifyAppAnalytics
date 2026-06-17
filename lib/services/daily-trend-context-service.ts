@@ -148,7 +148,7 @@ export async function getDailyTrendContext(
     }>;
 
     // Per day → per campaign → max spend across levels (dedupe).
-    // Using max() rather than sum() handles the common case where the
+    // Using max() rather than sum() usernames the common case where the
     // sync stores BOTH the campaign-level row AND its ad-level breakdown
     // for the same day; summing would double-count.
     const perDayPerCampaign = new Map<string, Map<string, number>>();
@@ -192,7 +192,7 @@ export async function getDailyTrendContext(
         likeCount: true,
         commentsCount: true,
         viewCount: true,
-        creatorProfile: { select: { displayName: true, handle: true } }
+        creatorProfile: { select: { displayName: true, username: true } }
       },
       orderBy: { postedAt: "asc" }
     })) as Array<{
@@ -202,7 +202,7 @@ export async function getDailyTrendContext(
       likeCount: number;
       commentsCount: number;
       viewCount: number;
-      creatorProfile: { displayName: string | null; handle: string | null } | null;
+      creatorProfile: { displayName: string | null; username: string | null } | null;
     }>;
 
     const perDay = new Map<string, Array<DailyTrendContextItem["posts"][number]>>();
@@ -210,7 +210,7 @@ export async function getDailyTrendContext(
       const day = toIsoDay(p.postedAt);
       const list = perDay.get(day) ?? [];
       list.push({
-        creator: p.creatorProfile?.displayName ?? p.creatorProfile?.handle ?? "Unknown creator",
+        creator: p.creatorProfile?.displayName ?? p.creatorProfile?.username ?? "Unknown creator",
         engagement: p.likeCount + p.commentsCount + p.viewCount,
         permalink: p.permalink,
         caption: p.caption ? p.caption.slice(0, 90) : null

@@ -134,6 +134,15 @@ export async function resolveAlertByFingerprint(input: {
   resolvedBy?: string;
 }): Promise<{ resolved: number }> {
   const db = getDb();
+  // Same P2002 fix as resolveStaleAlerts — clear any previously-resolved
+  // row with this fingerprint before flipping the open one to resolved.
+  await db.alert.deleteMany({
+    where: {
+      storeId: input.storeId,
+      fingerprint: input.fingerprint,
+      status: "resolved"
+    }
+  });
   const result = await db.alert.updateMany({
     where: {
       storeId: input.storeId,
@@ -167,6 +176,39 @@ export async function resolveStaleAlerts(input: {
   resolvedBy?: string;
 }): Promise<{ resolved: number }> {
   const db = getDb();
+  // The Alert model has @@unique([storeId, fingerprint, status]). A
+  // simple updateMany(status: "resolved") fails with P2002 the second
+  // time an alert with the same fingerprint cycles (open → resolved →
+  // open again → resolved would collide with the earlier resolved row).
+  // Pre-delete any existing "resolved" rows for these fingerprints
+  // BEFORE bulk-updating the open ones so the unique key has no
+  // duplicate to collide against.
+  const openAlerts = await db.alert.findMany({
+    where: {
+      storeId: input.storeId,
+      detectedBy: input.detectedBy,
+      type: input.type,
+      status: "open",
+      ...(input.keepFingerprints.length > 0
+        ? { fingerprint: { notIn: input.keepFingerprints } }
+        : {})
+    },
+    select: { fingerprint: true }
+  });
+  const fingerprintsToResolve = Array.from(
+    new Set((openAlerts as Array<{ fingerprint: string }>).map((a) => a.fingerprint))
+  );
+  if (fingerprintsToResolve.length > 0) {
+    await db.alert.deleteMany({
+      where: {
+        storeId: input.storeId,
+        detectedBy: input.detectedBy,
+        type: input.type,
+        status: "resolved",
+        fingerprint: { in: fingerprintsToResolve }
+      }
+    });
+  }
   const result = await db.alert.updateMany({
     where: {
       storeId: input.storeId,

@@ -127,11 +127,14 @@ export async function middleware(req: NextRequest) {
   }
 
   // Refresh session on every request — Supabase's helper handles the
-  // token rotation. We never need to call this explicitly; just having
-  // it run is enough.
+  // token rotation. For /api/* routes pass dropSetAll: true so the
+  // rotated cookie write is SKIPPED — that res.cookies.set call is
+  // the third known trigger of the Next.js 15 nodejs-middleware body
+  // lock, and it fires unpredictably (only when Supabase happens to
+  // rotate). Page routes will refresh the cookie on the next render.
   let user: { id: string } | null = null;
   try {
-    const supabase = createMiddlewareSupabaseClient(req, res);
+    const supabase = createMiddlewareSupabaseClient(req, res, { dropSetAll: isApiRoute });
     const { data } = await supabase.auth.getUser();
     user = data?.user ? { id: data.user.id } : null;
   } catch {
