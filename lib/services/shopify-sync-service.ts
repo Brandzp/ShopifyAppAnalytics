@@ -1,5 +1,6 @@
 import { getDb, withOptionalDb } from "@/lib/server/db";
 import { AppError, toErrorMessage } from "@/lib/server/errors";
+import { aggregateDailyMetrics, persistSummary } from "@/lib/services/daily-metric-aggregator";
 import { createShopifyClient, ShopifyGraphQLClient } from "@/lib/shopify/client";
 import { COLLECTIONS_QUERY, COLLECTION_PRODUCTS_PAGE_QUERY } from "@/lib/shopify/queries/collections";
 import { CUSTOMERS_QUERY } from "@/lib/shopify/queries/customers";
@@ -734,6 +735,20 @@ export async function runFullInitialSync(storeId: string): Promise<SyncRunSummar
         })
       : await syncOrders(storeId, null);
 
+    // ── DATA-03: materialise DailyMetric rows from synced orders ────────
+    // Full initial sync — aggregate the last COVERAGE_DAYS (90) of orders.
+    const dailyMetricsUpserted = await aggregateDailyMetrics(storeId, null).catch((err) => {
+      console.error("[shopify-sync] aggregateDailyMetrics failed (non-fatal):", err);
+      return 0;
+    });
+    if (dailyMetricsUpserted > 0) {
+      console.info(`[shopify-sync] upserted ${dailyMetricsUpserted} DailyMetric rows for store ${storeId}.`);
+    }
+    // Persist a Summary row after the metrics are fresh.
+    await persistSummary(storeId).catch((err) => {
+      console.error("[shopify-sync] persistSummary failed (non-fatal):", err);
+    });
+
     const result = await finishSyncRun(syncRun.id, {
       status: "success",
       errorMessage: null,
@@ -744,7 +759,8 @@ export async function runFullInitialSync(storeId: string): Promise<SyncRunSummar
         products,
         collections,
         customers,
-        orders
+        orders,
+        dailyMetricsUpserted
       }
     });
 
@@ -792,6 +808,20 @@ export async function runIncrementalSync(storeId: string): Promise<SyncRunSummar
     const customers = await syncCustomers(storeId, syncFrom);
     const orders = await syncOrders(storeId, syncFrom);
 
+    // ── DATA-03: materialise DailyMetric rows from synced orders ────────
+    // Incremental sync — narrow the aggregation window to changed days plus
+    // a 1-day look-back (handled inside aggregateDailyMetrics via syncFrom).
+    const dailyMetricsUpserted = await aggregateDailyMetrics(storeId, syncFrom).catch((err) => {
+      console.error("[shopify-sync] aggregateDailyMetrics failed (non-fatal):", err);
+      return 0;
+    });
+    if (dailyMetricsUpserted > 0) {
+      console.info(`[shopify-sync] upserted ${dailyMetricsUpserted} DailyMetric rows for store ${storeId}.`);
+    }
+    await persistSummary(storeId).catch((err) => {
+      console.error("[shopify-sync] persistSummary failed (non-fatal):", err);
+    });
+
     const result = await finishSyncRun(syncRun.id, {
       status: "success",
       errorMessage: null,
@@ -803,7 +833,8 @@ export async function runIncrementalSync(storeId: string): Promise<SyncRunSummar
         products,
         collections,
         customers,
-        orders
+        orders,
+        dailyMetricsUpserted
       }
     });
 
