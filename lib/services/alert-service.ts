@@ -29,7 +29,7 @@ export async function generateAlerts(): Promise<Alert[]> {
       id: "rule-revenue-down",
       severity: "high",
       title: locale === "he" ? "ההכנסות ירדו מול התקופה הקודמת" : "Revenue is down versus the prior period",
-      explanation: locale === "he" ? `ההכנסות זזו ב-${revenueMetric.change.toFixed(1)}% מול החלון הקודם.` : `Revenue moved ${revenueMetric.change.toFixed(1)}% against the previous window.`,
+      explanation: locale === "he" ? `ההכנסות זזו ב-${Math.abs(revenueMetric.change).toFixed(1)}% מול החלון הקודם.` : `Revenue moved ${revenueMetric.change.toFixed(1)}% against the previous window.`,
       suggestedAction: locale === "he" ? "בדקו את הביקוש למוצרים המובילים, תמהיל ההנחות וקצב ההזמנות לפני העדכון הבא למייסד." : "Review top product demand, discount mix, and order cadence before the next founder update.",
       periodLabel,
       timestamp: new Date().toISOString()
@@ -65,7 +65,7 @@ export async function generateAlerts(): Promise<Alert[]> {
       id: "rule-repeat-rate-drop",
       severity: "medium",
       title: locale === "he" ? "שיעור הלקוחות החוזרים נחלש מול התקופה הקודמת" : "Returning customer rate slipped versus the prior period",
-      explanation: locale === "he" ? `ביצועי הרכישה החוזרת זזו ב-${returningMetric.change.toFixed(1)} נקודות.` : `Repeat performance moved ${returningMetric.change.toFixed(1)} points.`,
+      explanation: locale === "he" ? `ביצועי הרכישה החוזרת זזו ב-${Math.abs(returningMetric.change).toFixed(1)} נקודות.` : `Repeat performance moved ${returningMetric.change.toFixed(1)} points.`,
       suggestedAction: locale === "he" ? "בדקו את התזמון של הזמנה שנייה ואת מסרי שימור הלקוחות לרוכשים חדשים." : "Review second-order timing and retention messages for recent first-time buyers.",
       periodLabel,
       timestamp: new Date().toISOString()

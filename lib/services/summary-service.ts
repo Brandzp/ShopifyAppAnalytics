@@ -78,7 +78,7 @@ function buildGeneratedSummary(
   if (locale === "he") {
     return {
       id: "generated-summary",
-      headline: `ההכנסות השתנו ב-${overview.comparisonMetrics[0]?.change.toFixed(1) ?? "0.0"}% מול התקופה הקודמת, והרווח המשוער עומד על ${overview.comparisonMetrics[1]?.change.toFixed(1) ?? "0.0"}%.`,
+      headline: `ההכנסות השתנו ב-${Math.abs(overview.comparisonMetrics[0]?.change ?? 0).toFixed(1)}% מול התקופה הקודמת, והרווח המשוער עומד על ${Math.abs(overview.comparisonMetrics[1]?.change ?? 0).toFixed(1)}%.`,
       generatedAt: new Date().toISOString(),
       sections: [
         {
@@ -179,7 +179,7 @@ function buildHeadlineFromDeltas(
   const rev = deltas.revenueChange;
   const prof = deltas.profitChange;
   if (locale === "he") {
-    return `הכנסות השתנו ב־${rev != null ? rev.toFixed(1) : "0.0"}% מול התקופה הקודמת, והרווח המשוער ב־${prof != null ? prof.toFixed(1) : "0.0"}%.`;
+    return `הכנסות השתנו ב־${rev != null ? Math.abs(rev).toFixed(1) : "0.0"}% מול התקופה הקודמת, והרווח המשוער ב־${prof != null ? Math.abs(prof).toFixed(1) : "0.0"}%.`;
   }
   return `Revenue is ${rev != null ? rev.toFixed(1) : "0.0"}% versus the prior period, with estimated profit at ${prof != null ? prof.toFixed(1) : "0.0"}%.`;
 }
