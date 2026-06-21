@@ -122,18 +122,33 @@ export async function buildContributionMargin(
     };
   }
 
-  // ── Affiliate commission — same window, same filtering ────────────
+  // ── Affiliate commission — same window, same filtering + refund deduction ──
   // The parity layer doesn't include commission because BixGrow is a
   // separate source. We pull it here and treat it as a contribution
   // margin deduction (= money paid out to affiliates).
-  const affAgg = await db.affiliateAttribution.aggregate({
+  //
+  // IMPORTANT: we apply the same refund-fraction deduction the affiliate-portal
+  // dashboard uses so the two surfaces agree. Without this the margin panel
+  // sums raw commissionAmount (including fully- or partially-refunded orders)
+  // while the portal shows commission net of refunds — causing a discrepancy
+  // of up to Σ(commission × refundFraction). See DISC-FIX.
+  const affRows = await db.affiliateAttribution.findMany({
     where: {
       storeId: input.storeId,
       occurredAt: { gte: input.start, lte: input.end }
     },
-    _sum: { commissionAmount: true }
+    select: {
+      commissionAmount: true,
+      order: { select: { totalPrice: true, totalRefunds: true } }
+    }
   });
-  const affiliateCommission = Number(affAgg._sum.commissionAmount ?? 0);
+  const affiliateCommission = affRows.reduce((sum: number, row: { commissionAmount: unknown; order: { totalPrice?: unknown; totalRefunds?: unknown } | null }) => {
+    const commission = Number(row.commissionAmount ?? 0);
+    const total = Number(row.order?.totalPrice ?? 0);
+    const refunds = Number(row.order?.totalRefunds ?? 0);
+    const refundFraction = total > 0 && refunds > 0 ? Math.min(refunds / total, 1) : 0;
+    return sum + commission * (1 - refundFraction);
+  }, 0);
 
   // ── Quality assessment ────────────────────────────────────────────
   // Same as v1 — count products that sold in the window but have no cost
