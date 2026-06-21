@@ -5,6 +5,7 @@ import { syncMetaAdsCampaignInsights } from "@/lib/services/meta-ads-service";
 import { syncInstagramPostsForStore } from "@/lib/services/instagram-service";
 import { refreshMetaTokensNearExpiry } from "@/lib/services/meta-token-refresh-service";
 import { reconcileAffiliateAttributionOrphans } from "@/lib/services/affiliate-attribution-reconciler";
+import { syncGscData, GSC_PLATFORM } from "@/lib/services/gsc-service";
 
 // Multi-source data refresh — the unified 2-hour cron tick.
 //
@@ -85,6 +86,7 @@ interface PerStoreResult {
   metaAds: { ok: boolean; skipped?: boolean; error?: string };
   instagram: { ok: boolean; skipped?: boolean; error?: string };
   bixgrow: { ok: boolean; skipped: boolean };
+  gsc: { ok: boolean; skipped?: boolean; pagesUpserted?: number; queriesUpserted?: number; error?: string };
   affiliateReconcile?: { linked: number; deletedDuplicates: number; stillOrphan: number };
 }
 
@@ -125,8 +127,8 @@ async function handler(request: Request) {
   // BixGrow are optional — we skip those when no connection row exists.
   const stores = (await db.store.findMany({
     where: { connected: true },
-    select: { id: true, name: true }
-  })) as Array<{ id: string; name: string | null }>;
+    select: { id: true, name: true, domain: true }
+  })) as Array<{ id: string; name: string | null; domain: string }>;
 
   if (stores.length === 0) {
     return NextResponse.json({
@@ -145,7 +147,8 @@ async function handler(request: Request) {
         shopify: { ok: false },
         metaAds: { ok: false },
         instagram: { ok: false },
-        bixgrow: { ok: true, skipped: true }
+        bixgrow: { ok: true, skipped: true },
+        gsc: { ok: true, skipped: true }
       };
 
       // ── Shopify (mandatory if connected) ──────────────────────────
@@ -221,6 +224,44 @@ async function handler(request: Request) {
           result.instagram = { ok: true };
         } catch (err) {
           result.instagram = {
+            ok: false,
+            error: err instanceof Error ? err.message : String(err)
+          };
+        }
+      }
+
+      // ── Google Search Console (optional) ─────────────────────────
+      // GSC sync requires: (a) a PlatformConnection row (platform =
+      // "googleSearchConsole") with status "connected", AND (b) the owner
+      // has performed the OAuth consent flow. Failures are isolated —
+      // GSC not being configured must never block Shopify / Meta / Instagram.
+      // The siteUrl is derived from the store's Shopify domain using the
+      // GSC domain property format ("sc-domain:<domain>").
+      const gscConn = await db.platformConnection
+        .findUnique({
+          where: { storeId_platform: { storeId: store.id, platform: GSC_PLATFORM } },
+          select: { id: true, status: true }
+        })
+        .catch(() => null);
+      if (!gscConn || gscConn.status !== "connected") {
+        result.gsc = { ok: true, skipped: true };
+      } else {
+        try {
+          // Derive siteUrl from the store domain. GSC domain properties use
+          // the "sc-domain:<domain>" format (supports all URL prefixes under
+          // that domain). Falls back gracefully if syncGscData throws.
+          const siteUrl = `sc-domain:${store.domain}`;
+          const gscResult = await syncGscData(store.id, siteUrl);
+          result.gsc = {
+            ok: true,
+            pagesUpserted: gscResult.pagesUpserted,
+            queriesUpserted: gscResult.queriesUpserted
+          };
+        } catch (err) {
+          // GSC failures are non-fatal. OAuth may not be configured yet,
+          // the site may not be verified, or the env vars may be missing.
+          console.error(`[refresh-all] GSC sync failed for ${store.id}:`, err);
+          result.gsc = {
             ok: false,
             error: err instanceof Error ? err.message : String(err)
           };
