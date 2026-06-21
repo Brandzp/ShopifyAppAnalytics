@@ -9,6 +9,7 @@ import { LanguageSwitcher } from "@/components/settings/language-switcher";
 import { CreatorConnectionsManager } from "@/components/settings/creator-connections-manager";
 import { MetaAdsConnectionManager } from "@/components/settings/meta-ads-connection-manager";
 import { WeeklyReportRecipientsManager } from "@/components/settings/weekly-report-recipients-manager";
+import { GscConnectionManager } from "@/components/settings/gsc-connection-manager";
 import { getAppChromeData } from "@/lib/services/analytics-service";
 import { getShopifyConnectionSummary } from "@/lib/services/shopify-connection-service";
 import { getSyncStatus } from "@/lib/services/shopify-sync-service";
@@ -18,23 +19,49 @@ import { getAppLocale, getDictionary } from "@/lib/i18n";
 import { CheckCircle2, AlertTriangle, XCircle } from "lucide-react";
 import { BixGrowWebhookCard } from "@/components/settings/bixgrow-webhook-card";
 import { getDb } from "@/lib/server/db";
+import { GSC_PLATFORM } from "@/lib/services/gsc-service";
 
-export default async function SettingsPage() {
+export default async function SettingsPage({
+  searchParams
+}: {
+  searchParams: Promise<{
+    gsc_connected?: string;
+    gsc_error?: string;
+  }>;
+}) {
   const locale = await getAppLocale();
   const dictionary = getDictionary(locale);
   const chrome = await getAppChromeData();
-  const [connectionSummary, syncStatus, metaAdsConnection, setupHealth, storeRow] = await Promise.all([
-    getShopifyConnectionSummary(chrome.store.id),
-    getSyncStatus(chrome.store.id),
-    getMetaAdsConnectionSummary(chrome.store.id).catch(() => null),
-    buildSetupHealth({ storeId: chrome.store.id }).catch(() => null),
-    getDb()
-      .store.findUnique({
-        where: { id: chrome.store.id },
-        select: { bixgrowSlug: true }
-      })
-      .catch(() => null)
-  ]);
+  const params = await searchParams;
+  const gscConnected = params.gsc_connected === "true";
+  const gscError = params.gsc_error ?? null;
+
+  const [connectionSummary, syncStatus, metaAdsConnection, setupHealth, storeRow, gscConnection] =
+    await Promise.all([
+      getShopifyConnectionSummary(chrome.store.id),
+      getSyncStatus(chrome.store.id),
+      getMetaAdsConnectionSummary(chrome.store.id).catch(() => null),
+      buildSetupHealth({ storeId: chrome.store.id }).catch(() => null),
+      getDb()
+        .store.findUnique({
+          where: { id: chrome.store.id },
+          select: { bixgrowSlug: true }
+        })
+        .catch(() => null),
+      getDb()
+        .platformConnection.findUnique({
+          where: { storeId_platform: { storeId: chrome.store.id, platform: GSC_PLATFORM } },
+          select: {
+            status: true,
+            tokenLastFour: true,
+            healthMessage: true,
+            lastSyncAt: true,
+            createdAt: true,
+            updatedAt: true
+          }
+        })
+        .catch(() => null)
+    ]);
 
   // Public URL the BixGrow webhook URL is built from. APP_URL is set in
   // production; locally we fall back to the dev origin so the card shows
@@ -106,6 +133,23 @@ export default async function SettingsPage() {
                 publicAppUrl={publicAppUrl}
                 storeName={chrome.store.name}
                 locale={locale === "he" ? "he" : "en"}
+              />
+              <GscConnectionManager
+                storeId={chrome.store.id}
+                initialConnection={
+                  gscConnection
+                    ? {
+                        status: gscConnection.status,
+                        tokenLastFour: gscConnection.tokenLastFour ?? null,
+                        healthMessage: gscConnection.healthMessage ?? null,
+                        lastSyncAt: gscConnection.lastSyncAt?.toISOString() ?? null,
+                        connectedAt: gscConnection.createdAt.toISOString(),
+                        updatedAt: gscConnection.updatedAt.toISOString()
+                      }
+                    : null
+                }
+                gscConnected={gscConnected}
+                gscError={gscError}
               />
               <CreatorConnectionsManager labels={dictionary.creator} />
             </div>
