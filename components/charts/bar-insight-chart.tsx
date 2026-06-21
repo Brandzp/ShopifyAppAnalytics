@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import type { KPI } from "@/lib/domain/types";
 import { formatMetricValue } from "@/lib/formatters";
@@ -27,6 +28,14 @@ export function BarInsightChart<T extends object>({
   /** Optional label shown in tooltip (e.g. "Estimated profit"). Defaults to dataKey humanized. */
   valueLabel?: string;
 }) {
+  // Mount guard: ResponsiveContainer reads DOM dimensions via ResizeObserver
+  // and produces different HTML on the server (where no DOM exists) vs the
+  // client — triggering React hydration error #418. Render nothing until the
+  // component has mounted on the client so server and client agree on the
+  // initial HTML (an empty placeholder div).
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
+
   const tooltipName =
     valueLabel ??
     String(dataKey)
@@ -35,6 +44,7 @@ export function BarInsightChart<T extends object>({
 
   return (
     <div className="h-[260px] w-full sm:h-[320px]">
+      {!mounted ? null : (
       <ResponsiveContainer width="100%" height="100%">
         <BarChart
           data={data}
@@ -76,6 +86,7 @@ export function BarInsightChart<T extends object>({
           <Bar dataKey={dataKey} fill={color} radius={[8, 8, 0, 0]} maxBarSize={56} />
         </BarChart>
       </ResponsiveContainer>
+      )}
     </div>
   );
 }
