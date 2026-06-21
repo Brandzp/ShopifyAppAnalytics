@@ -2,15 +2,30 @@
 
 import Link, { useLinkStatus } from "next/link";
 import { usePathname } from "next/navigation";
-import { Bell, CalendarRange, Camera, LayoutDashboard, LineChart, Loader2, Menu, PackageCheck, Settings2, Sparkles, Users2, Megaphone, Bot, FileSpreadsheet, type LucideIcon } from "lucide-react";
+import { Bell, Building2, CalendarRange, Camera, LayoutDashboard, LineChart, Loader2, Menu, PackageCheck, Settings2, Sparkles, Users2, Megaphone, Bot, FileSpreadsheet, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useMemo, useState } from "react";
 import type { AppLocale } from "@/lib/i18n";
 
-function getNavigation(labels: { nav: Record<string, string> }, locale: AppLocale) {
+function getNavigation(
+  labels: { nav: Record<string, string> },
+  locale: AppLocale,
+  showPortfolio: boolean
+) {
   return [
     { href: "/", label: labels.nav.overview, icon: LayoutDashboard },
+    // Portfolio view only appears when the org has 2+ brands — a portfolio
+    // of one is just the Overview.
+    ...(showPortfolio
+      ? [
+          {
+            href: "/portfolio",
+            label: locale === "he" ? "תיק המותגים" : "Portfolio",
+            icon: Building2
+          }
+        ]
+      : []),
     { href: "/profit", label: labels.nav.profit, icon: LineChart },
     {
       href: "/sales-summary",
@@ -57,7 +72,8 @@ function NavContent({
   pathname,
   storeName,
   locale,
-  labels
+  labels,
+  showPortfolio
 }: {
   pathname: string;
   storeName: string;
@@ -66,8 +82,12 @@ function NavContent({
     common: Record<string, string>;
     nav: Record<string, string>;
   };
+  showPortfolio: boolean;
 }) {
-  const navigation = useMemo(() => getNavigation(labels, locale), [labels, locale]);
+  const navigation = useMemo(
+    () => getNavigation(labels, locale, showPortfolio),
+    [labels, locale, showPortfolio]
+  );
 
   return (
     <div className="flex h-full flex-col">
@@ -127,7 +147,8 @@ function NavContent({
 export function Sidebar({
   storeName,
   locale,
-  labels
+  labels,
+  showPortfolio = false
 }: {
   storeName: string;
   locale: AppLocale;
@@ -135,6 +156,9 @@ export function Sidebar({
     common: Record<string, string>;
     nav: Record<string, string>;
   };
+  // Show the Portfolio nav item — true when the org has ≥2 connected
+  // brands. Defaults to false so callers that don't yet pass it stay safe.
+  showPortfolio?: boolean;
 }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
@@ -154,12 +178,24 @@ export function Sidebar({
         </Button>
       </div>
       <aside className="hidden w-80 shrink-0 border-r border-border/70 bg-muted/40 lg:block">
-        <NavContent pathname={pathname} storeName={storeName} locale={locale} labels={labels} />
+        <NavContent
+          pathname={pathname}
+          storeName={storeName}
+          locale={locale}
+          labels={labels}
+          showPortfolio={showPortfolio}
+        />
       </aside>
       {open ? (
         <div className="fixed inset-0 z-40 bg-slate-950/40 lg:hidden" onClick={() => setOpen(false)}>
           <div className="h-full w-[82%] max-w-80 bg-background shadow-2xl" onClick={(event) => event.stopPropagation()}>
-            <NavContent pathname={pathname} storeName={storeName} locale={locale} labels={labels} />
+            <NavContent
+              pathname={pathname}
+              storeName={storeName}
+              locale={locale}
+              labels={labels}
+              showPortfolio={showPortfolio}
+            />
           </div>
         </div>
       ) : null}

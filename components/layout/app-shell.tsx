@@ -40,7 +40,12 @@ export async function AppShell({
 
   return (
     <div className="min-h-screen lg:flex">
-      <Sidebar storeName={store.name} locale={locale} labels={dictionary} />
+      <Sidebar
+        storeName={store.name}
+        locale={locale}
+        labels={dictionary}
+        showPortfolio={allStores.length >= 2}
+      />
       <main className="flex-1">
         {sub ? <TrialBanner info={sub} locale={locale === "he" ? "he" : "en"} /> : null}
         <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-6 px-4 py-4 sm:gap-8 sm:px-6 sm:py-6 lg:px-10 lg:py-8">
