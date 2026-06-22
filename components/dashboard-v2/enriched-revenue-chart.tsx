@@ -101,21 +101,43 @@ function CustomTooltip({
           </div>
         ) : null}
 
-        {/* 🎯 Active campaigns */}
+        {/* 🎯 Active campaigns — ranked by VALUE (revenue/ROAS), not spend.
+            Shows attributed revenue + ROAS so the founder sees which ad
+            actually made money, not just which one cost the most. Falls
+            back to spend display only when Meta didn't report ROAS for
+            that day (e.g. zero conversions). */}
         {ctx?.campaigns && ctx.campaigns.length > 0 ? (
           <div>
             <p className="mb-1 font-semibold text-foreground">🎯 {t.campaigns}</p>
             <ul className="space-y-0.5 text-muted-foreground">
-              {ctx.campaigns.map((c) => (
-                <li key={c.name} className="flex justify-between gap-2">
-                  <span className="truncate" title={c.name}>
-                    {c.name}
-                  </span>
-                  <span className="shrink-0 tabular-nums text-foreground">
-                    {formatCurrency(c.spend, currency)} {t.spend}
-                  </span>
-                </li>
-              ))}
+              {ctx.campaigns.map((c) => {
+                const hasValue = c.roas != null && c.revenue > 0;
+                return (
+                  <li key={c.name} className="flex justify-between gap-2">
+                    <span className="truncate" title={c.name}>
+                      {c.name}
+                    </span>
+                    <span className="shrink-0 tabular-nums text-foreground">
+                      {hasValue ? (
+                        <>
+                          {formatCurrency(c.revenue, currency)}
+                          {" · "}
+                          <span className={c.roas! >= 1 ? "text-emerald-700" : "text-rose-700"}>
+                            {(c.roas as number).toFixed(2)}× {t.campaignRoas}
+                          </span>
+                        </>
+                      ) : (
+                        // No conversions reported this day — show spend so
+                        // the row isn't empty, but tagged as "spend" so the
+                        // founder reads it as cost, not value.
+                        <span className="text-muted-foreground">
+                          {formatCurrency(c.spend, currency)} {t.spend}
+                        </span>
+                      )}
+                    </span>
+                  </li>
+                );
+              })}
             </ul>
           </div>
         ) : null}

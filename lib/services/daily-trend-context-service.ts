@@ -135,7 +135,13 @@ export async function getDailyTrendContext(
         level: true,
         campaignName: true,
         spend: true,
-        purchases: true
+        purchases: true,
+        // purchaseRoas = revenue / spend (Meta's website-purchase ROAS).
+        // We use it to derive per-campaign revenue: revenue = spend * roas.
+        // Required so the tooltip can rank by VALUE (revenue/ROAS) instead
+        // of spend — the founder cares about "which ad made me money," not
+        // "which ad cost me the most."
+        purchaseRoas: true
       },
       orderBy: { spend: "desc" }
     })) as Array<{
@@ -145,32 +151,57 @@ export async function getDailyTrendContext(
       campaignName: string;
       spend: any;
       purchases: number;
+      purchaseRoas: any;
     }>;
 
-    // Per day → per campaign → max spend across levels (dedupe).
-    // Using max() rather than sum() usernames the common case where the
-    // sync stores BOTH the campaign-level row AND its ad-level breakdown
-    // for the same day; summing would double-count.
-    const perDayPerCampaign = new Map<string, Map<string, number>>();
+    // Per day → per campaign → { maxSpend, maxRoas } across levels (dedupe).
+    // Same dedupe logic as before: when the sync writes BOTH the
+    // campaign-level row AND its ad-level breakdown for the same day,
+    // sum() would double-count, so we take max() across levels per
+    // (day, campaign).
+    interface CampAcc {
+      spend: number;
+      roas: number | null;
+    }
+    const perDayPerCampaign = new Map<string, Map<string, CampAcc>>();
     for (const ins of insights) {
-      // Only single-day insights — range rows are summaries.
       if (ins.dateStart.getTime() !== ins.dateStop.getTime()) continue;
       const day = toIsoDay(ins.dateStart);
       const spend = num(ins.spend);
       if (spend <= 0) continue;
+      const roasRaw = ins.purchaseRoas == null ? null : Number(ins.purchaseRoas);
+      const roas = roasRaw != null && Number.isFinite(roasRaw) && roasRaw >= 0 ? roasRaw : null;
       let campMap = perDayPerCampaign.get(day);
       if (!campMap) {
         campMap = new Map();
         perDayPerCampaign.set(day, campMap);
       }
-      const prev = campMap.get(ins.campaignName) ?? 0;
-      campMap.set(ins.campaignName, Math.max(prev, spend));
+      const prev = campMap.get(ins.campaignName);
+      if (!prev) {
+        campMap.set(ins.campaignName, { spend, roas });
+      } else {
+        // Prefer the row with the higher spend (most authoritative);
+        // carry its ROAS as the authoritative one too.
+        if (spend > prev.spend) {
+          campMap.set(ins.campaignName, { spend, roas });
+        }
+      }
     }
 
     for (const [day, campMap] of perDayPerCampaign.entries()) {
+      // Build campaign rows with derived revenue, then rank by REVENUE
+      // descending (the value created — what the founder actually wants
+      // to see). Falls back to spend ordering for campaigns where ROAS
+      // wasn't reported (revenue computes to 0 in that case).
       const top5 = Array.from(campMap.entries())
-        .map(([name, spend]) => ({ name, spend, revenue: 0, roas: null }))
-        .sort((a, b) => b.spend - a.spend)
+        .map(([name, acc]) => {
+          const revenue = acc.roas != null ? acc.spend * acc.roas : 0;
+          return { name, spend: acc.spend, revenue, roas: acc.roas };
+        })
+        .sort((a, b) => {
+          if (b.revenue !== a.revenue) return b.revenue - a.revenue;
+          return b.spend - a.spend;
+        })
         .slice(0, 5);
       result[day] = { ...(result[day] ?? emptyDay(day)), campaigns: top5 };
     }
