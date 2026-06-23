@@ -738,15 +738,38 @@ export async function runFullInitialSync(storeId: string): Promise<SyncRunSummar
     // ── DATA-03: materialise DailyMetric rows from synced orders ────────
     // Full initial sync — aggregate the last COVERAGE_DAYS (90) of orders.
     const dailyMetricsUpserted = await aggregateDailyMetrics(storeId, null).catch((err) => {
-      console.error("[shopify-sync] aggregateDailyMetrics failed (non-fatal):", err);
+      console.error("[SA-SILENT-FAIL] aggregateDailyMetrics failed:", {
+        op: "aggregateDailyMetrics",
+        storeId,
+        mode: "initial",
+        err: err instanceof Error ? err.message : String(err)
+      });
       return 0;
     });
     if (dailyMetricsUpserted > 0) {
       console.info(`[shopify-sync] upserted ${dailyMetricsUpserted} DailyMetric rows for store ${storeId}.`);
+    } else {
+      // Zero rows written despite a completed order sync — log as a data-gap
+      // warning so it is visible in production logs without crashing the sync.
+      // AP-T8 / lessons-learned 2026-06-22: zero-writes-with-nonempty-source must be surfaced.
+      const orderCount = (orders.created ?? 0) + (orders.updated ?? 0);
+      if (orderCount > 0) {
+        console.warn("[SA-SILENT-FAIL] aggregateDailyMetrics wrote 0 rows but orders synced > 0:", {
+          op: "aggregateDailyMetrics",
+          storeId,
+          mode: "initial",
+          orderCount
+        });
+      }
     }
     // Persist a Summary row after the metrics are fresh.
     await persistSummary(storeId).catch((err) => {
-      console.error("[shopify-sync] persistSummary failed (non-fatal):", err);
+      console.error("[SA-SILENT-FAIL] persistSummary failed:", {
+        op: "persistSummary",
+        storeId,
+        mode: "initial",
+        err: err instanceof Error ? err.message : String(err)
+      });
     });
 
     const result = await finishSyncRun(syncRun.id, {
@@ -812,14 +835,36 @@ export async function runIncrementalSync(storeId: string): Promise<SyncRunSummar
     // Incremental sync — narrow the aggregation window to changed days plus
     // a 1-day look-back (handled inside aggregateDailyMetrics via syncFrom).
     const dailyMetricsUpserted = await aggregateDailyMetrics(storeId, syncFrom).catch((err) => {
-      console.error("[shopify-sync] aggregateDailyMetrics failed (non-fatal):", err);
+      console.error("[SA-SILENT-FAIL] aggregateDailyMetrics failed:", {
+        op: "aggregateDailyMetrics",
+        storeId,
+        mode: "incremental",
+        err: err instanceof Error ? err.message : String(err)
+      });
       return 0;
     });
     if (dailyMetricsUpserted > 0) {
       console.info(`[shopify-sync] upserted ${dailyMetricsUpserted} DailyMetric rows for store ${storeId}.`);
+    } else {
+      // Zero rows on an incremental sync with orders is unusual on a non-empty store.
+      // AP-T8 / lessons-learned 2026-06-22: zero-writes-with-nonempty-source must be surfaced.
+      const orderCount = (orders.created ?? 0) + (orders.updated ?? 0);
+      if (orderCount > 0) {
+        console.warn("[SA-SILENT-FAIL] aggregateDailyMetrics wrote 0 rows but orders synced > 0:", {
+          op: "aggregateDailyMetrics",
+          storeId,
+          mode: "incremental",
+          orderCount
+        });
+      }
     }
     await persistSummary(storeId).catch((err) => {
-      console.error("[shopify-sync] persistSummary failed (non-fatal):", err);
+      console.error("[SA-SILENT-FAIL] persistSummary failed:", {
+        op: "persistSummary",
+        storeId,
+        mode: "incremental",
+        err: err instanceof Error ? err.message : String(err)
+      });
     });
 
     const result = await finishSyncRun(syncRun.id, {
