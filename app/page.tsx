@@ -34,6 +34,29 @@ import { resolveActiveStoreId } from "@/lib/services/offline-sales-service";
 import { formatCurrency, formatNumber } from "@/lib/utils";
 import { getAppLocale } from "@/lib/i18n";
 
+/** Priority badge labels and colors, matching Hebrew UX convention. */
+type PriorityLevel = "critical" | "important" | "low";
+
+function PriorityBadge({ level, isHe }: { level: PriorityLevel; isHe: boolean }) {
+  const styles: Record<PriorityLevel, string> = {
+    critical: "bg-red-100 text-red-800 border-red-200",
+    important: "bg-amber-100 text-amber-800 border-amber-200",
+    low: "bg-slate-100 text-slate-600 border-slate-200"
+  };
+  const labels: Record<PriorityLevel, { he: string; en: string }> = {
+    critical: { he: "קריטי", en: "Critical" },
+    important: { he: "חשוב", en: "Important" },
+    low: { he: "נמוך", en: "Low" }
+  };
+  return (
+    <span
+      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${styles[level]}`}
+    >
+      {isHe ? labels[level].he : labels[level].en}
+    </span>
+  );
+}
+
 // Founder Command Center — the new homepage. Lead with what needs action,
 // then show money snapshot, then push trend + top products below the fold
 // as context. Replaces the old "step 1 → step 6" dashboard-of-everything.
@@ -206,6 +229,19 @@ export default async function CommandCenterPage() {
   return (
     <AppShell store={chrome.store} controls={chrome.controls}>
       <div className="space-y-6 sm:space-y-8">
+        {/* ── BUSINESS SUMMARY — 2-3 line glance at current state ────── */}
+        {contributionMargin ? (
+          <BusinessSummaryBlock
+            revenue={contributionMargin.totals.revenue}
+            profit={contributionMargin.totals.contributionMargin}
+            profitRate={contributionMargin.totals.contributionMarginRate}
+            criticalCount={alertCards.filter((a) => a.severity === "critical").length}
+            highCount={alertCards.filter((a) => a.severity === "high").length}
+            currency={overview.store.currency}
+            isHe={isHe}
+          />
+        ) : null}
+
         {/* ── HEADLINE — what's on fire right now + data confidence ───── */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex-1">
@@ -228,14 +264,14 @@ export default async function CommandCenterPage() {
         {/* ── SECTION 1 — Critical + High alerts as full cards ────────── */}
         {criticalAndHigh.length > 0 ? (
           <section className="space-y-3">
-            <SectionHead
-              eyebrow={lang("דורש פעולה היום", "Needs action today")}
-              title={lang("התראות בעדיפות גבוהה", "High-priority alerts")}
-              hint={lang(
-                "כל כרטיס כולל פעולה מומלצת. אישור = ראיתי, טופל = סגרתי, התעלם = לא רלוונטי.",
-                "Every card has a suggested action. Got it = seen, Mark done = closed, Dismiss = ignored."
-              )}
-            />
+            <div className="flex flex-wrap items-center gap-2">
+              <SectionHead
+                eyebrow={lang("דורש פעולה היום", "Needs action today")}
+                title={lang("התראות בעדיפות גבוהה", "High-priority alerts")}
+                hint={lang("כל כרטיס כולל פעולה מומלצת.", "Each card has a suggested action.")}
+              />
+              <PriorityBadge level="critical" isHe={isHe} />
+            </div>
             <div className="grid gap-3 lg:grid-cols-2">
               {criticalAndHigh.map((alert) => (
                 <CommandCenterAlertCard key={alert.id} alert={alert} locale={locale} />
@@ -262,23 +298,36 @@ export default async function CommandCenterPage() {
             />
           ) : null}
           <div className="grid gap-3 grid-cols-2 lg:grid-cols-3">
-            {overview.kpis.map((kpi) => (
-              <KpiTile key={kpi.label} kpi={kpi} currency={overview.store.currency} />
-            ))}
+            {overview.kpis.map((kpi) => {
+              const label = kpi.label.toLowerCase();
+              const drillHref = label.includes("revenue")
+                ? "/sales-summary"
+                : label.includes("profit")
+                  ? "/profit"
+                  : undefined;
+              return (
+                <KpiTile
+                  key={kpi.label}
+                  kpi={kpi}
+                  currency={overview.store.currency}
+                  href={drillHref}
+                />
+              );
+            })}
           </div>
         </section>
 
         {/* ── SECTION 3 — Medium/Low alerts compact list ──────────────── */}
         {mediumAndLow.length > 0 ? (
           <section className="space-y-3">
-            <SectionHead
-              eyebrow={lang("השבוע", "This week")}
-              title={lang("התראות בעדיפות בינונית/נמוכה", "Watch this week")}
-              hint={lang(
-                "שווה עין במהלך השבוע — לא יתפוצץ הלילה.",
-                "Worth checking during weekly planning — won't blow up overnight."
-              )}
-            />
+            <div className="flex flex-wrap items-center gap-2">
+              <SectionHead
+                eyebrow={lang("השבוע", "This week")}
+                title={lang("התראות לבדיקה", "Alerts to review")}
+                hint={lang("לא דחוף — שווה עין במהלך השבוע.", "Not urgent — check during weekly planning.")}
+              />
+              <PriorityBadge level="important" isHe={isHe} />
+            </div>
             <div className="grid gap-3 lg:grid-cols-2">
               {mediumAndLow.map((alert) => (
                 <CommandCenterAlertCard key={alert.id} alert={alert} locale={locale} />
@@ -379,6 +428,58 @@ export default async function CommandCenterPage() {
         </section>
       </div>
     </AppShell>
+  );
+}
+
+function BusinessSummaryBlock({
+  revenue,
+  profit,
+  profitRate,
+  criticalCount,
+  highCount,
+  currency,
+  isHe
+}: {
+  revenue: number;
+  profit: number;
+  profitRate: number;
+  criticalCount: number;
+  highCount: number;
+  currency: string;
+  isHe: boolean;
+}) {
+  const lang = (he: string, en: string) => (isHe ? he : en);
+  const fmt = (n: number) => formatCurrency(n, currency);
+  const ratePct = (profitRate * 100).toFixed(1);
+  const alertSummary =
+    criticalCount > 0
+      ? lang(`${criticalCount} קריטיות פתוחות`, `${criticalCount} critical open`)
+      : highCount > 0
+        ? lang(`${highCount} גבוהות פתוחות`, `${highCount} high-priority open`)
+        : lang("אין התראות קריטיות", "No critical alerts");
+
+  return (
+    <div className="rounded-xl border border-indigo-100 bg-indigo-50/60 px-5 py-4">
+      <p className="text-[10px] font-semibold uppercase tracking-widest text-indigo-500">
+        {lang("סיכום עסקי", "Business snapshot")}
+      </p>
+      <div className="mt-2 flex flex-wrap items-baseline gap-x-6 gap-y-1">
+        <span className="text-base font-bold text-foreground">
+          {lang("הכנסה", "Revenue")}: {fmt(revenue)}
+        </span>
+        <span className="text-base font-bold text-foreground">
+          {lang("רווח", "Profit")}: {fmt(profit)}{" "}
+          <span className="text-sm font-semibold text-muted-foreground">({ratePct}%)</span>
+        </span>
+        <span
+          className={`text-sm font-semibold ${
+            criticalCount > 0 ? "text-red-700" : highCount > 0 ? "text-amber-700" : "text-emerald-700"
+          }`}
+        >
+          {alertSummary}
+        </span>
+      </div>
+    </div>
   );
 }
 
@@ -511,7 +612,7 @@ function ContributionMarginPanel({
           ) : null}
         </div>
       </div>
-      <p className="mt-3 text-[11px] leading-5 text-muted-foreground">
+      <p className="mt-3 text-[11px] leading-4 text-muted-foreground line-clamp-1">
         {isHe ? q.notes.he : q.notes.en}
       </p>
     </div>
