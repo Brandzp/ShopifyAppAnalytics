@@ -474,10 +474,11 @@ export async function getShopifyParityOverview(): Promise<ShopifyParityOverview 
   );
 }
 
-export const STOCK_FLAG_THRESHOLDS = { red: 20, yellow: 50 } as const;
+export const STOCK_FLAG_THRESHOLDS = { critical: 5, red: 20, yellow: 50 } as const;
 
 export function classifyStock(quantity: number | null): StockFlag {
   if (quantity === null) return "unknown";
+  if (quantity < STOCK_FLAG_THRESHOLDS.critical) return "critical";
   if (quantity < STOCK_FLAG_THRESHOLDS.red) return "red";
   if (quantity < STOCK_FLAG_THRESHOLDS.yellow) return "yellow";
   return "green";
@@ -511,6 +512,51 @@ async function buildProductCollectionsLookup(storeId: string): Promise<Map<strin
   const result = new Map<string, string[]>();
   for (const [productId, titles] of lookup.entries()) {
     result.set(productId, Array.from(titles).sort((a, b) => a.localeCompare(b)));
+  }
+  return result;
+}
+
+/**
+ * Returns a map of productId → days since the product last appeared in a
+ * non-cancelled, non-test order. Products that have never sold return no entry
+ * (caller can treat as null = "never sold"). Uses the order's createdAt as the
+ * sale date proxy (same as every other metric in this codebase).
+ */
+async function buildLastSaleLookup(storeId: string): Promise<Map<string, number>> {
+  const rows = await withOptionalDb(
+    (db) =>
+      db.orderLineItem.findMany({
+        where: {
+          storeId,
+          productId: { not: null },
+          order: {
+            storeId,
+            cancelledAt: null,
+            test: false
+          }
+        },
+        select: {
+          productId: true,
+          order: { select: { createdAt: true } }
+        }
+      }),
+    [] as Array<{ productId: string | null; order: { createdAt: Date } }>
+  );
+
+  const latest = new Map<string, Date>();
+  for (const row of rows) {
+    if (!row.productId) continue;
+    const prev = latest.get(row.productId);
+    if (!prev || row.order.createdAt > prev) {
+      latest.set(row.productId, row.order.createdAt);
+    }
+  }
+
+  const now = Date.now();
+  const result = new Map<string, number>();
+  for (const [productId, lastDate] of latest.entries()) {
+    const diffMs = now - lastDate.getTime();
+    result.set(productId, Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24))));
   }
   return result;
 }
@@ -747,9 +793,10 @@ export const prismaAnalyticsRepository: AnalyticsRepository = {
   async getProductStock(storeId): Promise<ProductStockRow[]> {
     const store = await getStoreRecord(storeId);
     if (!store) return [];
-    const [stockLookup, collectionsLookup] = await Promise.all([
+    const [stockLookup, collectionsLookup, lastSaleLookup] = await Promise.all([
       buildProductStockLookup(store.id),
-      buildProductCollectionsLookup(store.id)
+      buildProductCollectionsLookup(store.id),
+      buildLastSaleLookup(store.id)
     ]);
     // Only ACTIVE products belong in the restock queue. DRAFT and ARCHIVED
     // products aren't visible to customers, so flagging them as low-stock
@@ -784,12 +831,13 @@ export const prismaAnalyticsRepository: AnalyticsRepository = {
           vendor: product.vendor ?? null,
           inventoryQuantity: quantity,
           variantCount: stock?.variantCount ?? 0,
-          flag: classifyStock(quantity)
+          flag: classifyStock(quantity),
+          daysSinceLastSale: lastSaleLookup.get(product.id) ?? null
         };
       })
       .sort((a, b) => {
         // unknown last, otherwise lowest stock first
-        const orderFlag = (f: StockFlag) => (f === "unknown" ? 99 : f === "red" ? 0 : f === "yellow" ? 1 : 2);
+        const orderFlag = (f: StockFlag) => (f === "unknown" ? 99 : f === "critical" ? 0 : f === "red" ? 1 : f === "yellow" ? 2 : 3);
         const flagDiff = orderFlag(a.flag) - orderFlag(b.flag);
         if (flagDiff !== 0) return flagDiff;
         const aq = a.inventoryQuantity ?? Number.POSITIVE_INFINITY;

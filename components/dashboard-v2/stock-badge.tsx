@@ -1,18 +1,20 @@
-import { AlertTriangle, CheckCircle2, HelpCircle, ShieldAlert } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Flame, HelpCircle, ShieldAlert } from "lucide-react";
 import type { StockFlag } from "@/lib/domain/types";
 import type { AppLocale } from "@/lib/i18n";
 import { cn, formatNumber } from "@/lib/utils";
 
-export const STOCK_THRESHOLDS = { red: 20, yellow: 50 } as const;
+export const STOCK_THRESHOLDS = { critical: 5, red: 20, yellow: 50 } as const;
 
 export function classifyStock(quantity: number | null | undefined): StockFlag {
   if (quantity === null || quantity === undefined) return "unknown";
+  if (quantity < STOCK_THRESHOLDS.critical) return "critical";
   if (quantity < STOCK_THRESHOLDS.red) return "red";
   if (quantity < STOCK_THRESHOLDS.yellow) return "yellow";
   return "green";
 }
 
 const FLAG_STYLE: Record<StockFlag, string> = {
+  critical: "bg-rose-600/15 text-rose-800 border-rose-400",
   red: "bg-rose-500/10 text-rose-700 border-rose-200",
   yellow: "bg-amber-500/10 text-amber-700 border-amber-200",
   green: "bg-emerald-500/10 text-emerald-700 border-emerald-200",
@@ -20,6 +22,7 @@ const FLAG_STYLE: Record<StockFlag, string> = {
 };
 
 const FLAG_ICON: Record<StockFlag, typeof AlertTriangle> = {
+  critical: Flame,
   red: ShieldAlert,
   yellow: AlertTriangle,
   green: CheckCircle2,
@@ -53,17 +56,21 @@ export function StockBadge({
         : "Not tracked"
       : showCount && quantity !== null && quantity !== undefined
         ? formatNumber(quantity)
-        : flag === "red"
+        : flag === "critical"
           ? locale === "he"
-            ? "קריטי"
-            : "Critical"
-          : flag === "yellow"
+            ? "אזעקה"
+            : "Emergency"
+          : flag === "red"
             ? locale === "he"
-              ? "נמוך"
-              : "Low"
-            : locale === "he"
-              ? "תקין"
-              : "Healthy";
+              ? "קריטי"
+              : "Critical"
+            : flag === "yellow"
+              ? locale === "he"
+                ? "נמוך"
+                : "Low"
+              : locale === "he"
+                ? "תקין"
+                : "Healthy";
 
   return (
     <span

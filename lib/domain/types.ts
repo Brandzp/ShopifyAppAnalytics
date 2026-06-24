@@ -161,7 +161,7 @@ export interface ProductPerformanceRow {
   inventoryQuantity: number | null;
 }
 
-export type StockFlag = "red" | "yellow" | "green" | "unknown";
+export type StockFlag = "critical" | "red" | "yellow" | "green" | "unknown";
 
 export interface ProductStockRow {
   productId: string;
@@ -173,6 +173,8 @@ export interface ProductStockRow {
   inventoryQuantity: number | null;
   variantCount: number;
   flag: StockFlag;
+  /** Calendar days since the product last appeared in any order. null = never sold or data unavailable. */
+  daysSinceLastSale: number | null;
 }
 
 export interface CollectionPerformanceRow {

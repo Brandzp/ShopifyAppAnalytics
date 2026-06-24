@@ -7,15 +7,17 @@ import type { AppLocale } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
 export function StockAlertsCallout({ stock, locale = "en" }: { stock: ProductStockRow[]; locale?: AppLocale }) {
+  const critical = stock.filter((row) => row.flag === "critical");
   const red = stock.filter((row) => row.flag === "red");
   const yellow = stock.filter((row) => row.flag === "yellow");
   const green = stock.filter((row) => row.flag === "green").length;
   const unknown = stock.filter((row) => row.flag === "unknown").length;
 
-  const tone = red.length > 0 ? "danger" : yellow.length > 0 ? "warning" : "ok";
+  const urgentCount = critical.length + red.length;
+  const tone = urgentCount > 0 ? "danger" : yellow.length > 0 ? "warning" : "ok";
 
-  // Show top 5 most-urgent items (red first, then yellow), already sorted asc by qty in repo
-  const urgent = [...red, ...yellow].slice(0, 5);
+  // Show top 5 most-urgent items (critical first, then red, then yellow), already sorted asc by qty in repo
+  const urgent = [...critical, ...red, ...yellow].slice(0, 5);
 
   return (
     <Card
@@ -46,9 +48,11 @@ export function StockAlertsCallout({ stock, locale = "en" }: { stock: ProductSto
               <p className="text-base font-semibold leading-snug">
                 {tone === "ok"
                   ? "All products in good shape"
-                  : red.length > 0
-                    ? `${red.length} product${red.length === 1 ? "" : "s"} critically low`
-                    : `${yellow.length} product${yellow.length === 1 ? "" : "s"} running low`}
+                  : critical.length > 0
+                    ? `${critical.length} product${critical.length === 1 ? "" : "s"} in emergency (<5 units)`
+                    : urgentCount > 0
+                      ? `${urgentCount} product${urgentCount === 1 ? "" : "s"} critically low`
+                      : `${yellow.length} product${yellow.length === 1 ? "" : "s"} running low`}
               </p>
             </div>
           </div>
@@ -60,8 +64,9 @@ export function StockAlertsCallout({ stock, locale = "en" }: { stock: ProductSto
           </Link>
         </div>
 
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          <Stat label="Red flags" value={red.length} tone="danger" hint="< 20 in stock" />
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+          <Stat label="Emergency" value={critical.length} tone="danger" hint="< 5 in stock" />
+          <Stat label="Critical" value={red.length} tone="danger" hint="5–19 in stock" />
           <Stat label="Yellow flags" value={yellow.length} tone="warning" hint="< 50 in stock" />
           <Stat label="Healthy" value={green} tone="ok" hint="≥ 50 in stock" />
           <Stat label="Not tracked" value={unknown} tone="muted" hint="No inventory data" />
