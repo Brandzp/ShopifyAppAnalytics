@@ -98,6 +98,42 @@ function formatRating(value: number | null) {
   return value != null ? value.toFixed(1) : "-";
 }
 
+/** Derives a promotional-strength prediction from baseline + discounts */
+function derivePrediction(result: MarketingPlannerResult): { label: string; color: string; detail: string } | null {
+  const baseline = result.previousMonthBaseline;
+  if (!baseline) return null;
+
+  const returningRate = baseline.returningCustomerRate;
+  const discountCount = result.discountProposals.filter((p) => p.canCreate).length;
+  const campaignCount = result.campaigns.length;
+
+  // Simple heuristic: strong if returning rate >=20%, >=2 campaigns, >=1 discount proposal
+  const strengthScore =
+    (returningRate >= 20 ? 2 : returningRate >= 10 ? 1 : 0) +
+    (campaignCount >= 3 ? 2 : campaignCount >= 1 ? 1 : 0) +
+    (discountCount >= 1 ? 1 : 0);
+
+  if (strengthScore >= 4) {
+    return {
+      label: "המבצע צפוי להיות חזק",
+      color: "border-emerald-200 bg-emerald-50 text-emerald-800",
+      detail: `שיעור לקוחות חוזרים ${returningRate.toFixed(0)}%, ${campaignCount} קמפיינים מתוכננים ו-${discountCount} קוד/קודי הנחה מוכנים — רמז לפוטנציאל גבוה.`
+    };
+  }
+  if (strengthScore >= 2) {
+    return {
+      label: "המבצע צפוי להיות בינוני",
+      color: "border-amber-200 bg-amber-50 text-amber-800",
+      detail: `שיעור לקוחות חוזרים ${returningRate.toFixed(0)}%. כדאי לחזק עם קוד הנחה ממוקד או הגדלת מספר הקמפיינים.`
+    };
+  }
+  return {
+    label: "המבצע עלול להיות חלש",
+    color: "border-red-200 bg-red-50 text-red-700",
+    detail: `שיעור לקוחות חוזרים ${returningRate.toFixed(0)}%, ${campaignCount} קמפיין/ים מתוכנן/ים. מומלץ להוסיף קמפיין שימור ו/או קוד הנחה לחיזוק.`
+  };
+}
+
 function decodeBase64ToBlob(base64: string, mimeType: string) {
   const binary = window.atob(base64);
   const bytes = new Uint8Array(binary.length);
@@ -258,6 +294,15 @@ function RecommendationsList({ items }: { items: MarketingPlannerResult["insight
             <p className="mt-1 text-muted-foreground">
               <strong className="text-foreground">איפה ב-GANTT:</strong> {item.ganttPlacement}
             </p>
+            {item.dataSource ? (
+              <p className="mt-2 rounded-lg border border-border/50 bg-muted/40 px-3 py-1.5 text-xs text-muted-foreground">
+                <strong className="text-foreground">מקור המסקנה:</strong> {item.dataSource}
+              </p>
+            ) : (
+              <p className="mt-2 rounded-lg border border-border/50 bg-muted/40 px-3 py-1.5 text-xs text-muted-foreground">
+                <strong className="text-foreground">מקור המסקנה:</strong> על סמך נתוני הבריף, החודש הקודם ותבניות עונתיות
+              </p>
+            )}
           </div>
         )) : (
           <p className="text-sm text-muted-foreground">אין עדיין המלצות אוטומטיות לחודש הזה.</p>
@@ -1038,6 +1083,14 @@ function MetaAdsIntelligenceCard({
   );
 }
 
+const ALL_FOCUS_OPTIONS: { value: MarketingPlannerFocus; label: string }[] = [
+  { value: "balanced", label: "Balanced / מאוזן" },
+  { value: "site", label: "Site / אתר" },
+  { value: "influencers", label: "Influencers / משפיעניות" },
+  { value: "paid_ads", label: "Paid Ads / פרסום ממומן" },
+  { value: "retention", label: "Retention / שימור" }
+];
+
 export function MarketingBriefStudio({ storeId }: { storeId: string }) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [brand, setBrand] = useState<MarketingBrand>("Incense");
@@ -1045,6 +1098,7 @@ export function MarketingBriefStudio({ storeId }: { storeId: string }) {
   const [briefText, setBriefText] = useState("");
   const [focusChannels, setFocusChannels] = useState("");
   const [focusMode, setFocusMode] = useState<MarketingPlannerFocus>("balanced");
+  const [secondaryFocuses, setSecondaryFocuses] = useState<MarketingPlannerFocus[]>([]);
   const [executionMode, setExecutionMode] = useState<MarketingPlannerExecutionMode>("recommend_only");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [result, setResult] = useState<MarketingPlannerResult | null>(null);
@@ -1199,6 +1253,9 @@ export function MarketingBriefStudio({ storeId }: { storeId: string }) {
         formData.append("storeId", storeId);
         formData.append("focusChannels", focusChannels);
         formData.append("focusMode", focusMode);
+        if (secondaryFocuses.length > 0) {
+          formData.append("secondaryFocusModes", secondaryFocuses.join(","));
+        }
         formData.append("executionMode", executionMode);
         if (selectedFile) {
           formData.append("file", selectedFile);
@@ -1246,7 +1303,7 @@ export function MarketingBriefStudio({ storeId }: { storeId: string }) {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-5">
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <div className="grid gap-4 md:grid-cols-2">
               <label className="space-y-2 text-sm">
                 <span className="text-muted-foreground">מותג</span>
                 <select
@@ -1270,20 +1327,63 @@ export function MarketingBriefStudio({ storeId }: { storeId: string }) {
                 />
               </label>
 
-              <label className="space-y-2 text-sm">
+              <div className="space-y-2 text-sm md:col-span-2">
                 <span className="text-muted-foreground">פוקוס החודש</span>
-                <select
-                  value={focusMode}
-                  onChange={(event) => setFocusMode(event.target.value as MarketingPlannerFocus)}
-                  className="w-full rounded-xl border border-border bg-background px-4 py-3"
-                >
-                  <option value="balanced">Balanced / מאוזן</option>
-                  <option value="site">Site / אתר</option>
-                  <option value="influencers">Influencers / משפיעניות</option>
-                  <option value="paid_ads">Paid Ads / פרסום ממומן</option>
-                  <option value="retention">Retention / שימור</option>
-                </select>
-              </label>
+                <div className="rounded-xl border border-border bg-background px-4 py-3 space-y-3">
+                  <div className="space-y-1">
+                    <p className="text-xs text-muted-foreground font-medium">פוקוס ראשי (אחד)</p>
+                    <select
+                      value={focusMode}
+                      onChange={(event) => {
+                        const newPrimary = event.target.value as MarketingPlannerFocus;
+                        setFocusMode(newPrimary);
+                        // Remove new primary from secondary if it was there
+                        setSecondaryFocuses((prev) => prev.filter((f) => f !== newPrimary));
+                      }}
+                      className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                    >
+                      {ALL_FOCUS_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-xs text-muted-foreground font-medium">פוקוס משני (אפשר כמה)</p>
+                    <div className="flex flex-wrap gap-2">
+                      {ALL_FOCUS_OPTIONS.filter((opt) => opt.value !== focusMode).map((opt) => {
+                        const checked = secondaryFocuses.includes(opt.value);
+                        return (
+                          <label
+                            key={opt.value}
+                            className={`inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1 text-xs transition-colors ${
+                              checked
+                                ? "border-violet-400 bg-violet-50 text-violet-700"
+                                : "border-border bg-background text-muted-foreground hover:border-violet-300"
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={(e) => {
+                                setSecondaryFocuses((prev) =>
+                                  e.target.checked
+                                    ? [...prev, opt.value]
+                                    : prev.filter((f) => f !== opt.value)
+                                );
+                              }}
+                              className="sr-only"
+                            />
+                            {opt.label}
+                          </label>
+                        );
+                      })}
+                    </div>
+                    {secondaryFocuses.length === 0 && (
+                      <p className="text-xs text-muted-foreground">אין פוקוס משני — הגאנט ייבנה לפי הפוקוס הראשי בלבד</p>
+                    )}
+                  </div>
+                </div>
+              </div>
 
               <label className="space-y-2 text-sm">
                 <span className="text-muted-foreground">מצב ביצוע</span>
@@ -1351,6 +1451,9 @@ export function MarketingBriefStudio({ storeId }: { storeId: string }) {
                 </Button>
               ) : null}
               <Badge>{getFocusLabel(focusMode)}</Badge>
+              {secondaryFocuses.map((f) => (
+                <Badge key={f} className="border-violet-200 bg-violet-50 text-violet-700">{getFocusLabel(f)} (משני)</Badge>
+              ))}
               <Badge>{getExecutionLabel(executionMode)}</Badge>
             </div>
           </form>
@@ -1375,6 +1478,22 @@ export function MarketingBriefStudio({ storeId }: { storeId: string }) {
               </Card>
             ))}
           </div>
+
+          {/* Predictive metric banner */}
+          {(() => {
+            const prediction = derivePrediction(result);
+            if (!prediction) return null;
+            return (
+              <div className={`rounded-2xl border p-4 text-sm ${prediction.color}`}>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-semibold text-base">מדד חיזוי:</span>
+                  <span className="font-medium">{prediction.label}</span>
+                  <Badge className="bg-white/50 text-current text-xs">המלצה בלבד — לא תחזית מחייבת</Badge>
+                </div>
+                <p className="mt-2 leading-6">{prediction.detail}</p>
+              </div>
+            );
+          })()}
 
           <div className="grid gap-4 xl:grid-cols-2">
             <Card dir={resultDirection} className={getDirectionClasses(resultDirection)}>

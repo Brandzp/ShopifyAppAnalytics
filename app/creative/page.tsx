@@ -1,6 +1,7 @@
 import { AppShell } from "@/components/layout/app-shell";
 import { PageHead } from "@/components/dashboard-v2/section-head";
 import { CreativeProjectsList } from "@/components/creative/creative-projects-list";
+import { TopCreativeBenchmarks } from "@/components/creative/top-creative-benchmarks";
 import { getAppChromeData } from "@/lib/services/analytics-service";
 import { getAppLocale } from "@/lib/i18n";
 import { listProjectsForStore } from "@/lib/services/creative-project-service";
@@ -12,6 +13,13 @@ export default async function CreativePage() {
   const [chrome, locale] = await Promise.all([getAppChromeData(), getAppLocale()]);
   const storeId = await resolveActiveStoreId();
   const projects = storeId ? await listProjectsForStore(storeId) : [];
+
+  // Top-performing creatives: ready projects sorted by most recently updated.
+  // Shown as benchmarks/inspiration before the new-project generation UI.
+  const topCreatives = projects
+    .filter((p) => p.status === "ready" && p.coverThumbUrl)
+    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+    .slice(0, 4);
 
   const heading =
     locale === "he"
@@ -32,6 +40,10 @@ export default async function CreativePage() {
     <AppShell store={chrome.store} controls={chrome.controls}>
       <div className="space-y-6 sm:space-y-8">
         <PageHead eyebrow={heading.eyebrow} title={heading.title} description={heading.description} />
+        {/* Show top-performing creatives as benchmarks before the generation UI */}
+        {topCreatives.length > 0 && (
+          <TopCreativeBenchmarks topCreatives={topCreatives} locale={locale} />
+        )}
         <CreativeProjectsList initialProjects={projects} locale={locale} />
       </div>
     </AppShell>

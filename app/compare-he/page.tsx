@@ -314,18 +314,18 @@ export default function CompareHePage() {
         </p>
       </section>
 
-      {/* Comparison Table */}
-      <section className="mx-auto max-w-6xl px-4 sm:px-6 py-8">
+      {/* Comparison Table — full viewport width for readability */}
+      <section className="w-full px-4 sm:px-6 py-8">
         <h2 className="text-xl sm:text-2xl font-bold tracking-tight mb-6 text-center">
           טבלת השוואה מהירה
         </h2>
 
         {/* Scrollable wrapper for mobile */}
         <div className="overflow-x-auto rounded-2xl border border-border shadow-sm">
-          <table className="w-full min-w-[640px] border-collapse text-sm">
+          <table className="w-full min-w-[700px] border-collapse text-sm">
             <thead>
               <tr className="border-b border-border bg-muted/40">
-                <th className="py-3 px-4 text-right font-semibold text-slate-700 w-44">
+                <th className="py-3 px-4 text-right font-semibold text-slate-700 w-56">
                   מאפיין
                 </th>
                 {columns.map((col) => (

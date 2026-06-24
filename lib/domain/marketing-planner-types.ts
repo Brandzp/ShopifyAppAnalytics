@@ -25,6 +25,8 @@ export interface MarketingPlannerRequest {
   storeId?: string | null;
   focusChannels?: string | null;
   focusMode?: MarketingPlannerFocus | null;
+  /** Additional secondary focus channels; comma-separated or array of MarketingPlannerFocus values */
+  secondaryFocusModes?: string | null;
   executionMode?: MarketingPlannerExecutionMode | null;
   sourceFileName?: string | null;
 }
@@ -53,6 +55,8 @@ export interface MarketingRecommendation {
   recommendation: string;
   why: string;
   ganttPlacement: string;
+  /** Short phrase explaining the data basis, e.g. "על סמך נתוני החודש הקודם" */
+  dataSource?: string | null;
 }
 
 export interface MarketingPlannerStoreScope {
@@ -334,6 +338,8 @@ export interface MarketingPlannerResult {
   contentDirection: MarketingPlannerDirection;
   contentLocale: MarketingPlannerLocale;
   plannerFocus: MarketingPlannerFocus;
+  /** Secondary focus channels that were active during generation */
+  plannerSecondaryFocuses?: MarketingPlannerFocus[] | null;
   executionMode: MarketingPlannerExecutionMode;
   storeScope: MarketingPlannerStoreScope;
   previousMonthBaseline: MarketingPlannerPreviousMonthBaseline | null;
