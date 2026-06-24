@@ -216,6 +216,13 @@ export interface ProfitAnalyticsPayload {
   discountUsage: DiscountUsage[];
   topProducts: ProductPerformanceRow[];
   lowProducts: ProductPerformanceRow[];
+  /** Percentage change in total estimated profit vs. the previous period.
+   *  Positive = grew, negative = shrank. null when previous period has no data. */
+  momProfitDelta: number | null;
+  /** Top 5 products sorted by estimatedProfit descending (most profitable). */
+  topProfitableProducts: ProductPerformanceRow[];
+  /** Top 5 products sorted by estimatedProfit ascending (least profitable / biggest losses). */
+  leastProfitableProducts: ProductPerformanceRow[];
 }
 
 export interface ProductOrderMix {

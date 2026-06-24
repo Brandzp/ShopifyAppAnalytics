@@ -87,6 +87,26 @@ export default async function ProfitPage() {
           }
         />
 
+        {/* MoM profit summary line */}
+        {profit.momProfitDelta !== null ? (
+          <div
+            className={`flex items-center gap-2 rounded-xl border px-4 py-3 text-sm font-medium ${
+              profit.momProfitDelta >= 0
+                ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                : "border-rose-200 bg-rose-50 text-rose-800"
+            }`}
+          >
+            <span className="text-base" aria-hidden="true">
+              {profit.momProfitDelta >= 0 ? "▲" : "▼"}
+            </span>
+            <span>
+              {locale === "he"
+                ? `הרווחיות ${profit.momProfitDelta >= 0 ? "עלתה" : "ירדה"} ${Math.abs(profit.momProfitDelta).toFixed(1)}% לעומת התקופה הקודמת`
+                : `Profitability ${profit.momProfitDelta >= 0 ? "increased" : "decreased"} ${Math.abs(profit.momProfitDelta).toFixed(1)}% vs. the previous period`}
+            </span>
+          </div>
+        ) : null}
+
         {/* Charts row */}
         <section className="space-y-3">
           <SectionHead
@@ -226,7 +246,18 @@ export default async function ProfitPage() {
                   key: "estimatedProfit",
                   label: dictionary.profit.estimatedProfit,
                   tooltip: overviewColTips.profit,
-                  render: (row) => formatCurrency(Number(row.estimatedProfit), currency)
+                  render: (row) => {
+                    const val = Number(row.estimatedProfit);
+                    if (val < 0) {
+                      return (
+                        <span className="inline-flex items-center gap-1 font-semibold text-rose-700">
+                          <span aria-label={locale === "he" ? "מפסיד" : "Loss"} role="img">⚠</span>
+                          {formatCurrency(val, currency)}
+                        </span>
+                      );
+                    }
+                    return <span className="font-semibold text-emerald-700">{formatCurrency(val, currency)}</span>;
+                  }
                 }
               ]}
               rows={profit.productPerformance}
@@ -366,6 +397,83 @@ export default async function ProfitPage() {
             <ChannelCacTable report={channelCac} currency={currency} locale={locale} />
           </section>
         ) : null}
+
+        {/* Most / least profitable products */}
+        <section className="space-y-3">
+          <SectionHead
+            eyebrow={locale === "he" ? "שלב 4" : "Step 4"}
+            title={locale === "he" ? "הכי רווחיים ופחות רווחיים" : "Most & least profitable products"}
+            hint={
+              locale === "he"
+                ? "המוצרים הכי רווחיים מניעים את המרווח — שקול להגביר את המכירות שלהם. המוצרים הפחות רווחיים (או מפסידים) ידרשו בדיקת תמחור, עלות או ביטול הנחות."
+                : "Most profitable products drive your margin — consider scaling them. Least profitable (or loss-making) products need pricing, cost, or promo review."
+            }
+          />
+          <div className="grid items-start gap-4 lg:grid-cols-2">
+            {/* Most profitable */}
+            <div>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-emerald-700">
+                {locale === "he" ? "המוצרים הכי רווחיים" : "Most profitable products"}
+              </p>
+              <StyledTable
+                numbered
+                locale={locale}
+                rowKey={(row) => row.productId}
+                rows={profit.topProfitableProducts}
+                columns={[
+                  { key: "productTitle", label: locale === "he" ? "מוצר" : "Product" },
+                  {
+                    key: "revenue",
+                    label: locale === "he" ? "הכנסה" : "Revenue",
+                    align: "end",
+                    render: (row) => formatCurrency(row.revenue, currency)
+                  },
+                  {
+                    key: "estimatedProfit",
+                    label: locale === "he" ? "רווח משוער" : "Est. profit",
+                    align: "end",
+                    emphasis: true,
+                    render: (row) => formatCurrency(row.estimatedProfit, currency)
+                  }
+                ]}
+              />
+            </div>
+            {/* Least profitable */}
+            <div>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-rose-700">
+                {locale === "he" ? "המוצרים הכי פחות רווחיים" : "Least profitable products"}
+              </p>
+              <StyledTable
+                numbered
+                locale={locale}
+                rowKey={(row) => row.productId}
+                rows={profit.leastProfitableProducts}
+                columns={[
+                  { key: "productTitle", label: locale === "he" ? "מוצר" : "Product" },
+                  {
+                    key: "revenue",
+                    label: locale === "he" ? "הכנסה" : "Revenue",
+                    align: "end",
+                    render: (row) => formatCurrency(row.revenue, currency)
+                  },
+                  {
+                    key: "estimatedProfit",
+                    label: locale === "he" ? "רווח משוער" : "Est. profit",
+                    align: "end",
+                    render: (row) => {
+                      const val = row.estimatedProfit;
+                      return (
+                        <span className={`font-semibold ${val < 0 ? "text-rose-700" : "text-amber-700"}`}>
+                          {val < 0 ? "⚠ " : null}{formatCurrency(val, currency)}
+                        </span>
+                      );
+                    }
+                  }
+                ]}
+              />
+            </div>
+          </div>
+        </section>
 
         {/* Bundle / refund placeholders */}
         <section className="space-y-3">

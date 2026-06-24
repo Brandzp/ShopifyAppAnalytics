@@ -895,8 +895,9 @@ export async function getProfitAnalyticsFromDb() {
   const store = await getConnectedStoreRecord();
   if (!store) return null;
   const range = await getActiveRange();
-  const [orders, products, stockLookup, collectionsLookup] = await Promise.all([
+  const [orders, prevOrders, products, stockLookup, collectionsLookup] = await Promise.all([
     getOrdersForRange(store.id, range.current.start, range.current.end),
+    getOrdersForRange(store.id, range.previous.start, range.previous.end),
     withOptionalDb((db) => db.product.findMany({ where: { storeId: store.id } }), []),
     buildProductStockLookup(store.id),
     buildProductCollectionsLookup(store.id)
@@ -966,11 +967,31 @@ export async function getProfitAnalyticsFromDb() {
   const collectionPerformance = await prismaAnalyticsRepository.getCollectionPerformance();
   const discountUsage = buildDiscountUsage(normalizedOrders);
 
+  // Compute MoM (previous-period) profit delta for the summary banner.
+  const normalizedPrevOrders = mapOrders(prevOrders);
+  const prevProductPerformance = buildProductPerformance(normalizedPrevOrders, productLookup);
+  const currentTotalProfit = productPerformance.reduce((sum, row) => sum + row.estimatedProfit, 0);
+  const prevTotalProfit = prevProductPerformance.reduce((sum, row) => sum + row.estimatedProfit, 0);
+  const momProfitDelta: number | null =
+    prevTotalProfit !== 0
+      ? ((currentTotalProfit - prevTotalProfit) / Math.abs(prevTotalProfit)) * 100
+      : null;
+
+  // Sorted product slices (top 5 most profitable / least profitable).
+  const sortedByProfit = [...productPerformance].sort((a, b) => b.estimatedProfit - a.estimatedProfit);
+  const topProfitableProducts = sortedByProfit.slice(0, 5);
+  const leastProfitableProducts = [...productPerformance]
+    .sort((a, b) => a.estimatedProfit - b.estimatedProfit)
+    .slice(0, 5);
+
   return {
     productPerformance,
     collectionPerformance,
     discountUsage,
     topProducts: productPerformance.slice(0, 4),
-    lowProducts: [...productPerformance].sort((a, b) => a.estimatedProfit - b.estimatedProfit).slice(0, 4)
+    lowProducts: [...productPerformance].sort((a, b) => a.estimatedProfit - b.estimatedProfit).slice(0, 4),
+    momProfitDelta,
+    topProfitableProducts,
+    leastProfitableProducts
   };
 }

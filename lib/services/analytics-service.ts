@@ -378,12 +378,17 @@ export async function getProfitAnalyticsPayload(): Promise<ProfitAnalyticsPayloa
       }))
   );
 
+  const sortedByProfit = [...productPerformance].sort((a, b) => b.estimatedProfit - a.estimatedProfit);
+
   return {
     productPerformance,
     collectionPerformance,
     discountUsage,
     topProducts: productPerformance.slice(0, 4),
-    lowProducts: [...productPerformance].sort((a, b) => a.estimatedProfit - b.estimatedProfit).slice(0, 4)
+    lowProducts: [...productPerformance].sort((a, b) => a.estimatedProfit - b.estimatedProfit).slice(0, 4),
+    momProfitDelta: null,
+    topProfitableProducts: sortedByProfit.slice(0, 5),
+    leastProfitableProducts: [...productPerformance].sort((a, b) => a.estimatedProfit - b.estimatedProfit).slice(0, 5)
   };
 }
 
