@@ -66,6 +66,11 @@ export interface CreativeBrief {
   // shape the look. Stored in briefJson so each project remembers its own
   // setting.
   realism?: CreativeRealismLevel;
+  // When true (default), the Creative agent rewrites the prompt before it
+  // hits the image model — using product/tone/brand notes as context. Set
+  // to false to bypass the agent and use only the deterministic template
+  // (legacy behavior). See creative-prompt-agent-service.
+  useAgentPrompt?: boolean;
   // Per-source-id metadata: which uploaded file is the actual product vs a
   // reference (model pose, lighting style, mood…). The product role is what
   // we pass to the model as the image-conditioning reference; reference rows

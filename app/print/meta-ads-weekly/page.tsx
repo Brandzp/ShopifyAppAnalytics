@@ -918,12 +918,12 @@ export default async function MetaAdsWeeklyPrintPage({
           {/* BI agent executive commentary — top of report. The agent
               wrote this from a digest of this week's KPIs. */}
           {biCommentary ? (
-            <section className="pwr-exec-page" style={{ marginBottom: 24 }}>
+            <section className="pwr-exec-page" style={{ marginBottom: 20 }}>
               <p className="pwr-exec-page-tag">{isHe ? "סיכום BI" : "BI EXECUTIVE SUMMARY"}</p>
-              <h2 className="pwr-exec-page-title" style={{ marginBottom: 4 }}>
-                {biCommentary.headline}
+              <h2 className="pwr-exec-page-title" style={{ marginBottom: 4, lineHeight: 1.3 }}>
+                <BoldedText text={biCommentary.headline} />
               </h2>
-              <p className="pwr-exec-page-sub" style={{ marginBottom: 16, fontStyle: "italic", color: "#64748b" }}>
+              <p className="pwr-exec-page-sub" style={{ marginBottom: 14, fontStyle: "italic", color: "#64748b" }}>
                 {isHe ? "נכתב על-ידי סוכן ה-BI של Brandzp" : "Written by the Brandzp BI agent"}
                 {" · "}
                 {new Date(biCommentary.generatedAt).toLocaleString(isHe ? "he-IL" : "en-US", {
@@ -934,11 +934,13 @@ export default async function MetaAdsWeeklyPrintPage({
 
               {biCommentary.insights.length > 0 ? (
                 <>
-                  <div className="pwr-block-title">{isHe ? "מה קרה השבוע" : "What happened this week"}</div>
-                  <ul className="pwr-insights" style={{ paddingInlineStart: 18, margin: "8px 0 16px 0" }}>
-                    {biCommentary.insights.map((insight, i) => (
-                      <li key={`insight-${i}`} style={{ marginBottom: 8 }}>
-                        {insight}
+                  <div className="pwr-block-title" style={{ marginTop: 0 }}>
+                    {isHe ? "מה קרה השבוע" : "What happened this week"}
+                  </div>
+                  <ul className="pwr-insights" style={{ paddingInlineStart: 18, margin: "6px 0 14px 0", listStyleType: "disc" }}>
+                    {biCommentary.insights.slice(0, 3).map((insight, i) => (
+                      <li key={`insight-${i}`} style={{ marginBottom: 4, lineHeight: 1.45 }}>
+                        <BoldedText text={insight} />
                       </li>
                     ))}
                   </ul>
@@ -947,11 +949,13 @@ export default async function MetaAdsWeeklyPrintPage({
 
               {biCommentary.actions.length > 0 ? (
                 <>
-                  <div className="pwr-block-title">{isHe ? "מה לעשות השבוע" : "What to do this week"}</div>
-                  <ol className="pwr-insights" style={{ paddingInlineStart: 22, margin: "8px 0 0 0" }}>
-                    {biCommentary.actions.map((action, i) => (
-                      <li key={`action-${i}`} style={{ marginBottom: 8, fontWeight: 500 }}>
-                        {action}
+                  <div className="pwr-block-title" style={{ marginTop: 0 }}>
+                    {isHe ? "מה לעשות השבוע" : "What to do this week"}
+                  </div>
+                  <ol className="pwr-insights" style={{ paddingInlineStart: 22, margin: "6px 0 0 0", listStyleType: "decimal" }}>
+                    {biCommentary.actions.slice(0, 3).map((action, i) => (
+                      <li key={`action-${i}`} style={{ marginBottom: 4, lineHeight: 1.45 }}>
+                        <BoldedText text={action} />
                       </li>
                     ))}
                   </ol>
@@ -1096,6 +1100,26 @@ function SourceTag({ source }: { source: "M" | "S" | "Calc" | "Blended" }) {
           ? "pwr-src pwr-src-blended"
           : "pwr-src pwr-src-calc";
   return <span className={cls}>{source}</span>;
+}
+
+// Minimal markdown bold renderer. Only handles **text** → <strong>text</strong>.
+// Used for the BI commentary block so the agent's emphasis on KPI numbers
+// (e.g. **₪184,067**, **ROAS 7.5×**) renders as visually weighted text in
+// the PDF, not as literal asterisks. Anything else (code, links, italic)
+// passes through unchanged — the agent is prompted to use only bold.
+function BoldedText({ text }: { text: string }) {
+  if (!text) return null;
+  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  return (
+    <>
+      {parts.map((part, i) => {
+        if (part.startsWith("**") && part.endsWith("**") && part.length > 4) {
+          return <strong key={i}>{part.slice(2, -2)}</strong>;
+        }
+        return <span key={i}>{part}</span>;
+      })}
+    </>
+  );
 }
 
 function ConfBadge({ level, isHe }: { level: ConfLevel; isHe: boolean }) {

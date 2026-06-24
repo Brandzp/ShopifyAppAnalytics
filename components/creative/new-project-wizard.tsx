@@ -17,6 +17,7 @@ import {
   type CreativeType
 } from "@/lib/domain/creative-types";
 import type { CreativeProviderStatus } from "@/lib/services/creative-provider-availability";
+import { ProductPicker, type SelectedProduct } from "@/components/shared/product-picker";
 
 const PROVIDER_INFO: Record<CreativeProvider, { labelEn: string; labelHe: string; blurbEn: string; blurbHe: string }> = {
   replicate: {
@@ -121,6 +122,10 @@ export function NewProjectWizard({
   const [name, setName] = useState("");
   const [productName, setProductName] = useState("");
   const [productDescription, setProductDescription] = useState("");
+  // Optional pre-fill from the store's Shopify catalog. Selecting here
+  // auto-populates productName + productDescription + project name (only
+  // when those fields are empty — never overwrites manual edits).
+  const [pickedProducts, setPickedProducts] = useState<SelectedProduct[]>([]);
   const [tone, setTone] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [previews, setPreviews] = useState<string[]>([]);
@@ -128,6 +133,10 @@ export function NewProjectWizard({
   const [fileLabels, setFileLabels] = useState<string[]>([]);
   const [customPrompt, setCustomPrompt] = useState("");
   const [realism, setRealism] = useState<CreativeRealismLevel>("ultra");
+  // Default ON. When on, the Creative agent rewrites the prompt before
+  // generation (using product/tone/brand notes). When off, falls back to
+  // the deterministic template — the legacy behavior.
+  const [useAgentPrompt, setUseAgentPrompt] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -287,6 +296,7 @@ export function NewProjectWizard({
       if (tone) formData.append("tone", tone);
       if (customPrompt.trim()) formData.append("customPrompt", customPrompt.trim());
       formData.append("realism", realism);
+      formData.append("useAgentPrompt", useAgentPrompt ? "1" : "0");
       files.forEach((file, i) => {
         formData.append("files", file);
         formData.append("fileRoles", fileRoles[i] ?? "reference");
@@ -484,6 +494,31 @@ export function NewProjectWizard({
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {/* Product picker — selecting a real product from the connected
+              store auto-fills name + description. The operator can still
+              edit the fields afterwards. Image upload below is unaffected;
+              if the picker provides an image we'll wire it as a reference
+              once Phase B (custom uploads) lands. */}
+          <div className="rounded-xl border border-dashed border-border bg-muted/20 p-3">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              {isHe ? "בחר מוצר מהחנות (מילוי אוטומטי)" : "Pick a product from your store (auto-fill)"}
+            </p>
+            <ProductPicker
+              locale={locale}
+              selected={pickedProducts}
+              onChange={(next) => {
+                setPickedProducts(next);
+                const p = next[0];
+                if (p) {
+                  if (!productName) setProductName(p.title);
+                  if (!productDescription && p.description) setProductDescription(p.description);
+                  if (!name) setName(p.title);
+                }
+              }}
+              mode="single"
+              limit={24}
+            />
+          </div>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field
               label={isHe ? "שם הפרויקט" : "Project name"}
@@ -574,6 +609,30 @@ export function NewProjectWizard({
               })}
             </div>
           </div>
+
+          {/* Creative agent toggle — defaults ON. When on, the Creative
+              agent rewrites the prompt before generation based on the
+              product/tone/brand-notes fields, then the template wraps it
+              with the stable style notes. */}
+          <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-border p-3 text-sm hover:border-indigo-300">
+            <input
+              type="checkbox"
+              checked={useAgentPrompt}
+              onChange={(e) => setUseAgentPrompt(e.target.checked)}
+              className="mt-0.5 h-4 w-4"
+            />
+            <div>
+              <p className="font-semibold">
+                {isHe ? "תן לסוכן הקריאייטיב לכתוב את הפרומפט" : "Let the Creative agent write the prompt"}
+              </p>
+              <p className="mt-0.5 text-[11px] text-muted-foreground">
+                {isHe
+                  ? "ברירת מחדל: דלוק. הסוכן יקבל את שדות הטופס (מוצר, תיאור, טון, הערות) ויחבר פרומפט מותאם ל-Higgsfield. כבו כדי להשתמש בתבנית הברירת-מחדל בלבד."
+                  : "Default: on. The agent receives the form fields (product, description, tone, notes) and writes a Higgsfield-optimised prompt. Turn off to use only the deterministic template."}
+              </p>
+            </div>
+          </label>
+
           <div className="space-y-2">
             <button
               type="button"

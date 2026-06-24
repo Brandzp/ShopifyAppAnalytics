@@ -90,6 +90,12 @@ export async function POST(request: Request) {
     const realism: CreativeBrief["realism"] =
       realismRaw === "balanced" || realismRaw === "ultra" ? realismRaw : "ultra";
 
+    // Default ON. Wizard form passes "1"/"0" string. Anything other than
+    // "0" is treated as on (so legacy callers without the field still
+    // get the new agent-rewritten behavior).
+    const useAgentPromptRaw = getStringField(formData, "useAgentPrompt");
+    const useAgentPrompt = useAgentPromptRaw !== "0";
+
     const brief: CreativeBrief = {
       productName: getStringField(formData, "productName"),
       productDescription: getStringField(formData, "productDescription"),
@@ -98,7 +104,8 @@ export async function POST(request: Request) {
       tone: getStringField(formData, "tone"),
       brandNotes: getStringField(formData, "brandNotes"),
       customPrompt: getStringField(formData, "customPrompt"),
-      realism
+      realism,
+      useAgentPrompt
     };
 
     const files = formData

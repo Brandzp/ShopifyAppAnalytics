@@ -8,6 +8,7 @@ import {
   suggestFilename
 } from "@/lib/services/creative-storage-service";
 import { buildPrompt } from "@/lib/services/creative-prompt-templates";
+import { craftPromptWithCreativeAgent } from "@/lib/services/creative-prompt-agent-service";
 import { generateImage, generateVideo } from "@/lib/services/creative-ai-image-service";
 import { isCreativeVideoEnabled, isVideoCreativeType } from "@/lib/services/creative-video-config";
 import {
@@ -153,10 +154,30 @@ export async function generatePackshotSync(
   const referenceImageBuffer = await readObject(product.storageKey);
   const additionalReferenceImages = await loadAdditionalReferences(references);
 
+  // Creative agent prompt refinement — default ON. When the agent
+  // succeeds we use its prompt as a "customPrompt" override so the
+  // existing template still wraps it with the consistent style notes
+  // (aspect ratio hints, lighting language, "no AI artifacts" rules).
+  // When the agent fails OR is disabled, we fall through to the
+  // template's mechanical concatenation — never worse than today.
+  const wantsAgentPrompt = briefForGen?.useAgentPrompt !== false;
+  let briefForBuild: CreativeBrief | null = briefForGen;
+  if (wantsAgentPrompt && briefForGen) {
+    const agentPrompt = await craftPromptWithCreativeAgent({
+      creativeType: project.creativeType,
+      aspectRatio: project.aspectRatio,
+      brief: briefForGen,
+      referenceLabels,
+      hasReferenceImage: true // we always have at least the product source
+    });
+    if (agentPrompt) {
+      briefForBuild = { ...briefForGen, customPrompt: agentPrompt };
+    }
+  }
   const prompt = buildPrompt({
     creativeType: project.creativeType,
     aspectRatio: project.aspectRatio,
-    brief: briefForGen,
+    brief: briefForBuild,
     index: 0,
     referenceLabels
   });
@@ -350,10 +371,26 @@ export async function retryAssetGeneration(
   const referenceImageBuffer = await readObject(retryProduct.storageKey);
   const retryAdditionalReferences = await loadAdditionalReferences(retryRefs);
 
+  // Same agent refinement as the sync path — keeps regen consistent
+  // with the original generation behavior.
+  const wantsAgentPromptRetry = briefForRetry?.useAgentPrompt !== false;
+  let briefForRetryBuild: CreativeBrief | null = briefForRetry;
+  if (wantsAgentPromptRetry && briefForRetry) {
+    const agentPrompt = await craftPromptWithCreativeAgent({
+      creativeType: project.creativeType,
+      aspectRatio: project.aspectRatio,
+      brief: briefForRetry,
+      referenceLabels: retryRefLabels,
+      hasReferenceImage: true
+    });
+    if (agentPrompt) {
+      briefForRetryBuild = { ...briefForRetry, customPrompt: agentPrompt };
+    }
+  }
   const prompt = buildPrompt({
     creativeType: project.creativeType,
     aspectRatio: project.aspectRatio,
-    brief: briefForRetry,
+    brief: briefForRetryBuild,
     index: 0,
     referenceLabels: retryRefLabels
   });

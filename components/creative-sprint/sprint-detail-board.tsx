@@ -19,10 +19,12 @@ import type { SprintDetail } from "@/lib/services/creative-sprint/sprint-service
 import type { AppLocale } from "@/lib/i18n";
 import { PublishTargetingModal } from "./publish-targeting-modal";
 import { BriefEditModal } from "./brief-edit-modal";
+import { GenerateBriefsModal } from "./generate-briefs-modal";
 
 interface Props {
   initial: SprintDetail;
   locale: AppLocale;
+  storeName: string;
   storeCurrency: string;
 }
 
@@ -52,13 +54,14 @@ function formatMoney(v: string | null | number, currency: string): string {
   return `${currency} ${n.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 }
 
-export function SprintDetailBoard({ initial, locale, storeCurrency }: Props) {
+export function SprintDetailBoard({ initial, locale, storeName, storeCurrency }: Props) {
   const t = locale === "he";
   const router = useRouter();
   const [sprint, setSprint] = useState<SprintDetail>(initial);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showPublishModal, setShowPublishModal] = useState(false);
+  const [showGenerateBriefsModal, setShowGenerateBriefsModal] = useState(false);
   // Open ad in the brief-edit modal. Briefs are only editable while the
   // sprint is in brief-approval phase; after that the modal still opens
   // (so the operator can read the full text) but inputs are disabled.
@@ -129,17 +132,11 @@ export function SprintDetailBoard({ initial, locale, storeCurrency }: Props) {
     }
   }
 
-  async function onGenerateBriefs() {
-    // For the MVP we ask the operator inline (browser prompt) for the
-    // store + product context. A nicer "set up product" modal can come
-    // in v2 — but the prompt unblocks the flow today.
-    const brandName = window.prompt(t ? "שם המותג?" : "Brand name?") ?? "";
-    const productTitle = window.prompt(t ? "שם המוצר?" : "Product title?") ?? "";
-    if (!brandName || !productTitle) return;
-    await callAction("briefs", `/api/creative-sprint/${sprint.id}/generate-briefs`, {
-      store: { brandName, language: locale === "he" ? "he" : "en" },
-      product: { title: productTitle }
-    });
+  function onGenerateBriefs() {
+    // Open the rich modal that lets the operator pick a real product
+    // from the store catalog + an optional campaign vibe. The modal
+    // itself fires the API call and refreshes state on success.
+    setShowGenerateBriefsModal(true);
   }
 
   // ── Action bar — what's next based on status ──────────────────────
@@ -315,6 +312,20 @@ export function SprintDetailBoard({ initial, locale, storeCurrency }: Props) {
           onSaved={async () => {
             await refreshSprint();
             setEditingAdId(null);
+          }}
+        />
+      ) : null}
+
+      {showGenerateBriefsModal ? (
+        <GenerateBriefsModal
+          sprintId={sprint.id}
+          storeName={storeName}
+          locale={locale}
+          onClose={() => setShowGenerateBriefsModal(false)}
+          onGenerated={async () => {
+            setShowGenerateBriefsModal(false);
+            await refreshSprint();
+            router.refresh();
           }}
         />
       ) : null}

@@ -23,7 +23,12 @@ export default async function SprintDetailPage({ params }: { params: Promise<{ s
   }
   return (
     <AppShell store={chrome.store} controls={chrome.controls}>
-      <SprintDetailBoard initial={detail} locale={locale} storeCurrency={chrome.store.currency} />
+      <SprintDetailBoard
+        initial={detail}
+        locale={locale}
+        storeName={chrome.store.name}
+        storeCurrency={chrome.store.currency}
+      />
     </AppShell>
   );
 }
