@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import type { SprintDetail } from "@/lib/services/creative-sprint/sprint-service";
 import type { AppLocale } from "@/lib/i18n";
 import { PublishTargetingModal } from "./publish-targeting-modal";
+import { BriefEditModal } from "./brief-edit-modal";
 
 interface Props {
   initial: SprintDetail;
@@ -58,6 +59,22 @@ export function SprintDetailBoard({ initial, locale, storeCurrency }: Props) {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showPublishModal, setShowPublishModal] = useState(false);
+  // Open ad in the brief-edit modal. Briefs are only editable while the
+  // sprint is in brief-approval phase; after that the modal still opens
+  // (so the operator can read the full text) but inputs are disabled.
+  const [editingAdId, setEditingAdId] = useState<string | null>(null);
+  const briefsEditable = sprint.status === "awaiting_brief_approval";
+  const editingAd = editingAdId ? sprint.ads.find((a) => a.id === editingAdId) ?? null : null;
+
+  async function refreshSprint() {
+    try {
+      const res = await fetch(`/api/creative-sprint/${sprint.id}`);
+      const body = await res.json();
+      if (body.ok && body.sprint) setSprint(body.sprint as SprintDetail);
+    } catch {
+      // ignore transient
+    }
+  }
 
   // ── Live polling while sprint is non-terminal ──────────────────────
   useEffect(() => {
@@ -245,7 +262,13 @@ export function SprintDetailBoard({ initial, locale, storeCurrency }: Props) {
       ) : (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-10">
           {sprint.ads.map((ad) => (
-            <AdTile key={ad.id} ad={ad} locale={locale} storeCurrency={storeCurrency} />
+            <AdTile
+              key={ad.id}
+              ad={ad}
+              locale={locale}
+              storeCurrency={storeCurrency}
+              onClick={() => setEditingAdId(ad.id)}
+            />
           ))}
         </div>
       )}
@@ -278,6 +301,20 @@ export function SprintDetailBoard({ initial, locale, storeCurrency }: Props) {
           onPublished={() => {
             setShowPublishModal(false);
             router.refresh();
+          }}
+        />
+      ) : null}
+
+      {editingAd ? (
+        <BriefEditModal
+          sprintId={sprint.id}
+          ad={editingAd}
+          locale={locale}
+          editable={briefsEditable}
+          onClose={() => setEditingAdId(null)}
+          onSaved={async () => {
+            await refreshSprint();
+            setEditingAdId(null);
           }}
         />
       ) : null}
@@ -319,13 +356,31 @@ function statusTone(status: string, finalStatus: string): string {
   return "";
 }
 
-function AdTile({ ad, locale, storeCurrency }: { ad: SprintDetail["ads"][number]; locale: AppLocale; storeCurrency: string }) {
+function AdTile({
+  ad,
+  locale,
+  storeCurrency,
+  onClick
+}: {
+  ad: SprintDetail["ads"][number];
+  locale: AppLocale;
+  storeCurrency: string;
+  onClick?: () => void;
+}) {
   const t = locale === "he";
-  const thumbSrc = ad.assetStorageKey ? `/api/creative/files/${ad.assetStorageKey}` : null;
+  // Asset URL is resolved server-side (presigned R2 URL or local proxy
+  // path depending on backend). The old code hardcoded /api/creative/files
+  // which only worked locally — broken in prod where storage is R2.
+  const thumbSrc = ad.assetUrl ?? null;
   const isVideo = (ad.assetMimeType || "").startsWith("video/");
 
   return (
-    <div className={`overflow-hidden rounded-xl border border-border bg-card shadow-soft ${statusTone(ad.status, ad.finalStatus)}`}>
+    <button
+      type="button"
+      onClick={onClick}
+      className={`group block overflow-hidden rounded-xl border border-border bg-card text-start shadow-soft transition hover:border-foreground/30 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-primary ${statusTone(ad.status, ad.finalStatus)}`}
+      title={t ? "לחץ לצפייה / עריכה של התקציר" : "Click to view / edit brief"}
+    >
       <div className="relative aspect-[9/16] w-full bg-muted">
         {thumbSrc ? (
           isVideo ? (
@@ -374,6 +429,6 @@ function AdTile({ ad, locale, storeCurrency }: { ad: SprintDetail["ads"][number]
           </p>
         ) : null}
       </div>
-    </div>
+    </button>
   );
 }

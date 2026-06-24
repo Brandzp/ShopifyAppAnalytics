@@ -15,11 +15,13 @@
 //   • Top campaigns + top ads
 //   • Optional prior-week comparison (delta % per KPI + winner/loser ads)
 //
-// Provider: OpenAI gpt-4o-mini via Chat Completions. ~$0.0008 per brand at
-// this prompt size — pennies per PDF. Falls back to a deterministic
-// summary if OPENAI_API_KEY is missing or the call fails.
+// Provider waterfall (via lib/clients/ai-insights-client):
+//   1. Brandzp BI agent (askBiAgentJson) — primary; domain-tuned
+//   2. OpenAI gpt-4o-mini — fallback if BI is unconfigured or throws
+//   3. Deterministic fallback content if both fail (no fabrication)
 
 import type { MetaAdsReportBrand } from "@/lib/services/meta-ads-report-service";
+import { generateInsightsJson } from "@/lib/clients/ai-insights-client";
 
 export interface BrandInsights {
   hookLine: string;
@@ -44,23 +46,26 @@ const OPENAI_MODEL = "gpt-4o-mini";
 const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
 
 function fallbackInsights(brand: MetaAdsReportBrand, isHe: boolean): BrandInsights {
+  // No-fabrication fallback. The message is intentionally neutral — both
+  // the BI agent and OpenAI failed, so we can't say which fix is needed.
+  // Check server logs for the underlying error.
   if (isHe) {
     return {
       hookLine: `${brand.name} — סה״כ הוצאה ₪${Math.round(brand.kpis.spend).toLocaleString("he-IL")} ו־${brand.kpis.purchases} רכישות השבוע.`,
       observations: [
-        "תובנות אוטומטיות לא זמינות (OPENAI_API_KEY חסר או הקריאה נכשלה).",
+        "תובנות אוטומטיות לא זמינות כרגע. סוכן ה-BI ו-OpenAI שניהם נכשלו.",
         "ניתן לצפות בנתונים המלאים בטבלאות שלמטה."
       ],
-      actions: ["הוסיפו OPENAI_API_KEY ל־.env כדי לקבל ניתוח אוטומטי שבועי בעברית."]
+      actions: ["בדקו את לוגי השרת לפרטי השגיאה."]
     };
   }
   return {
     hookLine: `${brand.name} — total spend ₪${Math.round(brand.kpis.spend)} and ${brand.kpis.purchases} purchases this week.`,
     observations: [
-      "Automatic insights unavailable (OPENAI_API_KEY missing or the call failed).",
+      "Automatic insights unavailable. Both BI agent and OpenAI failed.",
       "Full numbers are in the tables below."
     ],
-    actions: ["Set OPENAI_API_KEY in .env to enable weekly AI commentary."]
+    actions: ["Check server logs for the underlying error."]
   };
 }
 
@@ -245,54 +250,32 @@ export async function generateBrandInsights(
   locale: "he" | "en" = "he",
   options: { prior?: PriorWeekSnapshot | null } = {}
 ): Promise<BrandInsights> {
-  const apiKey = (process.env.OPENAI_API_KEY ?? "").trim();
-  if (!apiKey) return fallbackInsights(brand, locale === "he");
-
   const systemPrompt = buildSystemPrompt(locale);
   const userPrompt = buildPrompt(brand, dateRange, options.prior ?? null, locale);
+  const fallback = fallbackInsights(brand, locale === "he");
 
-  try {
-    const response = await fetch(OPENAI_URL, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        model: OPENAI_MODEL,
-        response_format: { type: "json_object" },
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt }
-        ],
-        // Slightly higher than the old 0.4 — the new prompt is more
-        // constrained so we can afford a touch more flexibility in phrasing.
-        temperature: 0.5,
-        max_tokens: 900
-      })
-    });
-    if (!response.ok) return fallbackInsights(brand, locale === "he");
-    const payload = (await response.json()) as OpenAIChatResponse;
-    if (payload.error) return fallbackInsights(brand, locale === "he");
-    const raw = payload.choices?.[0]?.message?.content?.trim();
-    if (!raw) return fallbackInsights(brand, locale === "he");
-    const parsed = JSON.parse(raw) as RawInsights;
-    const fallback = fallbackInsights(brand, locale === "he");
-    return {
-      hookLine:
-        typeof parsed.hookLine === "string" && parsed.hookLine.trim()
-          ? parsed.hookLine.trim()
-          : fallback.hookLine,
-      observations:
-        Array.isArray(parsed.observations) && parsed.observations.length > 0
-          ? parsed.observations.map((s) => String(s).trim()).filter(Boolean).slice(0, 4)
-          : fallback.observations,
-      actions:
-        Array.isArray(parsed.actions) && parsed.actions.length > 0
-          ? parsed.actions.map((s) => String(s).trim()).filter(Boolean).slice(0, 3)
-          : fallback.actions
-    };
-  } catch {
-    return fallbackInsights(brand, locale === "he");
-  }
+  const parsed = await generateInsightsJson<RawInsights>({
+    systemPrompt,
+    userPrompt,
+    openaiModel: OPENAI_MODEL,
+    temperature: 0.5,
+    maxTokens: 900,
+    jsonHint: 'object with hookLine:string, observations:string[2-4], actions:string[2-3]'
+  });
+  if (!parsed) return fallback;
+
+  return {
+    hookLine:
+      typeof parsed.hookLine === "string" && parsed.hookLine.trim()
+        ? parsed.hookLine.trim()
+        : fallback.hookLine,
+    observations:
+      Array.isArray(parsed.observations) && parsed.observations.length > 0
+        ? parsed.observations.map((s) => String(s).trim()).filter(Boolean).slice(0, 4)
+        : fallback.observations,
+    actions:
+      Array.isArray(parsed.actions) && parsed.actions.length > 0
+        ? parsed.actions.map((s) => String(s).trim()).filter(Boolean).slice(0, 3)
+        : fallback.actions
+  };
 }

@@ -186,18 +186,32 @@ export async function createHiggsfieldJob(input: HiggsfieldCreateJobInput): Prom
 
   if (input.assetType === "video") {
     // TODO(video): Higgsfield offers video via DoP-style endpoints
-    // (likely /v1/image2video/{model}). Not implemented yet — surface a
-    // clear error so callers don't silently fall back.
-    throw new Error("Higgsfield video generation is not yet wired. Sprint defaults to image.");
+    // (likely /v1/image2video/{model}). Not implemented yet — instead
+    // of throwing (which fails the whole slot), silently fall through
+    // to the image path. The brief generator sometimes picks "video"
+    // for cinematic concepts; we'd rather render those as a still than
+    // lose them entirely. Log a warning so it's visible in Render logs.
+    console.warn(
+      "[higgsfield-client] video requested but not wired — falling back to image gen for this slot"
+    );
   }
 
   const size = safeSize(aspectToSize(input.aspectRatio ?? "9:16"));
-  const body = {
-    params: {
-      prompt: input.prompt,
-      width_and_height: size
-    }
+  const params: Record<string, unknown> = {
+    prompt: input.prompt,
+    width_and_height: size
   };
+  // Reference image conditioning — Higgsfield uploads the URL to their
+  // CDN and uses it to guide the generation (e.g. keeps the product
+  // identity consistent across variants). Verified format:
+  //   { type: "image_url", image_url: "https://..." }
+  if (input.referenceImageUrl) {
+    params.image_reference = {
+      type: "image_url",
+      image_url: input.referenceImageUrl
+    };
+  }
+  const body = { params };
 
   const headers = authHeaders();
   if (input.idempotencyKey) headers["Idempotency-Key"] = input.idempotencyKey;

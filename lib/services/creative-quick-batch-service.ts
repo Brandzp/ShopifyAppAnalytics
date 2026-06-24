@@ -31,6 +31,13 @@ export interface QuickBatchInput {
   productName?: string;
   // Brand voice notes — passed verbatim into the agent prompt.
   brandNotes?: string;
+  // Product reference images. Already uploaded to R2 by the API layer —
+  // we pass the public URLs to Higgsfield via image_reference so the
+  // generated ads actually feature the real product, not a generic stand-in.
+  // When multiple URLs are given we round-robin them across slots so each
+  // reference image gets used. The Creative agent ALSO sees a hint that
+  // references exist so its prompts stay consistent with "the product."
+  referenceImageUrls?: string[];
 }
 
 export interface QuickBatchResult {
@@ -53,6 +60,7 @@ interface AgentPromptDraft {
 }
 
 function buildCreativePrompt(input: Required<Pick<QuickBatchInput, "theme" | "count">> & QuickBatchInput): string {
+  const hasReferences = (input.referenceImageUrls?.length ?? 0) > 0;
   return [
     `You are a senior performance-marketing art director.`,
     "",
@@ -60,13 +68,24 @@ function buildCreativePrompt(input: Required<Pick<QuickBatchInput, "theme" | "co
     input.productName ? `Product: ${input.productName}` : null,
     input.brandNotes ? `Brand voice notes: ${input.brandNotes}` : null,
     `Aspect ratio target: ${input.aspectRatio ?? "9:16"} vertical (Meta-feed format)`,
+    hasReferences
+      ? `IMPORTANT: ${input.referenceImageUrls!.length} reference image(s) of the actual product will be passed to the image generator.`
+      : null,
+    hasReferences
+      ? `Your visualPrompts should describe the SCENE / CONTEXT / STYLING around the product — NOT the product itself (the reference image handles that).`
+      : null,
+    hasReferences
+      ? `Example: instead of "a red apple on a table", write "soft morning light from the left, white marble surface, a few water droplets on the surface, single shadow."`
+      : null,
     "",
     `Produce exactly ${input.count} DISTINCT visual concepts for this campaign.`,
-    `Each concept should feel meaningfully different — different lighting, framing, mood, subject matter.`,
+    `Each concept should feel meaningfully different — different lighting, framing, mood, surface, props.`,
     `Avoid repetition: don't generate "the same scene with different colors."`,
     "",
     `For each concept, write a "visualPrompt": a 2-3 sentence directive an image model can render directly.`,
-    `Mention: subject, framing, lighting, mood, surface/background, any props.`,
+    hasReferences
+      ? `Mention: lighting direction + mood, surface/background, props, atmosphere. Do NOT describe the product itself.`
+      : `Mention: subject, framing, lighting, mood, surface/background, any props.`,
     `Photography style preferred (luxury editorial, not illustration).`,
     `English only for visualPrompt (image models work better in English).`,
     "",
@@ -84,6 +103,9 @@ async function generateOneAsset(input: {
   slotIndex: number;
   aspectRatio: "9:16" | "1:1" | "4:5" | "16:9";
   agentDraft: AgentPromptDraft;
+  // Optional: which reference image URL to condition this slot's gen on.
+  // Picked by the parent loop via round-robin across the operator's uploads.
+  referenceImageUrl?: string | null;
 }): Promise<{ assetId: string }> {
   const db = getDb();
   // Create the asset row up-front in "rendering" so the UI can show
@@ -103,6 +125,7 @@ async function generateOneAsset(input: {
       assetType: "image",
       prompt: input.prompt,
       aspectRatio: input.aspectRatio,
+      referenceImageUrl: input.referenceImageUrl ?? null,
       idempotencyKey: asset.id
     });
     const completed = job.status === "completed" ? job : await pollHiggsfieldUntilDone(job.id);

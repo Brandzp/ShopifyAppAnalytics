@@ -21,6 +21,7 @@ import { Prisma } from "@prisma/client";
 import { getDb } from "@/lib/server/db";
 import { assertStoreInActiveOrg } from "@/lib/auth/guards";
 import { AppError } from "@/lib/server/errors";
+import { getReadableUrl } from "@/lib/services/creative-storage-service";
 import {
   generateSprintBriefs,
   type SprintBrief,
@@ -65,9 +66,21 @@ export interface SprintAdSummary {
   slotIndex: number;
   status: string;
   finalStatus: string;
+  // Brief fields — exposed so the matrix tile's edit modal can show + edit
+  // the full text without a second fetch. angle + variantLabel stay
+  // read-only; headline/body/cta/visualPrompt are editable.
   angle: string;
+  variantLabel: string;
   headline: string;
+  body: string;
+  cta: string;
+  visualPrompt: string;
+  assetType: "image" | "video";
   assetStorageKey: string | null;
+  // Presigned URL resolved server-side. For R2 backend this is a short-
+  // lived signed URL; for local backend it's a /api/creative/files/ path.
+  // Either way the UI can drop this straight into <img src> or <video src>.
+  assetUrl: string | null;
   assetMimeType: string | null;
   metaAdsetId: string | null;
   metaAdId: string | null;
@@ -213,6 +226,25 @@ export async function getSprintDetail(sprintId: string): Promise<SprintDetail> {
   });
   if (!sprint) throw new AppError("Sprint not found.", 404);
   await assertStoreInActiveOrg(sprint.storeId);
+
+  // Resolve presigned URLs for asset storage keys in parallel — R2 needs
+  // signed URLs (short-lived), local backend returns /api/creative/files/.
+  // Doing this server-side means the UI just drops the result into <img src>.
+  const adsWithUrls = await Promise.all(
+    sprint.ads.map(async (a: { id: string; assetStorageKey: string | null }) => {
+      let url: string | null = null;
+      if (a.assetStorageKey) {
+        try {
+          url = await getReadableUrl(a.assetStorageKey);
+        } catch (err) {
+          console.warn(`[sprint-service] failed to resolve URL for ${a.assetStorageKey}:`, err);
+        }
+      }
+      return { id: a.id, assetUrl: url };
+    })
+  );
+  const urlByAdId = new Map(adsWithUrls.map((r) => [r.id, r.assetUrl]));
+
   return {
     id: sprint.id,
     storeId: sprint.storeId,
@@ -248,7 +280,13 @@ export async function getSprintDetail(sprintId: string): Promise<SprintDetail> {
       status: a.status,
       finalStatus: a.finalStatus,
       angle: (a.briefJson as { angle?: string } | null)?.angle ?? "",
+      variantLabel: (a.briefJson as { variantLabel?: string } | null)?.variantLabel ?? "",
       headline: (a.briefJson as { headline?: string } | null)?.headline ?? "",
+      body: (a.briefJson as { body?: string } | null)?.body ?? "",
+      cta: (a.briefJson as { cta?: string } | null)?.cta ?? "",
+      visualPrompt: (a.briefJson as { visualPrompt?: string } | null)?.visualPrompt ?? "",
+      assetType: ((a.briefJson as { assetType?: "image" | "video" } | null)?.assetType ?? "image") as "image" | "video",
+      assetUrl: urlByAdId.get(a.id) ?? null,
       assetStorageKey: a.assetStorageKey,
       assetMimeType: a.assetMimeType,
       metaAdsetId: a.metaAdsetId,

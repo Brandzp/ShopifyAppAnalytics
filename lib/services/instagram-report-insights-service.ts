@@ -45,7 +45,6 @@ export interface InstagramInsights {
 }
 
 const OPENAI_MODEL = "gpt-4o-mini";
-const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
 
 function fallback(isHe: boolean, summary: InstagramInsightsInput): InstagramInsights {
   const total = summary.affiliates.length;
@@ -54,26 +53,23 @@ function fallback(isHe: boolean, summary: InstagramInsightsInput): InstagramInsi
     return {
       hookLine: `${active} מתוך ${total} משפיענים פעילים השבוע. ${summary.recentPosts.length} פוסטים סה״כ ב־30 הימים האחרונים.`,
       observations: [
-        "תובנות Instagram אוטומטיות לא זמינות (OPENAI_API_KEY חסר או הקריאה נכשלה).",
+        "תובנות Instagram אוטומטיות לא זמינות. סוכן ה-BI ו-OpenAI שניהם נכשלו.",
         "הנתונים המלאים מופיעים בטבלאות שלמטה."
       ],
-      actions: ["הוסיפו OPENAI_API_KEY ל־.env כדי לקבל ניתוח אוטומטי."]
+      actions: ["בדקו את לוגי השרת לפרטי השגיאה."]
     };
   }
   return {
     hookLine: `${active} of ${total} affiliates active this week. ${summary.recentPosts.length} posts in the last 30 days.`,
     observations: [
-      "Automatic Instagram insights unavailable (OPENAI_API_KEY missing or call failed).",
+      "Automatic Instagram insights unavailable. Both BI agent and OpenAI failed.",
       "Full numbers are in the tables below."
     ],
-    actions: ["Set OPENAI_API_KEY in .env to enable weekly AI commentary."]
+    actions: ["Check server logs for the underlying error."]
   };
 }
 
-interface OpenAIChatResponse {
-  choices?: Array<{ message?: { content?: string } }>;
-  error?: { message?: string };
-}
+import { generateInsightsJson } from "@/lib/clients/ai-insights-client";
 
 interface RawInsights {
   hookLine?: string;
@@ -173,49 +169,28 @@ export async function generateInstagramInsights(
   input: InstagramInsightsInput,
   locale: "he" | "en" = "he"
 ): Promise<InstagramInsights> {
-  const apiKey = (process.env.OPENAI_API_KEY ?? "").trim();
-  if (!apiKey) return fallback(locale === "he", input);
-
-  try {
-    const response = await fetch(OPENAI_URL, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        model: OPENAI_MODEL,
-        response_format: { type: "json_object" },
-        messages: [
-          { role: "system", content: buildSystemPrompt(locale) },
-          { role: "user", content: buildUserPrompt(input) }
-        ],
-        temperature: 0.5,
-        max_tokens: 800
-      })
-    });
-    if (!response.ok) return fallback(locale === "he", input);
-    const payload = (await response.json()) as OpenAIChatResponse;
-    if (payload.error) return fallback(locale === "he", input);
-    const raw = payload.choices?.[0]?.message?.content?.trim();
-    if (!raw) return fallback(locale === "he", input);
-    const parsed = JSON.parse(raw) as RawInsights;
-    const fb = fallback(locale === "he", input);
-    return {
-      hookLine:
-        typeof parsed.hookLine === "string" && parsed.hookLine.trim()
-          ? parsed.hookLine.trim()
-          : fb.hookLine,
-      observations:
-        Array.isArray(parsed.observations) && parsed.observations.length > 0
-          ? parsed.observations.map((s) => String(s).trim()).filter(Boolean).slice(0, 4)
-          : fb.observations,
-      actions:
-        Array.isArray(parsed.actions) && parsed.actions.length > 0
-          ? parsed.actions.map((s) => String(s).trim()).filter(Boolean).slice(0, 3)
-          : fb.actions
-    };
-  } catch {
-    return fallback(locale === "he", input);
-  }
+  const fb = fallback(locale === "he", input);
+  const parsed = await generateInsightsJson<RawInsights>({
+    systemPrompt: buildSystemPrompt(locale),
+    userPrompt: buildUserPrompt(input),
+    openaiModel: OPENAI_MODEL,
+    temperature: 0.5,
+    maxTokens: 800,
+    jsonHint: 'object with hookLine:string, observations:string[2-4], actions:string[2-3]'
+  });
+  if (!parsed) return fb;
+  return {
+    hookLine:
+      typeof parsed.hookLine === "string" && parsed.hookLine.trim()
+        ? parsed.hookLine.trim()
+        : fb.hookLine,
+    observations:
+      Array.isArray(parsed.observations) && parsed.observations.length > 0
+        ? parsed.observations.map((s) => String(s).trim()).filter(Boolean).slice(0, 4)
+        : fb.observations,
+    actions:
+      Array.isArray(parsed.actions) && parsed.actions.length > 0
+        ? parsed.actions.map((s) => String(s).trim()).filter(Boolean).slice(0, 3)
+        : fb.actions
+  };
 }
