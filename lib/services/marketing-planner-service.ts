@@ -542,7 +542,72 @@ function parseNumericDate(day: number, month: number, year: number) {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
+// Map Hebrew month names to JS month numbers (1-based)
+const HEBREW_MONTH_NUMBER: Record<string, number> = {
+  "ינואר": 1, "פברואר": 2, "מרץ": 3, "מרס": 3, "אפריל": 4,
+  "מאי": 5, "יוני": 6, "יולי": 7, "אוגוסט": 8, "ספטמבר": 9,
+  "אוקטובר": 10, "נובמבר": 11, "דצמבר": 12
+};
+
+function parseHebrewMonthDay(segment: string, monthStart: Date, monthEnd: Date) {
+  // Matches "ה-1 ביולי", "1 ביולי", "1-15 ביולי", "ה-1-15 ביולי"
+  const hebrewMonthNames = Object.keys(HEBREW_MONTH_NUMBER).join("|");
+  const re = new RegExp(
+    `(?:ה-?)?(\\d{1,2})\\s*(?:[-–]\\s*(\\d{1,2}))?\\s*ב?(${hebrewMonthNames})`,
+    "u"
+  );
+  const m = segment.match(re);
+  if (!m) return null;
+
+  const monthName = m[3];
+  const hebrewMonth = HEBREW_MONTH_NUMBER[monthName];
+  if (!hebrewMonth) return null;
+
+  const year = monthStart.getFullYear();
+  const d1 = Number(m[1]);
+  const d2 = m[2] ? Number(m[2]) : d1;
+
+  const start = parseNumericDate(d1, hebrewMonth, year);
+  const end = parseNumericDate(d2, hebrewMonth, year);
+  if (!start || !end) return null;
+
+  const clampedStart = clampDateToMonth(start, monthStart, monthEnd);
+  const clampedEnd = clampDateToMonth(end, monthStart, monthEnd);
+  return clampedStart <= clampedEnd
+    ? { start: clampedStart, end: clampedEnd }
+    : { start: clampedEnd, end: clampedStart };
+}
+
+function parseIsoDateRange(segment: string, monthStart: Date, monthEnd: Date) {
+  // Matches ISO dates: "2026-07-01", "2026-07-01 - 2026-07-15", "2026-07-01 עד 2026-07-15"
+  const iso = segment.match(/(\d{4})-(\d{2})-(\d{2})(?:\s*(?:עד|[-–])\s*(\d{4})-(\d{2})-(\d{2}))?/);
+  if (!iso) return null;
+
+  const start = parseNumericDate(Number(iso[3]), Number(iso[2]), Number(iso[1]));
+  if (!start) return null;
+
+  const end = iso[4]
+    ? parseNumericDate(Number(iso[6]), Number(iso[5]), Number(iso[4]))
+    : start;
+  if (!end) return null;
+
+  const clampedStart = clampDateToMonth(start, monthStart, monthEnd);
+  const clampedEnd = clampDateToMonth(end, monthStart, monthEnd);
+  return clampedStart <= clampedEnd
+    ? { start: clampedStart, end: clampedEnd }
+    : { start: clampedEnd, end: clampedStart };
+}
+
 function parseDateRange(segment: string, monthStart: Date, monthEnd: Date) {
+  // 1. ISO dates first (most unambiguous)
+  const isoResult = parseIsoDateRange(segment, monthStart, monthEnd);
+  if (isoResult) return isoResult;
+
+  // 2. Hebrew month name with day(s): "1-15 ביולי", "ה-1 ביולי"
+  const hebrewMonthResult = parseHebrewMonthDay(segment, monthStart, monthEnd);
+  if (hebrewMonthResult) return hebrewMonthResult;
+
+  // 3. Explicit numeric range with . or / separator: "01.07 - 15.07", "1/7 עד 15/7"
   const explicitRange = segment.match(/(\d{1,2})[./](\d{1,2})(?:[./](\d{2,4}))?\s*(?:עד|ל|[-–])\s*(\d{1,2})[./](\d{1,2})(?:[./](\d{2,4}))?/);
   if (explicitRange) {
     const startYear = explicitRange[3] ? normalizeYear(Number(explicitRange[3])) : monthStart.getFullYear();
@@ -558,6 +623,7 @@ function parseDateRange(segment: string, monthStart: Date, monthEnd: Date) {
     }
   }
 
+  // 4. Same-month range with only day numbers: "1-15", "5–20"
   const sameMonthRange = segment.match(/(?<![./]\d)(\d{1,2})\s*[-–]\s*(\d{1,2})(?![./]\d)/);
   if (sameMonthRange) {
     const start = buildDate(monthStart.getFullYear(), monthStart.getMonth() + 1, Number(sameMonthRange[1]));
@@ -571,6 +637,7 @@ function parseDateRange(segment: string, monthStart: Date, monthEnd: Date) {
     }
   }
 
+  // 5. Leading date with "until": "01.07 עד 15.07"
   const leadingDateWithUntil = segment.match(/^(\d{1,2})[./](\d{1,2})(?:[./](\d{2,4}))?.*?עד\s*(\d{1,2})[./](\d{1,2})(?:[./](\d{2,4}))?/);
   if (leadingDateWithUntil) {
     const startYear = leadingDateWithUntil[3] ? normalizeYear(Number(leadingDateWithUntil[3])) : monthStart.getFullYear();
@@ -586,6 +653,7 @@ function parseDateRange(segment: string, monthStart: Date, monthEnd: Date) {
     }
   }
 
+  // 6. Single short date: "ב-1.7", "1.7", "מ-01.07"
   const shortDate = segment.match(/(?:ב-|בין |מ-)?(\d{1,2})[./](\d{1,2})(?:[./](\d{2,4}))?/);
   if (shortDate) {
     const year = shortDate[3] ? normalizeYear(Number(shortDate[3])) : monthStart.getFullYear();
@@ -596,6 +664,7 @@ function parseDateRange(segment: string, monthStart: Date, monthEnd: Date) {
     }
   }
 
+  // 7. "Until" date: "עד 15.7"
   const untilDate = segment.match(/עד\s*(\d{1,2})[./](\d{1,2})/);
   if (untilDate) {
     const end = parseNumericDate(Number(untilDate[1]), Number(untilDate[2]), monthStart.getFullYear());
@@ -604,14 +673,21 @@ function parseDateRange(segment: string, monthStart: Date, monthEnd: Date) {
     }
   }
 
+  // 8. Whole-month keywords
   if (/כל החודש|לאורך החודש|כלל החודש/.test(segment)) {
     return { start: new Date(monthStart), end: new Date(monthEnd) };
   }
 
+  // 9. Week-of-month keywords
   if (/שבוע ראשון/.test(segment)) return buildWeekRange(1, monthStart, monthEnd);
   if (/שבוע שני/.test(segment)) return buildWeekRange(2, monthStart, monthEnd);
   if (/שבוע שלישי/.test(segment)) return buildWeekRange(3, monthStart, monthEnd);
   if (/שבוע רביעי|שבוע אחרון/.test(segment)) return buildWeekRange(4, monthStart, monthEnd);
+
+  // 10. "Beginning / middle / end of month" in Hebrew
+  if (/תחילת החודש|בתחילת החודש|ראשית החודש/.test(segment)) return buildWeekRange(1, monthStart, monthEnd);
+  if (/אמצע החודש|באמצע החודש/.test(segment)) return buildWeekRange(2, monthStart, monthEnd);
+  if (/סוף החודש|בסוף החודש|סיום החודש/.test(segment)) return buildWeekRange(4, monthStart, monthEnd);
 
   return null;
 }
@@ -2393,13 +2469,18 @@ async function buildWorkbook(
     cell.font = { name: "Arial", size: 10, bold: true };
   }
 
+  // Precompute first and last column for fallback when campaign dates are outside the month grid
+  const firstDateColumn = 2;
+  const lastDateColumn = monthDates.length + 1;
+
   for (const campaign of campaigns) {
     const rowNumber = rowLookup.get(campaign.rowLabel);
     if (!rowNumber) continue;
 
-    const startColumn = dateLookup.get(campaign.startDate);
-    const endColumn = dateLookup.get(campaign.endDate);
-    if (!startColumn || !endColumn) continue;
+    // Fallback to first/last column if campaign dates fall outside the month grid
+    // (can happen if clamping produced edge dates not represented in dateLookup)
+    const startColumn = dateLookup.get(campaign.startDate) ?? firstDateColumn;
+    const endColumn = dateLookup.get(campaign.endDate) ?? lastDateColumn;
 
     const startCell = worksheet.getCell(rowNumber, startColumn);
     appendCellText(startCell, buildCellBody(campaign));
