@@ -843,8 +843,9 @@ export async function getRetentionAnalyticsFromDb() {
   const store = await getConnectedStoreRecord();
   if (!store) return null;
   const range = await getActiveRange();
-  const [orders, history, allOrders, products] = await Promise.all([
+  const [orders, prevOrders, history, allOrders, products] = await Promise.all([
     getOrdersForRange(store.id, range.current.start, range.current.end),
+    getOrdersForRange(store.id, range.previous.start, range.previous.end),
     getCustomerOrderHistory(store.id),
     withOptionalDb(
       (db) =>
@@ -858,6 +859,7 @@ export async function getRetentionAnalyticsFromDb() {
     withOptionalDb((db) => db.product.findMany({ where: { storeId: store.id } }), [])
   ]);
   const normalizedOrders = mapOrders(orders);
+  const normalizedPrevOrders = mapOrders(prevOrders);
   const allNormalizedOrders = mapOrders(allOrders);
   const orderLookup = new Map<string, Order>(allNormalizedOrders.map((order) => [order.id, order]));
   const snapshot = buildRetentionSnapshot(normalizedOrders, history, orderLookup);
@@ -884,6 +886,7 @@ export async function getRetentionAnalyticsFromDb() {
   return {
     snapshot,
     dailyMetrics: buildDailyMetrics(normalizedOrders, history),
+    previousDailyMetrics: buildDailyMetrics(normalizedPrevOrders, history),
     firstOrderProducts: Array.from(firstOrderProducts.entries()).map(([title, orders]) => ({ title, orders })).sort((a, b) => b.orders - a.orders).slice(0, 5),
     secondOrderProducts: Array.from(secondOrderProducts.entries()).map(([title, orders]) => ({ title, orders })).sort((a, b) => b.orders - a.orders).slice(0, 5),
     cohortPlaceholder:

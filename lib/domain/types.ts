@@ -233,6 +233,8 @@ export interface ProductOrderMix {
 export interface RetentionPayload {
   snapshot: RetentionSnapshot;
   dailyMetrics: DailyMetric[];
+  /** Previous comparison period metrics — used to overlay a second line on the trend chart. */
+  previousDailyMetrics?: DailyMetric[];
   firstOrderProducts: ProductOrderMix[];
   secondOrderProducts: ProductOrderMix[];
   cohortPlaceholder: string;

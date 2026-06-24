@@ -398,7 +398,10 @@ export async function getRetentionPayload(): Promise<RetentionPayload> {
   if (dbPayload) return dbPayload;
 
   const repository = await getAnalyticsRepository();
-  const dailyMetrics = await repository.getDailyMetrics();
+  const [dailyMetrics, previousDailyMetrics] = await Promise.all([
+    repository.getDailyMetrics(),
+    repository.getPreviousPeriodMetrics()
+  ]);
 
   return {
     snapshot: {
@@ -409,6 +412,7 @@ export async function getRetentionPayload(): Promise<RetentionPayload> {
       averageDaysToSecondOrder: 0
     },
     dailyMetrics,
+    previousDailyMetrics,
     firstOrderProducts: [],
     secondOrderProducts: [],
     cohortPlaceholder:

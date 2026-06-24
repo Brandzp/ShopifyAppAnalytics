@@ -15,22 +15,53 @@ function formatMonthLabel(yyyyMm: string, locale: "he" | "en"): string {
   });
 }
 
+/**
+ * Enhanced cohort color coding with three zones:
+ *  - High values (>= 25%): green ramp — strong retention
+ *  - Mid values (5%–25%): neutral indigo ramp
+ *  - Low values (> 0% and < 5%): red ramp — poor retention (outlier)
+ * The colour scale is full-range (not capped at 60%) so outlier cells
+ * stand out clearly at both extremes.
+ */
 function cellShade(rate: number | null): {
   bg: string;
   text: string;
 } {
   if (rate == null) return { bg: "#ffffff", text: "#94a3b8" };
   if (rate <= 0) return { bg: "#f8fafc", text: "#cbd5e1" };
-  // Indigo ramp — same hue as the rest of the dashboards. Saturation
-  // scales with rate; we cap at 60% so 100% cells don't blow out.
-  const t = Math.min(rate, 0.6) / 0.6;
-  // Light end #eef2ff (rgba 238, 242, 255) → strong end #6366f1 (rgba 99, 102, 241).
+
+  // Low outlier: < 5% retention — red ramp
+  if (rate < 0.05) {
+    // t = 0 (near 0%) → faint rose; t = 1 (5%) → strong rose
+    const t = rate / 0.05;
+    const r = Math.round(255 - (255 - 220) * t); // 255 → 220
+    const g = Math.round(241 - (241 - 38) * t);  // 241 → 38
+    const b = Math.round(242 - (242 - 38) * t);  // 242 → 38
+    const bg = `rgb(${r}, ${g}, ${b})`;
+    const text = t > 0.6 ? "#ffffff" : "#7f1d1d";
+    return { bg, text };
+  }
+
+  // High outlier: >= 25% retention — green ramp
+  if (rate >= 0.25) {
+    // t = 0 (25%) → light emerald; t = 1 (60%+) → strong emerald
+    const t = Math.min((rate - 0.25) / 0.35, 1);
+    const r = Math.round(209 - (209 - 4) * t);  // 209 → 4
+    const g = Math.round(250 - (250 - 120) * t); // 250 → 120
+    const b = Math.round(229 - (229 - 87) * t);  // 229 → 87
+    const bg = `rgb(${r}, ${g}, ${b})`;
+    const text = t > 0.45 ? "#ffffff" : "#14532d";
+    return { bg, text };
+  }
+
+  // Mid range 5%–25%: indigo ramp (same hue as rest of the dashboard)
+  const t = (rate - 0.05) / 0.20; // 0 at 5%, 1 at 25%
+  // Light end #eef2ff → strong end #6366f1
   const r = Math.round(238 - (238 - 99) * t);
   const g = Math.round(242 - (242 - 102) * t);
   const b = Math.round(255 - (255 - 241) * t);
   const bg = `rgb(${r}, ${g}, ${b})`;
-  // Flip text to white above ~40% intensity for legibility.
-  const text = t > 0.5 ? "#ffffff" : "#1e293b";
+  const text = t > 0.65 ? "#ffffff" : "#1e293b";
   return { bg, text };
 }
 
@@ -115,15 +146,19 @@ export function CohortHeatmap({
           ))}
         </tbody>
       </table>
-      <div className="mt-3 flex items-center gap-3 text-[11px] text-muted-foreground">
+      <div className="mt-3 flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
         <span>{lang("מקרא:", "Legend:")}</span>
         <span className="flex items-center gap-1">
-          <span className="inline-block h-3 w-6 rounded-sm" style={{ background: "#eef2ff" }} />
-          {lang("נמוך", "Low")}
+          <span className="inline-block h-3 w-6 rounded-sm" style={{ background: "rgb(220,38,38)" }} />
+          {lang("נמוך מאוד (<5%)", "Very low (<5%)")}
         </span>
         <span className="flex items-center gap-1">
-          <span className="inline-block h-3 w-6 rounded-sm" style={{ background: "#6366f1" }} />
-          {lang("גבוה", "High")}
+          <span className="inline-block h-3 w-6 rounded-sm" style={{ background: "#eef2ff" }} />
+          {lang("בינוני", "Mid")}
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="inline-block h-3 w-6 rounded-sm" style={{ background: "rgb(4,120,87)" }} />
+          {lang("גבוה (>25%)", "High (>25%)")}
         </span>
         <span className="ms-auto">
           {lang(

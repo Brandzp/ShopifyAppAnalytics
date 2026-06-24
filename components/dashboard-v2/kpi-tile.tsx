@@ -156,25 +156,52 @@ export function KpiTile({
 /**
  * Generic stat tile — for plain values that aren't KPIs (no change %).
  */
+/**
+ * Visual health indicator for a KPI stat tile.
+ * "good" = green, "warn" = red/amber, undefined = no badge.
+ */
+export type StatTileStatus = "good" | "warn" | undefined;
+
+const STATUS_BADGE: Record<NonNullable<StatTileStatus>, { className: string; label: string }> = {
+  good: { className: "bg-emerald-500/10 text-emerald-700", label: "✓" },
+  warn: { className: "bg-rose-500/10 text-rose-700", label: "!" }
+};
+
 export function StatTile({
   label,
   value,
   hint,
   tooltip,
-  icon: Icon = Package2
+  icon: Icon = Package2,
+  status
 }: {
   label: string;
   value: React.ReactNode;
   hint?: string;
   tooltip?: string;
   icon?: LucideIcon;
+  /** Optional health status badge. "good" = green, "warn" = red. */
+  status?: StatTileStatus;
 }) {
+  const badge = status ? STATUS_BADGE[status] : null;
   return (
     <Card className="transition-shadow hover:shadow-lg">
       <CardContent className="p-5">
-        <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-600">
-          <Icon className="h-4 w-4" aria-hidden />
-        </span>
+        <div className="flex items-start justify-between gap-2">
+          <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-600">
+            <Icon className="h-4 w-4" aria-hidden />
+          </span>
+          {badge ? (
+            <span
+              className={cn(
+                "inline-flex items-center justify-center rounded-full px-2 py-0.5 text-[11px] font-bold",
+                badge.className
+              )}
+            >
+              {badge.label}
+            </span>
+          ) : null}
+        </div>
         <div className="mt-4 flex items-center gap-1.5">
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
             {label}

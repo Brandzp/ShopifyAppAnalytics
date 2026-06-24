@@ -13,6 +13,7 @@ import { resolveActiveStoreId } from "@/lib/services/offline-sales-service";
 import { CohortHeatmap } from "@/components/retention/cohort-heatmap";
 import { formatNumber } from "@/lib/utils";
 import { getAppLocale, getDictionary } from "@/lib/i18n";
+import type { StatTileStatus } from "@/components/dashboard-v2/kpi-tile";
 
 export default async function RetentionPage() {
   const locale = await getAppLocale();
@@ -28,6 +29,38 @@ export default async function RetentionPage() {
   const cohortReport = storeId
     ? await buildCohortRetention({ storeId, lookbackMonths: 12 }).catch(() => null)
     : null;
+
+  // --- KPI health thresholds ---
+  // repeatPurchaseRate > 20% = good, < 10% = warn
+  const repeatRateStatus: StatTileStatus =
+    snap.repeatPurchaseRate >= 20 ? "good" : snap.repeatPurchaseRate < 10 ? "warn" : undefined;
+  // secondOrderRate > 15% = good, < 5% = warn
+  const secondOrderStatus: StatTileStatus =
+    snap.secondOrderRate >= 15 ? "good" : snap.secondOrderRate < 5 && snap.secondOrderRate > 0 ? "warn" : undefined;
+  // averageDaysToSecondOrder: shorter is better; < 45 days = good, > 120 days = warn
+  const avgDaysStatus: StatTileStatus =
+    snap.averageDaysToSecondOrder > 0
+      ? snap.averageDaysToSecondOrder <= 45 ? "good" : snap.averageDaysToSecondOrder > 120 ? "warn" : undefined
+      : undefined;
+  // returningCustomers: if more returning than 20% of total customers = good
+  const totalCustomers = snap.newCustomers + snap.returningCustomers;
+  const returningShare = totalCustomers > 0 ? snap.returningCustomers / totalCustomers : 0;
+  const returningStatus: StatTileStatus =
+    returningShare >= 0.2 ? "good" : returningShare > 0 && returningShare < 0.1 ? "warn" : undefined;
+
+  // --- Auto conclusion: top retention product ---
+  const topFirstOrderProduct = retention.firstOrderProducts[0]?.title ?? null;
+  const topSecondOrderProduct = retention.secondOrderProducts[0]?.title ?? null;
+  const autoConclusion: string | null =
+    topFirstOrderProduct && topSecondOrderProduct
+      ? locale === "he"
+        ? `המוצר המוביל ברכישה ראשונה: "${topFirstOrderProduct}". המוצר שמחזיר הכי הרבה לקוחות: "${topSecondOrderProduct}".`
+        : `Top acquisition product: "${topFirstOrderProduct}". Top product that brings customers back: "${topSecondOrderProduct}".`
+      : topSecondOrderProduct
+        ? locale === "he"
+          ? `המוצר הנמכר ביותר בקנייה חוזרת הוא "${topSecondOrderProduct}".`
+          : `The top product in repeat purchases is "${topSecondOrderProduct}".`
+        : null;
 
   // Narrative
   const repeatRate = snap.repeatPurchaseRate;
@@ -119,6 +152,7 @@ export default async function RetentionPage() {
               icon={Users2}
               tooltip={tips.returningCustomers}
               hint={locale === "he" ? "כבר הייתה להם לפחות הזמנה קודמת אחת." : "Already had at least one prior order."}
+              status={returningStatus}
             />
             <StatTile
               label={dictionary.retention.repeatPurchaseRate}
@@ -126,6 +160,7 @@ export default async function RetentionPage() {
               icon={Repeat}
               tooltip={tips.repeatRate}
               hint={locale === "he" ? "גבוה יותר = מותג דביק יותר." : "Higher = stickier brand."}
+              status={repeatRateStatus}
             />
             <StatTile
               label={dictionary.retention.secondOrderRate}
@@ -133,6 +168,7 @@ export default async function RetentionPage() {
               icon={TrendingUp}
               tooltip={tips.secondOrderRate}
               hint={locale === "he" ? "לקוחות חדשים שחזרו להזמין שוב." : "First-time buyers who came back."}
+              status={secondOrderStatus}
             />
             <StatTile
               label={dictionary.retention.avgDaysToSecondOrder}
@@ -140,6 +176,7 @@ export default async function RetentionPage() {
               icon={CalendarClock}
               tooltip={tips.avgDaysToSecond}
               hint={locale === "he" ? "ימים בין הזמנה ראשונה לשנייה." : "Days between order #1 and #2."}
+              status={avgDaysStatus}
             />
           </div>
         </section>
@@ -159,7 +196,11 @@ export default async function RetentionPage() {
               <CardTitle className="text-base">{dictionary.retention.repeatRateOverTime}</CardTitle>
             </CardHeader>
             <CardContent>
-              <RetentionLineChartV2 data={retention.dailyMetrics} />
+              <RetentionLineChartV2
+                data={retention.dailyMetrics}
+                previousData={retention.previousDailyMetrics}
+                locale={locale}
+              />
             </CardContent>
           </Card>
         </section>
@@ -186,7 +227,7 @@ export default async function RetentionPage() {
                   <HelpTip>{tips.topFirstOrder}</HelpTip>
                 </div>
               </CardHeader>
-              <CardContent>
+              <CardContent className="overflow-hidden">
                 <BarInsightChart
                   data={retention.firstOrderProducts}
                   dataKey="orders"
@@ -204,7 +245,7 @@ export default async function RetentionPage() {
                 </div>
                 <p className="text-sm text-muted-foreground">{dictionary.retention.topSecondOrderDescription}</p>
               </CardHeader>
-              <CardContent>
+              <CardContent className="overflow-hidden">
                 <BarInsightChart
                   data={retention.secondOrderProducts}
                   dataKey="orders"
@@ -216,6 +257,14 @@ export default async function RetentionPage() {
               </CardContent>
             </Card>
           </div>
+          {autoConclusion ? (
+            <div className="rounded-xl border border-indigo-100 bg-indigo-50/50 px-4 py-3 dark:border-indigo-900/40 dark:bg-indigo-950/20">
+              <p className="text-sm font-medium text-indigo-800 dark:text-indigo-300">
+                {locale === "he" ? "סיכום אוטומטי" : "Auto insight"}&ensp;
+                <span className="font-normal text-indigo-700 dark:text-indigo-400">{autoConclusion}</span>
+              </p>
+            </div>
+          ) : null}
         </section>
 
         <section className="space-y-3">
