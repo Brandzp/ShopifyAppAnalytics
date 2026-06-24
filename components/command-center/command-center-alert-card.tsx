@@ -6,6 +6,8 @@ import {
   AlertOctagon,
   AlertTriangle,
   Bell,
+  ChevronDown,
+  ChevronUp,
   Info,
   Check,
   X,
@@ -52,10 +54,12 @@ const SEVERITY_PILL = {
   low: "bg-sky-500 text-white"
 } as const;
 
+// Hebrew labels use the 3-level UX system: קריטי / חשוב / נמוך.
+// English keeps the full 4-level labels for clarity.
 const SEVERITY_LABEL = {
   critical: { he: "קריטי", en: "Critical" },
-  high: { he: "גבוה", en: "High" },
-  medium: { he: "בינוני", en: "Medium" },
+  high: { he: "חשוב", en: "High" },
+  medium: { he: "חשוב", en: "Medium" },
   low: { he: "נמוך", en: "Low" }
 } as const;
 
@@ -76,8 +80,21 @@ export function CommandCenterAlertCard({
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState(false);
   const isHe = locale === "he";
   const lang = (he: string, en: string) => (isHe ? he : en);
+
+  // Truncate long text to a short preview (≤120 chars) with expand toggle.
+  const TRUNCATE_AT = 120;
+  const descLong = alert.description.length > TRUNCATE_AT;
+  const actionLong = (alert.recommendedAction ?? "").length > TRUNCATE_AT;
+  const descText = expanded || !descLong
+    ? alert.description
+    : alert.description.slice(0, TRUNCATE_AT).trimEnd() + "…";
+  const actionText = expanded || !actionLong
+    ? (alert.recommendedAction ?? "")
+    : (alert.recommendedAction ?? "").slice(0, TRUNCATE_AT).trimEnd() + "…";
+  const hasLongContent = descLong || actionLong;
 
   const Icon = SEVERITY_ICON[alert.severity];
   const sevLabel = SEVERITY_LABEL[alert.severity][isHe ? "he" : "en"];
@@ -134,15 +151,35 @@ export function CommandCenterAlertCard({
         </div>
 
         <p className="text-sm font-semibold leading-snug">{alert.title}</p>
-        <p className="text-xs leading-5 text-muted-foreground">{alert.description}</p>
+        <p className="text-xs leading-5 text-muted-foreground">{descText}</p>
 
         {alert.recommendedAction ? (
           <div className="rounded-lg border border-border bg-card/80 px-3 py-2">
             <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
               {lang("פעולה מומלצת", "Suggested action")}
             </p>
-            <p className="mt-1 text-xs leading-5">{alert.recommendedAction}</p>
+            <p className="mt-1 text-xs leading-5">{actionText}</p>
           </div>
+        ) : null}
+
+        {hasLongContent ? (
+          <button
+            type="button"
+            onClick={() => setExpanded((prev) => !prev)}
+            className="inline-flex items-center gap-1 text-[11px] font-medium text-indigo-600 hover:text-indigo-800"
+          >
+            {expanded ? (
+              <>
+                <ChevronUp className="h-3 w-3" aria-hidden />
+                {lang("פחות", "Show less")}
+              </>
+            ) : (
+              <>
+                <ChevronDown className="h-3 w-3" aria-hidden />
+                {lang("קרא עוד", "Read more")}
+              </>
+            )}
+          </button>
         ) : null}
 
         {alert.relatedEntityType && alert.relatedEntityId ? (

@@ -300,9 +300,17 @@ export default async function CommandCenterPage() {
           <div className="grid gap-3 grid-cols-2 lg:grid-cols-3">
             {overview.kpis.map((kpi) => {
               const label = kpi.label.toLowerCase();
-              const drillHref = label.includes("revenue")
+              // Match both English labels and Hebrew equivalents (הכנסות / רווח משוער).
+              const isRevenue =
+                label.includes("revenue") ||
+                label.includes("הכנסות") ||
+                label.includes("הכנסה");
+              const isProfit =
+                label.includes("profit") ||
+                label.includes("רווח");
+              const drillHref = isRevenue
                 ? "/sales-summary"
-                : label.includes("profit")
+                : isProfit
                   ? "/profit"
                   : undefined;
               return (
