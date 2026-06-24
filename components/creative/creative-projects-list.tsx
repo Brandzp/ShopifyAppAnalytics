@@ -9,6 +9,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import type { AppLocale } from "@/lib/i18n";
 import type { CreativeProjectSummary, CreativeType } from "@/lib/domain/creative-types";
+import { QuickBatchButton } from "@/components/creative/quick-batch-button";
 
 const TYPE_ICON: Record<CreativeType, typeof Sparkles> = {
   PACKSHOT: Box,
@@ -124,12 +125,15 @@ export function CreativeProjectsList({
               : "Each project bundles your source uploads with the assets generated from them."}
           </p>
         </div>
-        <Link href={"/creative/new" as any}>
-          <Button>
-            <Plus className={cn("h-4 w-4", isHe ? "ml-2" : "mr-2")} />
-            {isHe ? "פרויקט חדש" : "New project"}
-          </Button>
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          <QuickBatchButton locale={locale} />
+          <Link href={"/creative/new" as any}>
+            <Button>
+              <Plus className={cn("h-4 w-4", isHe ? "ml-2" : "mr-2")} />
+              {isHe ? "פרויקט חדש" : "New project"}
+            </Button>
+          </Link>
+        </div>
       </div>
 
       {projects.length === 0 ? (

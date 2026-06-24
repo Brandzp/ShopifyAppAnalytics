@@ -47,6 +47,10 @@ import {
   type RoasCollapseReport
 } from "@/lib/services/roas-collapse-service";
 import { getDb } from "@/lib/server/db";
+import {
+  generateWeeklyBiCommentary,
+  type BiWeeklyCommentary
+} from "@/lib/services/weekly-report-bi-commentary-service";
 
 export interface WeeklyReportBundle {
   storeId: string;
@@ -90,6 +94,10 @@ export interface WeeklyReportBundle {
   restockAlerts: RestockHeroAlertReport | null;
   stockoutAlerts: StockoutImminentReport | null;
   roasCollapseAlerts: RoasCollapseReport | null;
+  // BI agent's executive summary (3 insights + 3 actions) — rendered at
+  // the top of the print page. Null when the BI agent is unconfigured or
+  // fails; the section just hides. See weekly-report-bi-commentary-service.
+  biAgentCommentary: BiWeeklyCommentary | null;
 }
 
 export interface BuildWeeklyReportInput {
@@ -261,6 +269,21 @@ export async function buildWeeklyReportBundle(
     }
   }
 
+  // BI agent commentary — feeds the agent a compact digest of the week's
+  // KPIs and gets back 3 insights + 3 prescribed actions. Best-effort: a
+  // failure or unconfigured agent just returns null and the print page
+  // hides the section. Runs last so prior failures don't block it.
+  const biAgentCommentary = await generateWeeklyBiCommentary({
+    storeName: store?.name ?? null,
+    periodStart: input.start.toISOString().slice(0, 10),
+    periodEnd: input.end.toISOString().slice(0, 10),
+    locale,
+    metaAds,
+    affiliateDeepDive,
+    restockAlerts,
+    roasCollapseAlerts
+  });
+
   return {
     storeId: input.storeId,
     storeName: store?.name ?? null,
@@ -275,7 +298,8 @@ export async function buildWeeklyReportBundle(
     affiliateDeepDive,
     restockAlerts,
     stockoutAlerts,
-    roasCollapseAlerts
+    roasCollapseAlerts,
+    biAgentCommentary
   };
 }
 

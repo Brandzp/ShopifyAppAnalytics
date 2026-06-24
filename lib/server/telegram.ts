@@ -47,3 +47,27 @@ export async function sendTelegramDocument(input: SendTelegramDocumentInput): Pr
     throw new Error(`Telegram sendDocument failed: HTTP ${response.status} — ${detail}`);
   }
 }
+
+// Plain-text notification — used by the creative-sprint cascade evaluator
+// to ping the owner after each stage ("Sprint X stage 1 done: 70 killed,
+// 30 alive"). Best-effort: never throws — Telegram outage shouldn't kill
+// a successful cascade run. Set TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID env
+// vars to enable; absent vars → silent no-op (handy for dev).
+export async function sendTelegramMessage(text: string): Promise<void> {
+  const token = process.env.TELEGRAM_BOT_TOKEN?.trim();
+  const chatId = process.env.TELEGRAM_CHAT_ID?.trim();
+  if (!token || !chatId) return;
+  try {
+    const res = await fetch(`${TELEGRAM_API}/bot${token}/sendMessage`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, text, parse_mode: "Markdown" })
+    });
+    if (!res.ok) {
+      const detail = await res.text().catch(() => "");
+      console.warn(`[telegram] sendMessage failed: HTTP ${res.status} — ${detail.slice(0, 200)}`);
+    }
+  } catch (err) {
+    console.warn("[telegram] sendMessage error:", err);
+  }
+}

@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider  = "postgresql"
   // DATABASE_URL → runtime connection. In production point this at the
   // Supabase POOLED endpoint (port 6543,
   // ?pgbouncer=true&connection_limit=5&pool_timeout=20). connection_limit=1
@@ -28,55 +28,55 @@ datasource db {
 // for Shopify/Meta/Instagram; orgs are who pays.
 
 model User {
-  id                String       @id @default(cuid())
+  id              String       @id @default(cuid())
   // Supabase Auth user id (from auth.users). Lets us swap auth providers
   // later without rewriting every join — only this column changes.
-  authUserId        String       @unique
-  email             String       @unique
-  displayName       String?
+  authUserId      String       @unique
+  email           String       @unique
+  displayName     String?
   // User's preferred UI language. Defaults from IP/browser at signup, can
   // be overridden in Settings. Used by the i18n layer on every request.
-  locale            String       @default("he")
+  locale          String       @default("he")
   // Stamp these on every authenticated request via middleware.
-  lastSignInAt      DateTime?
-  createdAt         DateTime     @default(now())
-  updatedAt         DateTime     @updatedAt
-  memberships       Membership[]
-  invitationsSent   Invitation[]
-  auditEvents       AuditEvent[]
+  lastSignInAt    DateTime?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  memberships     Membership[]
+  invitationsSent Invitation[]
+  auditEvents     AuditEvent[]
 
   @@index([email])
 }
 
 model Organization {
-  id                  String         @id @default(cuid())
-  name                String
+  id                   String       @id @default(cuid())
+  name                 String
   // URL-friendly slug, used for any future `/org/<slug>/...` routes and
   // as a vanity identifier in support tickets. Globally unique.
-  slug                String         @unique
+  slug                 String       @unique
   // Subscription plan name — "starter" / "growth" / "agency" / "trial".
   // We don't enforce limits here; that's done at action time in services.
-  plan                String         @default("trial")
+  plan                 String       @default("trial")
   // Trial expiry. After this date and without a paid `plan`, the app
   // shows a paywall on every page except billing.
-  trialEndsAt         DateTime?
+  trialEndsAt          DateTime?
   // Stripe linkage for self-serve billing + customer portal.
-  stripeCustomerId    String?        @unique
-  stripeSubscriptionId String?       @unique
+  stripeCustomerId     String?      @unique
+  stripeSubscriptionId String?      @unique
   // Currency the org pays in. Drives Stripe price selection + display
   // formatting. Lock at signup time (detected from IP/locale).
-  currency            String         @default("ILS")
+  currency             String       @default("ILS")
   // Org default locale — used for invoice + email rendering. UI locale
   // is per-user (see User.locale).
-  locale              String         @default("he")
+  locale               String       @default("he")
   // Where the org is billed from — drives Stripe Tax behavior + VAT.
-  billingCountry      String?
-  createdAt           DateTime       @default(now())
-  updatedAt           DateTime       @updatedAt
-  memberships         Membership[]
-  stores              Store[]
-  invitations         Invitation[]
-  auditEvents         AuditEvent[]
+  billingCountry       String?
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
+  memberships          Membership[]
+  stores               Store[]
+  invitations          Invitation[]
+  auditEvents          AuditEvent[]
 
   @@index([plan])
 }
@@ -94,7 +94,7 @@ model Organization {
 // (Stripe webhook firing, cron auto-action). `targetType` + `targetId`
 // describe what was affected.
 model AuditEvent {
-  id          String   @id @default(cuid())
+  id          String       @id @default(cuid())
   orgId       String
   actorUserId String?
   // Event type — e.g. "team.invite_sent", "billing.subscription_started"
@@ -106,7 +106,7 @@ model AuditEvent {
   targetId    String?
   // Useful for forensics: client IP, user agent, etc.
   metadata    Json?
-  createdAt   DateTime @default(now())
+  createdAt   DateTime     @default(now())
   org         Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
   actor       User?        @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
 
@@ -124,20 +124,20 @@ model AuditEvent {
 //   - expired: more than 14 days old, ignored on accept attempts
 //   - revoked: owner/admin canceled before acceptance (also deleted)
 model Invitation {
-  id        String   @id @default(cuid())
-  orgId     String
-  email     String
-  role      String   @default("member")
+  id          String       @id @default(cuid())
+  orgId       String
+  email       String
+  role        String       @default("member")
   // The user who sent the invite — used in the accept email body
   // ("Yohad invited you to join…").
   invitedById String
   // Random token in the URL the recipient clicks. We rotate this if the
   // invite is re-sent, so old emails stop working.
-  token     String   @unique
-  expiresAt DateTime
-  createdAt DateTime @default(now())
-  org       Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  invitedBy User         @relation(fields: [invitedById], references: [id], onDelete: Cascade)
+  token       String       @unique
+  expiresAt   DateTime
+  createdAt   DateTime     @default(now())
+  org         Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  invitedBy   User         @relation(fields: [invitedById], references: [id], onDelete: Cascade)
 
   @@index([orgId])
   @@index([email])
@@ -147,15 +147,15 @@ model Invitation {
 // inside that org. Owners cannot be removed by other members; deleting
 // the owner role on a user requires the user themselves to leave.
 model Membership {
-  id        String   @id @default(cuid())
+  id        String       @id @default(cuid())
   userId    String
   orgId     String
   // owner = full control + billing
   // admin = manage stores + invite teammates, no billing/delete
   // member = read+write all analytics, no settings changes
-  role      String   @default("member")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  role      String       @default("member")
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
   user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   org       Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
@@ -222,6 +222,8 @@ model Store {
   creativeProjects           CreativeProject[]
   creativeSources            CreativeSource[]
   creativeJobs               CreativeGenerationJob[]
+  creativeSprints            CreativeSprint[]
+  sprintAds                  SprintAd[]
   weeklyReports              WeeklyReport[]
   weeklyReportRecipients     WeeklyReportRecipient[]
   searchConsoleMetrics       SearchConsoleMetric[]
@@ -655,20 +657,20 @@ model Summary {
 // kind: "weekly" for the standard Sunday report, "monthly" for the rollup
 // generated at month-end that reads the prior 4 weeklies.
 model WeeklyReport {
-  id          String   @id @default(cuid())
-  storeId     String
-  kind        String   @default("weekly") // "weekly" | "monthly"
-  periodStart DateTime
-  periodEnd   DateTime
-  dataJson    Json
+  id           String    @id @default(cuid())
+  storeId      String
+  kind         String    @default("weekly") // "weekly" | "monthly"
+  periodStart  DateTime
+  periodEnd    DateTime
+  dataJson     Json
   insightsJson Json?
-  generatedAt DateTime @default(now())
-  sentAt      DateTime?
+  generatedAt  DateTime  @default(now())
+  sentAt       DateTime?
   // Array of email addresses the cron actually sent it to — empty if the
   // report was generated on-demand without a send.
-  sentToJson  Json?
+  sentToJson   Json?
   errorMessage String?
-  store       Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  store        Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
 
   @@index([storeId, periodEnd(sort: Desc)])
   @@index([storeId, kind, periodEnd(sort: Desc)])
@@ -705,63 +707,63 @@ model WeeklyReportRecipient {
 // Once the legacy Alerts page is replaced by the Command Center we can drop
 // the legacy columns in a follow-up migration.
 model Alert {
-  id                 String    @id @default(cuid())
-  storeId            String
+  id                String    @id @default(cuid())
+  storeId           String
   // Stable type slug, e.g. "restock_hero", "stockout_imminent",
   // "roas_collapse", "silent_affiliate", "sync_failure". Used to group and
   // route alerts in the UI and to template their renderer.
-  type               String    @default("legacy")
+  type              String    @default("legacy")
   // critical | high | medium | low. Existing severity values mapped in.
-  severity           String
+  severity          String
   // open | acknowledged | resolved | ignored. Default open. The UI updates
   // this when the founder takes action.
-  status             String    @default("open")
+  status            String    @default("open")
   // Origin engine — Shopify | Meta | BixGrow | Instagram | Calculated.
   // Helps the user understand provenance and lets us route by source.
-  source             String    @default("Calculated")
+  source            String    @default("Calculated")
   // Detection engine that wrote this row — e.g. "restock-hero-alert-service".
   // Diagnostic field, surfaced only in admin views.
-  detectedBy         String?
-  title              String
+  detectedBy        String?
+  title             String
   // New canonical description field — engines populate this; legacy
   // `explanation` column below mirrors it.
-  description        String?
+  description       String?
   // New canonical action field — engines populate this; legacy
   // `suggestedAction` column below mirrors it.
-  recommendedAction  String?
+  recommendedAction String?
   // Optional fields for numeric alerts (e.g. ROAS dropped from 5.2x to 1.8x).
-  metricName         String?
-  currentValue       Decimal?  @db.Decimal(14, 4)
-  previousValue      Decimal?  @db.Decimal(14, 4)
+  metricName        String?
+  currentValue      Decimal?  @db.Decimal(14, 4)
+  previousValue     Decimal?  @db.Decimal(14, 4)
   // Click-through targets. relatedEntityType examples: "product", "campaign",
   // "affiliate", "order". relatedEntityId is the row id in the matching table.
   // We don't enforce a relation — different alerts point at different models.
-  relatedEntityType  String?
-  relatedEntityId    String?
+  relatedEntityType String?
+  relatedEntityId   String?
   // Dedup key: detector decides what makes "the same alert," e.g.
   // `restock_hero:<productId>`. Unique with storeId + status so the same
   // fingerprint can re-fire after being resolved (we soft-delete via status).
-  fingerprint        String?
+  fingerprint       String?
   // Free-form JSON for type-specific data the renderer needs (e.g. restock
   // detail blob, top product list, ROAS comparison snapshot). Keeps the
   // model lean while letting each alert type carry rich context.
-  payloadJson        Json?
-  createdAt          DateTime  @default(now())
-  updatedAt          DateTime  @updatedAt @default(now())
+  payloadJson       Json?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @default(now()) @updatedAt
   // Set when the alert transitions to resolved/acknowledged/ignored.
-  resolvedAt         DateTime?
+  resolvedAt        DateTime?
   // Who or what cleared the alert. "user:<email>" | "system:<engine>" | null.
-  resolvedBy         String?
+  resolvedBy        String?
 
   // ─── Legacy columns (kept for backward compatibility with the existing
   // Alerts page). New writers populate them by mirroring the canonical
   // fields. Drop once the Command Center replaces the legacy reader. ───
-  explanation        String?
-  suggestedAction    String?
-  periodLabel        String?
-  timestamp          DateTime?
+  explanation     String?
+  suggestedAction String?
+  periodLabel     String?
+  timestamp       DateTime?
 
-  store              Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
 
   // One OPEN alert per (storeId, fingerprint). Including status lets us
   // re-fire a resolved alert with the same fingerprint later.
@@ -943,18 +945,18 @@ model AffiliateCouponAssignment {
 }
 
 model AffiliateAttribution {
-  id                String          @id @default(cuid())
-  storeId           String
-  affiliateMemberId String
-  orderId           String?
-  sourceType        String          @default("coupon")
-  trackingMethod    String?
-  sourceUrl         String?
-  contentTitle      String?
-  salesAmount       Decimal         @default(0) @db.Decimal(12, 2)
-  commissionAmount  Decimal         @default(0) @db.Decimal(12, 2)
-  clicks            Int             @default(0)
-  ordersCount       Int             @default(1)
+  id                  String          @id @default(cuid())
+  storeId             String
+  affiliateMemberId   String
+  orderId             String?
+  sourceType          String          @default("coupon")
+  trackingMethod      String?
+  sourceUrl           String?
+  contentTitle        String?
+  salesAmount         Decimal         @default(0) @db.Decimal(12, 2)
+  commissionAmount    Decimal         @default(0) @db.Decimal(12, 2)
+  clicks              Int             @default(0)
+  ordersCount         Int             @default(1)
   // External (BixGrow / CSV) order number — kept so the conversions
   // page can still show the order # even when Shopify hasn't synced
   // the order yet (or never will, e.g. for cancelled orders BixGrow
@@ -963,13 +965,13 @@ model AffiliateAttribution {
   // The discount/coupon code BixGrow attributed to this conversion.
   // Mirrors what the merchant sees on the BixGrow side, and unlocks
   // a "Coupon" column on the conversions table.
-  couponCode        String?
-  occurredAt        DateTime        @default(now())
-  createdAt         DateTime        @default(now())
-  updatedAt         DateTime        @updatedAt
-  store             Store           @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  affiliateMember   AffiliateMember @relation(fields: [affiliateMemberId], references: [id], onDelete: Cascade)
-  order             Order?          @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  couponCode          String?
+  occurredAt          DateTime        @default(now())
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+  store               Store           @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  affiliateMember     AffiliateMember @relation(fields: [affiliateMemberId], references: [id], onDelete: Cascade)
+  order               Order?          @relation(fields: [orderId], references: [id], onDelete: SetNull)
 
   @@unique([affiliateMemberId, orderId])
   @@index([storeId, occurredAt])
@@ -1314,4 +1316,165 @@ model SearchConsoleQuery {
 
   @@unique([storeId, query])
   @@index([storeId, totalImpressions(sort: Desc)])
+}
+
+// ─── Creative Sprint (SA-SPRINT-01) ──────────────────────────────────
+// Automated "N ads × small budget × 6h test → keep winners" loop.
+// Generates targetCount distinct creatives via an AI provider (Higgsfield),
+// publishes each as a standalone Meta adset with a small daily budget, then
+// runs a 3-stage waterfall evaluator (defaults: 6h CTR → 24h CPC → 72h CPA)
+// that pauses the bottom X% at each stage. Survivors become evergreen ads.
+//
+// Two models:
+//   CreativeSprint — the sprint container (config + lifecycle + cascade plan)
+//   SprintAd       — one row per ad slot, owning brief, asset, Meta IDs,
+//                    cascade decisions, and the latest KPI snapshot.
+//
+// Cascade is stored as JSON on the sprint (small, infrequent reads) and the
+// per-stage decisions are appended to a JSON log on each SprintAd (audit
+// trail without an extra table). If we later want cross-sprint analytics
+// over individual stage decisions, split into a SprintCascadeDecision table.
+// String columns instead of enums to match the rest of the schema.
+
+model CreativeSprint {
+  id                     String     @id @default(cuid())
+  storeId                String
+  // Operator-visible label, e.g. "July perfume push 100x".
+  name                   String
+  // Shopify product the ads promote. Drives brief generation context
+  // (image, title, USP). Nullable for brand-level (no single product) sprints.
+  productId              String?
+  // ─── Targets ────────────────────────────────────────────────────────
+  // How many ads to generate + publish. Default 100; pilot smoke runs use 10.
+  targetCount            Int        @default(100)
+  // Daily budget per ad in the sprint currency. 100 × ₪10 = ₪1000/day ceiling
+  // before any kills. Meta paces this across 24h, so a 6h evaluation window
+  // will only have consumed roughly a quarter of this per ad.
+  dailyBudgetPerAd       Decimal    @db.Decimal(12, 2)
+  currency               String     @default("ILS")
+  // ─── Workflow mode ──────────────────────────────────────────────────
+  // "full_auto" → no gates; briefs auto-generate, assets auto-publish.
+  // "review_briefs" → human approves briefs before Higgsfield runs.
+  // "review_assets" → human approves assets before Meta publish.
+  // "review_both" → both gates. Default for the first sprint on any store.
+  approvalMode           String     @default("review_both")
+  // ─── Cascade plan (waterfall kill schedule) ─────────────────────────
+  // JSON array of stages:
+  //   { stage: 1, hoursAfterLaunch: 6,  metric: "ctr", killBottomPct: 70, minImpressions: 500 }
+  //   { stage: 2, hoursAfterLaunch: 24, metric: "cpc", killBottomPct: 50, minImpressions: 1500 }
+  //   { stage: 3, hoursAfterLaunch: 72, metric: "cpa", killBottomPct: 50, minImpressions: 4000 }
+  // metric ∈ "ctr" | "cpc" | "cpa" | "roas". Ads below minImpressions are
+  // exempted from kill (insufficient signal). Editable per sprint.
+  cascadeJson            Json
+  // Current stage index. 0 = pre-publish; 1, 2, 3 = post-stage-N decisions made.
+  currentStage           Int        @default(0)
+  // ─── Lifecycle ──────────────────────────────────────────────────────
+  // "draft" | "generating_briefs" | "awaiting_brief_approval"
+  //   | "generating_assets" | "awaiting_asset_approval"
+  //   | "publishing" | "running" | "measuring" | "complete"
+  //   | "cancelled" | "failed"
+  status                 String     @default("draft")
+  // ─── Meta linkage ───────────────────────────────────────────────────
+  // The single Meta Campaign created for this sprint (holds all N adsets).
+  metaCampaignId         String?
+  // Targeting blob captured at launch (lookalike id, geo, age, interests)
+  // so we can re-render the audience config later in the report UI.
+  targetingJson          Json?
+  // ─── Cost tracking ──────────────────────────────────────────────────
+  estimatedHiggsfieldUsd Decimal?   @db.Decimal(10, 4)
+  actualHiggsfieldUsd    Decimal?   @db.Decimal(10, 4)
+  estimatedAdSpend       Decimal?   @db.Decimal(12, 2)
+  actualAdSpend          Decimal?   @db.Decimal(12, 2)
+  // ─── Notes + diagnostics ────────────────────────────────────────────
+  notes                  String?
+  errorMessage           String?
+  // ─── Lifecycle timestamps (drive the report timeline) ───────────────
+  briefsGeneratedAt      DateTime?
+  briefsApprovedAt       DateTime?
+  assetsGeneratedAt      DateTime?
+  assetsApprovedAt       DateTime?
+  publishedAt            DateTime?
+  completedAt            DateTime?
+  cancelledAt            DateTime?
+  createdAt              DateTime   @default(now())
+  updatedAt              DateTime   @updatedAt
+  store                  Store      @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  ads                    SprintAd[]
+
+  @@index([storeId, status])
+  @@index([storeId, createdAt(sort: Desc)])
+  @@index([status])
+}
+
+model SprintAd {
+  id                 String         @id @default(cuid())
+  sprintId           String
+  // Denormalized for fast multi-tenant queries (matches CreativeSource pattern).
+  storeId            String
+  // 1-based slot inside the sprint (1..targetCount). Drives matrix layout
+  // in the UI and gives the operator a stable handle ("ad #47 was the winner").
+  slotIndex          Int
+  // ─── Brief (concept the LLM authored) ───────────────────────────────
+  // Shape: { angle, headline, body, cta, visualPrompt, voicePrompt?, durationSec? }.
+  // Editable during the review_briefs gate.
+  briefJson          Json
+  briefApprovedAt    DateTime?
+  briefRejectedAt    DateTime?
+  // ─── Higgsfield generation ──────────────────────────────────────────
+  higgsfieldJobId    String?
+  // Raw provider URL (signed, short-lived). Kept for traceability.
+  higgsfieldAssetUrl String?
+  // Our mirrored R2 key. Path convention:
+  //   creative/<storeId>/sprints/<sprintId>/<slotIndex>.<ext>
+  assetStorageKey    String?
+  assetMimeType      String?
+  assetWidth         Int?
+  assetHeight        Int?
+  assetDurationMs    Int?
+  assetApprovedAt    DateTime?
+  assetRejectedAt    DateTime?
+  higgsfieldCostUsd  Decimal?       @db.Decimal(10, 4)
+  // ─── Meta linkage ───────────────────────────────────────────────────
+  metaAdsetId        String?
+  metaCreativeId     String?
+  metaAdId           String?
+  // ─── Cascade outcomes (append-only audit log) ───────────────────────
+  // Array of:
+  //   { stage, evaluatedAt, metric, metricValue, impressions, clicks, spend,
+  //     purchases, purchaseValue, decision: "kept" | "killed" | "exempt",
+  //     reason }
+  decisionsJson      Json           @default("[]")
+  // "alive" → no kill decisions yet. "killed" → paused at some stage.
+  // "winner" → survived all configured cascade stages.
+  finalStatus        String         @default("alive")
+  killedReason       String?
+  killedAt           DateTime?
+  // ─── Last KPI snapshot (refreshed by the cascade evaluator) ─────────
+  // Cached so the matrix board renders without round-tripping to Meta.
+  lastImpressions    Int            @default(0)
+  lastClicks         Int            @default(0)
+  lastSpend          Decimal        @default(0) @db.Decimal(12, 2)
+  lastPurchases      Int            @default(0)
+  lastPurchaseValue  Decimal        @default(0) @db.Decimal(12, 2)
+  // Stored as fractions (0.0234 = 2.34%) for clean math; UI multiplies by 100.
+  lastCtr            Decimal?       @db.Decimal(8, 6)
+  lastCpc            Decimal?       @db.Decimal(12, 2)
+  lastCpa            Decimal?       @db.Decimal(12, 2)
+  lastRoas           Decimal?       @db.Decimal(8, 4)
+  lastSyncedAt       DateTime?
+  // ─── Lifecycle status ───────────────────────────────────────────────
+  // "draft" | "brief_ready" | "generating" | "asset_ready" | "publishing"
+  //   | "live" | "killed" | "winner" | "failed"
+  status             String         @default("draft")
+  errorMessage       String?
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+  sprint             CreativeSprint @relation(fields: [sprintId], references: [id], onDelete: Cascade)
+  store              Store          @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@unique([sprintId, slotIndex])
+  @@index([sprintId, status])
+  @@index([sprintId, finalStatus])
+  @@index([storeId, createdAt(sort: Desc)])
+  @@index([metaAdsetId])
 }

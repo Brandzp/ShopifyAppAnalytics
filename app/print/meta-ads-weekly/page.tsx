@@ -47,6 +47,10 @@ import {
 } from "@/lib/services/recommendation-engine-service";
 import { getDb } from "@/lib/server/db";
 import { getAppLocale } from "@/lib/i18n";
+import {
+  generateWeeklyBiCommentary,
+  type BiWeeklyCommentary
+} from "@/lib/services/weekly-report-bi-commentary-service";
 
 // Print-only weekly Meta Ads report. Server-rendered, no client JS,
 // captured to PDF by Playwright (or visible directly in a browser).
@@ -174,6 +178,23 @@ export default async function MetaAdsWeeklyPrintPage({
   const closedLoop = storeId
     ? await getRecentlyResolvedWithOutcomes({ storeId, lookbackDays: 14, limit: 8 }).catch(() => [])
     : [];
+
+  // BI agent executive commentary. Best-effort: returns null if the agent
+  // is unconfigured or throws — the section just won't render. Wrapped in
+  // a try/catch so a tunnel hiccup never blocks the rest of the PDF.
+  let biCommentary: BiWeeklyCommentary | null = null;
+  if (storeId && report) {
+    biCommentary = await generateWeeklyBiCommentary({
+      storeName: null, // print page doesn't load the store name; agent infers from data
+      periodStart: start.toISOString().slice(0, 10),
+      periodEnd: end.toISOString().slice(0, 10),
+      locale,
+      metaAds: report,
+      affiliateDeepDive,
+      restockAlerts,
+      roasCollapseAlerts: null
+    }).catch(() => null);
+  }
 
   // Build a prior-week snapshot per brand so the insights service can frame
   // observations as trends, not snapshots. The prior window is the same
@@ -892,6 +913,51 @@ export default async function MetaAdsWeeklyPrintPage({
               the first thing the founder sees on opening the PDF. */}
           {restockAlerts && restockAlerts.flags.length > 0 ? (
             <RestockHeroBanner alerts={restockAlerts} isHe={isHe} />
+          ) : null}
+
+          {/* BI agent executive commentary — top of report. The agent
+              wrote this from a digest of this week's KPIs. */}
+          {biCommentary ? (
+            <section className="pwr-exec-page" style={{ marginBottom: 24 }}>
+              <p className="pwr-exec-page-tag">{isHe ? "סיכום BI" : "BI EXECUTIVE SUMMARY"}</p>
+              <h2 className="pwr-exec-page-title" style={{ marginBottom: 4 }}>
+                {biCommentary.headline}
+              </h2>
+              <p className="pwr-exec-page-sub" style={{ marginBottom: 16, fontStyle: "italic", color: "#64748b" }}>
+                {isHe ? "נכתב על-ידי סוכן ה-BI של Brandzp" : "Written by the Brandzp BI agent"}
+                {" · "}
+                {new Date(biCommentary.generatedAt).toLocaleString(isHe ? "he-IL" : "en-US", {
+                  dateStyle: "medium",
+                  timeStyle: "short"
+                })}
+              </p>
+
+              {biCommentary.insights.length > 0 ? (
+                <>
+                  <div className="pwr-block-title">{isHe ? "מה קרה השבוע" : "What happened this week"}</div>
+                  <ul className="pwr-insights" style={{ paddingInlineStart: 18, margin: "8px 0 16px 0" }}>
+                    {biCommentary.insights.map((insight, i) => (
+                      <li key={`insight-${i}`} style={{ marginBottom: 8 }}>
+                        {insight}
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              ) : null}
+
+              {biCommentary.actions.length > 0 ? (
+                <>
+                  <div className="pwr-block-title">{isHe ? "מה לעשות השבוע" : "What to do this week"}</div>
+                  <ol className="pwr-insights" style={{ paddingInlineStart: 22, margin: "8px 0 0 0" }}>
+                    {biCommentary.actions.map((action, i) => (
+                      <li key={`action-${i}`} style={{ marginBottom: 8, fontWeight: 500 }}>
+                        {action}
+                      </li>
+                    ))}
+                  </ol>
+                </>
+              ) : null}
+            </section>
           ) : null}
 
           {/* PAGE 1 — Executive Summary (the 60-second view) */}
