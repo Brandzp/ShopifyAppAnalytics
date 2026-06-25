@@ -196,8 +196,20 @@ export function QuickBatchButton({ locale }: { locale: AppLocale }) {
                   onChange={(e) => setCount(Math.max(1, Math.min(10, Number(e.target.value) || 1)))}
                   className="mt-1 w-24 rounded-lg border border-border bg-background px-3 py-2"
                 />
+                {/* Cost estimate. When a reference image is provided we
+                    route through OpenAI gpt-image-1 edits (preserves the
+                    product) — that's ~$0.17 per gen at high quality.
+                    Without a reference, Higgsfield ($0.05). */}
                 <span className="ms-2 text-xs text-muted-foreground">
-                  {isHe ? `~₪${(count * 0.18).toFixed(2)} ב-Higgsfield` : `~$${(count * 0.05).toFixed(2)} on Higgsfield`}
+                  {(() => {
+                    const usingOpenAi = product !== null || uploadedFiles.length > 0;
+                    const perGen = usingOpenAi ? 0.17 : 0.05;
+                    const total = (count * perGen).toFixed(2);
+                    const providerLabel = usingOpenAi
+                      ? isHe ? "OpenAI (שומר על המוצר)" : "OpenAI (preserves product)"
+                      : isHe ? "Higgsfield" : "Higgsfield";
+                    return isHe ? `~$${total} ב-${providerLabel}` : `~$${total} on ${providerLabel}`;
+                  })()}
                 </span>
               </label>
 

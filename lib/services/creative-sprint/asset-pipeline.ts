@@ -16,9 +16,18 @@ import {
   pollHiggsfieldUntilDone,
   type HiggsfieldAssetType
 } from "@/lib/clients/higgsfield-client";
+import { openaiGenerateImage } from "@/lib/services/creative-ai-openai-service";
 import { buildStorageKey, putObject, suggestFilename } from "@/lib/services/creative-storage-service";
 import { getDb } from "@/lib/server/db";
 import type { SprintBrief } from "./brief-generator";
+
+async function downloadAsBuffer(url: string): Promise<{ buffer: Buffer; contentType: string }> {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Failed to download ${url}: ${res.status}`);
+  const arr = await res.arrayBuffer();
+  const contentType = res.headers.get("content-type") || "image/jpeg";
+  return { buffer: Buffer.from(arr), contentType };
+}
 
 export interface GenerateAssetInput {
   sprintAdId: string;
@@ -54,35 +63,78 @@ export async function generateSprintAsset(input: GenerateAssetInput): Promise<Ge
     data: { status: "generating" }
   });
 
-  // 2. Kick off the Higgsfield job. We use the sprintAd id as the
-  // idempotency key so a retried call returns the same job.
-  const job = await createHiggsfieldJob({
-    assetType,
-    prompt: input.brief.visualPrompt,
-    referenceImageUrl: input.referenceImageUrl ?? null,
-    aspectRatio: "9:16",
-    idempotencyKey: input.sprintAdId
-  });
+  // ── Provider selection ──────────────────────────────────────────────
+  // Same rationale as in Quick Batch: Higgsfield Soul's image_reference
+  // is STYLE-only — it can't preserve a product's identity. For ad
+  // creative we MUST keep the bottle/box/label intact, so when a
+  // reference image is given AND OPENAI_API_KEY is configured, route
+  // through OpenAI gpt-image-1 /images/edits (the proper preservation
+  // endpoint). Without a reference, Higgsfield Soul is excellent for
+  // scene generation — keep using it.
+  const hasReference = Boolean(input.referenceImageUrl);
+  const openaiAvailable = Boolean(process.env.OPENAI_API_KEY?.trim());
+  const useOpenAi = hasReference && openaiAvailable && assetType === "image";
 
-  // 3. Persist the jobId immediately so a crash mid-generation leaves us
-  // able to recover (we could write a recovery script that re-polls).
-  await db.sprintAd.update({
-    where: { id: input.sprintAdId },
-    data: { higgsfieldJobId: job.id }
-  });
+  let bytes: Buffer;
+  let mimeType: string;
+  let widthFromGen: number | null = null;
+  let heightFromGen: number | null = null;
+  let durationMs: number | null = null;
+  let providerJobId: string = "openai-edits";
+  let providerAssetUrl: string | null = null;
+  let providerCost: number | null = null;
 
-  // 4. Poll until done.
-  const completed = job.status === "completed" ? job : await pollHiggsfieldUntilDone(job.id);
-  if (completed.status !== "completed" || !completed.assetUrl) {
-    const err = completed.errorMessage || `Higgsfield job ended in status=${completed.status}`;
-    throw new Error(err);
+  if (useOpenAi) {
+    const ref = await downloadAsBuffer(input.referenceImageUrl!);
+    const result = await openaiGenerateImage({
+      prompt: {
+        prompt: `${input.brief.visualPrompt}\n\nIMPORTANT: the uploaded product image is the canonical reference. Keep every bottle/box/package, all labels, all colors, all proportions, all branding EXACTLY identical to the source image. Do NOT redesign, recolor, resize, or relabel the product. Only the surrounding scene, lighting, composition, and props may change.`,
+        negativePrompt: "",
+        styleNotes: []
+      },
+      aspectRatio: "9:16",
+      referenceImageBuffer: {
+        buffer: ref.buffer,
+        contentType: ref.contentType,
+        label: "product (preserve identity)"
+      },
+      quality: "high"
+    });
+    bytes = result.buffer;
+    mimeType = result.contentType || "image/png";
+  } else {
+    // Higgsfield path (no reference OR video).
+    const job = await createHiggsfieldJob({
+      assetType,
+      prompt: input.brief.visualPrompt,
+      referenceImageUrl: input.referenceImageUrl ?? null,
+      aspectRatio: "9:16",
+      idempotencyKey: input.sprintAdId
+    });
+    await db.sprintAd.update({
+      where: { id: input.sprintAdId },
+      data: { higgsfieldJobId: job.id }
+    });
+    const completed = job.status === "completed" ? job : await pollHiggsfieldUntilDone(job.id);
+    if (completed.status !== "completed" || !completed.assetUrl) {
+      const err = completed.errorMessage || `Higgsfield job ended in status=${completed.status}`;
+      throw new Error(err);
+    }
+    bytes = await downloadHiggsfieldAsset(completed.assetUrl);
+    mimeType = completed.assetMimeType || (assetType === "video" ? "video/mp4" : "image/png");
+    widthFromGen = completed.width ?? null;
+    heightFromGen = completed.height ?? null;
+    durationMs = completed.durationMs ?? null;
+    providerJobId = completed.id;
+    providerAssetUrl = completed.assetUrl;
+    providerCost = completed.costUsd ?? null;
   }
 
-  // 5. Download bytes and mirror to R2 under our own key.
-  const bytes = await downloadHiggsfieldAsset(completed.assetUrl);
-  const mimeType = completed.assetMimeType || (assetType === "video" ? "video/mp4" : "image/png");
-  const extFromUrl = path.extname(new URL(completed.assetUrl, "https://placeholder.local").pathname).replace(".", "");
-  const filename = suggestFilename(`sprint-${input.slotIndex}.${extFromUrl || (assetType === "video" ? "mp4" : "png")}`);
+  const extFromUrl = providerAssetUrl
+    ? path.extname(new URL(providerAssetUrl, "https://placeholder.local").pathname).replace(".", "")
+    : "";
+  const ext = extFromUrl || (mimeType === "image/png" ? "png" : mimeType === "image/jpeg" ? "jpg" : assetType === "video" ? "mp4" : "webp");
+  const filename = suggestFilename(`sprint-${input.slotIndex}.${ext}`);
   const storageKey = buildStorageKey({
     storeId: input.storeId,
     scope: "assets",
@@ -91,17 +143,19 @@ export async function generateSprintAsset(input: GenerateAssetInput): Promise<Ge
   });
   await putObject({ key: storageKey, body: bytes, contentType: mimeType });
 
-  // 6. Update the SprintAd row with the final asset state.
+  // 6. Update the SprintAd row with the final asset state. Note the
+  // higgsfield* columns are repurposed as "provider*" labels — we keep
+  // the column names for back-compat; values may come from OpenAI now.
   await db.sprintAd.update({
     where: { id: input.sprintAdId },
     data: {
       assetStorageKey: storageKey,
       assetMimeType: mimeType,
-      assetWidth: completed.width,
-      assetHeight: completed.height,
-      assetDurationMs: completed.durationMs,
-      higgsfieldAssetUrl: completed.assetUrl,
-      higgsfieldCostUsd: completed.costUsd ?? null,
+      assetWidth: widthFromGen,
+      assetHeight: heightFromGen,
+      assetDurationMs: durationMs,
+      higgsfieldAssetUrl: providerAssetUrl,
+      higgsfieldCostUsd: providerCost,
       status: "asset_ready"
     }
   });
@@ -109,12 +163,12 @@ export async function generateSprintAsset(input: GenerateAssetInput): Promise<Ge
   return {
     storageKey,
     mimeType,
-    width: completed.width ?? null,
-    height: completed.height ?? null,
-    durationMs: completed.durationMs ?? null,
-    higgsfieldJobId: job.id,
-    higgsfieldAssetUrl: completed.assetUrl,
-    costUsd: completed.costUsd ?? null
+    width: widthFromGen,
+    height: heightFromGen,
+    durationMs,
+    higgsfieldJobId: providerJobId,
+    higgsfieldAssetUrl: providerAssetUrl,
+    costUsd: providerCost
   };
 }
 
