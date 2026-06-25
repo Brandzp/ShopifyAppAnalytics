@@ -38,12 +38,22 @@ export interface ProductPickerRow {
   source: "db" | "shopify";
 }
 
+// Image-getting field chain. Different Shopify stores expose product
+// images through different fields depending on how they were uploaded:
+//   - featuredImage    → set when product has a designated "main" image
+//   - images(first:1)  → ANY image attached to the product (always populated
+//                        if there's at least one image, even when no
+//                        featured one is set explicitly)
+//   - media(first:1)   → handles videos + 3D models too, but for images
+//                        the `images` field is simpler
+// We ask for both so the consumer can fall back.
 const NODES_QUERY = /* GraphQL */ `
   query GetProductImages($ids: [ID!]!) {
     nodes(ids: $ids) {
       ... on Product {
         id
         featuredImage { url }
+        images(first: 1) { nodes { url } }
         description
       }
     }
@@ -65,6 +75,7 @@ const LIVE_SEARCH_QUERY = /* GraphQL */ `
           productType
           description
           featuredImage { url }
+          images(first: 1) { nodes { url } }
           priceRangeV2 { minVariantPrice { amount } }
           variants(first: 3) { edges { node { sku } } }
         }
@@ -72,6 +83,21 @@ const LIVE_SEARCH_QUERY = /* GraphQL */ `
     }
   }
 `;
+
+// Pull the best available image URL from a product node, trying each
+// known field in turn. Logged when null so we know which products to
+// audit on the Shopify side.
+function extractImageUrl(node: {
+  id?: string;
+  featuredImage?: { url?: string } | null;
+  images?: { nodes?: Array<{ url?: string }> } | null;
+}): string | null {
+  return (
+    node.featuredImage?.url ??
+    node.images?.nodes?.[0]?.url ??
+    null
+  );
+}
 
 function gidForProduct(shopifyProductId: string): string {
   if (shopifyProductId.startsWith("gid://")) return shopifyProductId;
@@ -153,14 +179,25 @@ export async function GET(request: Request) {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const gids = products.map((p: any) => gidForProduct(p.shopifyProductId));
           const result = await shopifyClient.request<{
-            nodes: Array<{ id: string; featuredImage?: { url?: string } | null; description?: string | null } | null>;
+            nodes: Array<{
+              id: string;
+              featuredImage?: { url?: string } | null;
+              images?: { nodes?: Array<{ url?: string }> } | null;
+              description?: string | null;
+            } | null>;
           }>(NODES_QUERY, { ids: gids });
+          let missingImages = 0;
           for (const node of result.nodes ?? []) {
             if (!node) continue;
+            const url = extractImageUrl(node);
+            if (!url) missingImages += 1;
             imageByGid.set(node.id, {
-              imageUrl: node.featuredImage?.url ?? null,
+              imageUrl: url,
               description: node.description ?? null
             });
+          }
+          if (missingImages > 0) {
+            console.log(`[api/products] ${missingImages}/${result.nodes?.length ?? 0} products had no featuredImage or images.nodes[0]`);
           }
         } catch (err) {
           console.warn("[api/products] failed to fetch images from Shopify:", err);
@@ -209,6 +246,7 @@ export async function GET(request: Request) {
                 productType?: string | null;
                 description?: string | null;
                 featuredImage?: { url?: string } | null;
+                images?: { nodes?: Array<{ url?: string }> } | null;
                 priceRangeV2?: { minVariantPrice?: { amount?: string } };
                 variants?: { edges?: Array<{ node: { sku?: string | null } }> };
               };
@@ -217,9 +255,13 @@ export async function GET(request: Request) {
         }>(LIVE_SEARCH_QUERY, { query: shopifyQuery, first: limit });
 
         const existingGids = new Set(rows.map((r) => gidForProduct(r.shopifyProductId)));
+        let liveCount = 0;
+        let liveMissingImages = 0;
         for (const edge of result.products?.edges ?? []) {
           const n = edge.node;
           if (existingGids.has(n.id)) continue; // already in DB results
+          const imageUrl = extractImageUrl(n);
+          if (!imageUrl) liveMissingImages += 1;
           rows.push({
             id: numericIdFromGid(n.id), // synthetic id (we don't have a local row)
             shopifyProductId: numericIdFromGid(n.id),
@@ -228,13 +270,14 @@ export async function GET(request: Request) {
             vendor: n.vendor ?? null,
             productType: n.productType ?? null,
             price: n.priceRangeV2?.minVariantPrice?.amount ?? "0",
-            imageUrl: n.featuredImage?.url ?? null,
+            imageUrl,
             description: n.description ?? null,
             source: "shopify"
           });
+          liveCount += 1;
           if (rows.length >= limit) break;
         }
-        console.log(`[api/products] Shopify fallback added ${rows.length - products.length} rows`);
+        console.log(`[api/products] Shopify fallback added ${liveCount} rows (${liveMissingImages} without images)`);
       } catch (err) {
         console.warn("[api/products] live Shopify search failed:", err);
       }

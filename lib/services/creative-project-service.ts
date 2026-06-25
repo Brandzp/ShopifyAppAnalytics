@@ -667,9 +667,18 @@ export async function getProjectDetail(
 
 async function projectToSummary(record: any): Promise<CreativeProjectSummary> {
   const assets = record.assets ?? [];
-  const cover = assets.find((a: any) => a.status === "ready" && (a.thumbStorageKey || a.storageKey));
+  // Cover thumbnail priority:
+  //   1. A "ready" asset with a thumbnail or full storage key (ideal)
+  //   2. ANY asset with a storage key, even if still "rendering" or
+  //      "failed" — so the project card shows SOMETHING instead of a
+  //      blank ghost card. Mostly catches partial-failure projects where
+  //      a few assets succeeded but never flipped to status="ready" in
+  //      the DB (e.g. older Quick Batch runs).
+  const cover =
+    assets.find((a: any) => a.status === "ready" && (a.thumbStorageKey || a.storageKey)) ??
+    assets.find((a: any) => a.thumbStorageKey || a.storageKey);
   const coverThumbUrl = cover
-    ? await getReadableUrl(cover.thumbStorageKey ?? cover.storageKey)
+    ? await getReadableUrl(cover.thumbStorageKey ?? cover.storageKey).catch(() => null)
     : null;
   return {
     id: record.id,
