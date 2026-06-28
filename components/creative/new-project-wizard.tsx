@@ -324,6 +324,22 @@ export function NewProjectWizard({
       setError(isHe ? "העלו תמונה אחת לפחות." : "Please upload at least one image.");
       return;
     }
+    // If the user previewed an agent prompt, that's what they expect to be
+    // sent — confirm before submitting so they aren't surprised by a
+    // different prompt running. The agent isn't deterministic, so re-running
+    // it server-side could produce a different result than what they
+    // reviewed. The pinned-prompt path (below) avoids the re-run entirely.
+    if (previewAgentText && previewOpen) {
+      const ok =
+        typeof window !== "undefined"
+          ? window.confirm(
+              isHe
+                ? `הפרומפט המעודכן של הסוכן יישלח כמו שהוא:\n\n${previewAgentText.slice(0, 400)}${previewAgentText.length > 400 ? "…" : ""}\n\nלהמשיך?`
+                : `The agent prompt you previewed will be sent as-is:\n\n${previewAgentText.slice(0, 400)}${previewAgentText.length > 400 ? "…" : ""}\n\nContinue?`
+            )
+          : true;
+      if (!ok) return;
+    }
     setError(null);
     setSubmitting(true);
     try {
@@ -336,9 +352,24 @@ export function NewProjectWizard({
       if (productName) formData.append("productName", productName);
       if (productDescription) formData.append("productDescription", productDescription);
       if (tone) formData.append("tone", tone);
-      if (customPrompt.trim()) formData.append("customPrompt", customPrompt.trim());
+
+      // PIN the agent's previewed prompt. When the user clicked "Generate
+      // prompt with agent" and reviewed the result, we send that exact text
+      // as customPrompt and set useAgentPrompt=0 so the server skips its
+      // own agent call. Without this, the server re-runs the agent on
+      // submit and produces a (possibly) different prompt than what was
+      // shown to the user — surprising and not what they signed off on.
+      const pinAgentPrompt = Boolean(previewAgentText && previewAgentText.trim());
+      const effectiveCustomPrompt = pinAgentPrompt
+        ? previewAgentText!.trim()
+        : customPrompt.trim();
+      if (effectiveCustomPrompt) formData.append("customPrompt", effectiveCustomPrompt);
       formData.append("realism", realism);
-      formData.append("useAgentPrompt", useAgentPrompt ? "1" : "0");
+      formData.append(
+        "useAgentPrompt",
+        pinAgentPrompt ? "0" : useAgentPrompt ? "1" : "0"
+      );
+
       files.forEach((file, i) => {
         formData.append("files", file);
         formData.append("fileRoles", fileRoles[i] ?? "reference");
@@ -726,10 +757,18 @@ export function NewProjectWizard({
               <div className="space-y-3">
                 {previewAgentText || previewAgentError || previewAgentLoading ? (
                   <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-3">
-                    <p className="mb-2 inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-emerald-800">
-                      <Sparkles className="h-3 w-3" aria-hidden />
-                      {isHe ? "הסוכן כתב:" : "Agent wrote:"}
-                    </p>
+                    <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                      <p className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-emerald-800">
+                        <Sparkles className="h-3 w-3" aria-hidden />
+                        {isHe ? "הסוכן כתב:" : "Agent wrote:"}
+                      </p>
+                      {previewAgentText && !previewAgentLoading ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+                          <CheckCircle2 className="h-3 w-3" aria-hidden />
+                          {isHe ? "ננעל לשליחה" : "Pinned for submit"}
+                        </span>
+                      ) : null}
+                    </div>
                     {previewAgentLoading ? (
                       <p className="flex items-center gap-2 text-[11px] text-muted-foreground">
                         <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
@@ -738,9 +777,16 @@ export function NewProjectWizard({
                           : "Agent thinking… 5–30 seconds."}
                       </p>
                     ) : previewAgentText ? (
-                      <pre className="max-h-56 overflow-auto whitespace-pre-wrap break-words text-[12px] leading-5 text-slate-900">
-                        {previewAgentText}
-                      </pre>
+                      <>
+                        <pre className="max-h-56 overflow-auto whitespace-pre-wrap break-words text-[12px] leading-5 text-slate-900">
+                          {previewAgentText}
+                        </pre>
+                        <p className="mt-2 text-[10px] leading-4 text-emerald-800">
+                          {isHe
+                            ? "כשתלחצו ״צור עכשיו״ הטקסט הזה יישלח בדיוק כמו שהוא — הסוכן לא ירוץ שוב בצד השרת. רענן כדי לקבל ניסוח חדש."
+                            : "When you click \"Generate now\", this exact text will be sent — the server will not re-run the agent. Click \"Generate prompt with agent\" again to get a new draft."}
+                        </p>
+                      </>
                     ) : (
                       <p className="text-[11px] text-rose-700">
                         {previewAgentError ??
