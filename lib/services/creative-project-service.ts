@@ -163,12 +163,25 @@ export async function generatePackshotSync(
   const wantsAgentPrompt = briefForGen?.useAgentPrompt !== false;
   let briefForBuild: CreativeBrief | null = briefForGen;
   if (wantsAgentPrompt && briefForGen) {
+    // Pass the full per-image role breakdown so the agent can write
+    // explicit "preserve THIS, take inspiration from THAT" instructions
+    // for the image model. Generic "hasReferenceImage: true" wasn't
+    // enough — the agent had no way to distinguish product vs lighting
+    // vs model references.
     const agentPrompt = await craftPromptWithCreativeAgent({
       creativeType: project.creativeType,
       aspectRatio: project.aspectRatio,
       brief: briefForGen,
+      images: [
+        { role: "product", label: "Product" },
+        ...references.map((_, i) => ({
+          role: "reference" as const,
+          label: referenceLabels[i] ?? null
+        }))
+      ],
+      // Legacy fields kept for safety — `images` takes precedence.
       referenceLabels,
-      hasReferenceImage: true // we always have at least the product source
+      hasReferenceImage: true
     });
     if (agentPrompt) {
       briefForBuild = { ...briefForGen, customPrompt: agentPrompt };
@@ -388,6 +401,13 @@ export async function retryAssetGeneration(
       creativeType: project.creativeType,
       aspectRatio: project.aspectRatio,
       brief: briefForRetry,
+      images: [
+        { role: "product", label: "Product" },
+        ...retryRefs.map((_, i) => ({
+          role: "reference" as const,
+          label: retryRefLabels[i] ?? null
+        }))
+      ],
       referenceLabels: retryRefLabels,
       hasReferenceImage: true
     });

@@ -62,7 +62,44 @@ export interface GenerateImageOutput {
  * M1 wizard uses this directly; the M2 queue worker will invoke it from a
  * concurrency-bounded loop.
  */
+// Decide whether to override the caller's provider pick.
+//
+// The user's repeated complaint: when they upload a product image and pick
+// Higgsfield/Replicate, the model "creates a new product" instead of using
+// theirs. Reason: only OpenAI's gpt-image-1 `/v1/images/edits` and Nano
+// Banana's Gemini multi-image input actually preserve product identity.
+// Higgsfield Soul treats the reference as STYLE; Replicate Flux ignores
+// it. So whenever there's a product reference AND OpenAI is configured,
+// we force-route to OpenAI regardless of the picker. Logged so the user
+// can see why their pick was overridden.
+function chooseProvider(input: GenerateImageInput): CreativeProvider {
+  const hasReference =
+    Boolean(input.referenceImageBuffer) || Boolean(input.referenceImageUrl);
+  if (!hasReference) return input.provider;
+  if (input.provider === "openai" || input.provider === "nanobanana") {
+    // These already preserve products well — honour the pick.
+    return input.provider;
+  }
+  const openaiAvailable = Boolean(process.env.OPENAI_API_KEY?.trim());
+  if (openaiAvailable) {
+    console.warn(
+      `[creative-ai-image-service] Provider override: '${input.provider}' cannot preserve product identity with a reference image. Routing to 'openai' (gpt-image-1 edits) instead. Set OPENAI_API_KEY='' or pick OpenAI explicitly to silence this override.`
+    );
+    return "openai";
+  }
+  // No OpenAI configured — honour the original pick but the user will get
+  // the "new product" output. Better than failing outright.
+  console.warn(
+    `[creative-ai-image-service] Provider '${input.provider}' cannot preserve product identity with a reference image, and OPENAI_API_KEY is not set so we cannot override. The output product will likely differ from the reference.`
+  );
+  return input.provider;
+}
+
 export async function generateImage(input: GenerateImageInput): Promise<GenerateImageOutput> {
+  const provider = chooseProvider(input);
+  if (provider !== input.provider) {
+    input = { ...input, provider };
+  }
   if (input.provider === "higgsfield") {
     const result = await higgsfieldGenerateImage({
       prompt: input.prompt,

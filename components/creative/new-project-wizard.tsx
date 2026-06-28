@@ -156,8 +156,14 @@ export function NewProjectWizard({
       customPrompt: customPrompt || undefined,
       realism
     },
-    // Only labels of reference (non-product) uploads — the product
-    // upload is implicit in the prompt template.
+    // Full per-file role breakdown — agent needs this so it can write
+    // "preserve THIS, take inspiration from THAT" instructions instead
+    // of the generic "there's a reference image" hint.
+    images: files.map((_, i) => ({
+      role: (fileRoles[i] ?? "reference") as "product" | "reference",
+      label: fileLabels[i] ?? null
+    })),
+    // Legacy: only labels of reference (non-product) uploads.
     referenceLabels: files
       .map((_, i) => ({ role: fileRoles[i] ?? "reference", label: fileLabels[i] ?? "" }))
       .filter((x) => x.role === "reference")

@@ -29,6 +29,10 @@ export async function POST(request: Request) {
       aspectRatio?: string;
       brief?: CreativeBrief;
       referenceLabels?: string[];
+      // Structured per-image role breakdown — preferred when caller can
+      // supply it (the wizard knows each upload's role from the file-role
+      // chips). Older callers can still pass referenceLabels alone.
+      images?: Array<{ role?: "product" | "reference"; label?: string | null }>;
       index?: number;
       useAgent?: boolean;
       hasReferenceImage?: boolean;
@@ -47,10 +51,20 @@ export async function POST(request: Request) {
 
     if (body.useAgent) {
       try {
+        // Map the wizard's per-file role array into the agent's structured
+        // shape. Only forward known roles; default unknowns to "reference"
+        // so a stray client value can't accidentally claim "product".
+        const structuredImages = Array.isArray(body.images)
+          ? body.images.map((img) => ({
+              role: img.role === "product" ? ("product" as const) : ("reference" as const),
+              label: typeof img.label === "string" ? img.label : null
+            }))
+          : undefined;
         agentPrompt = await craftPromptWithCreativeAgent({
           creativeType,
           aspectRatio,
           brief,
+          images: structuredImages,
           referenceLabels: Array.isArray(body.referenceLabels) ? body.referenceLabels : [],
           hasReferenceImage: Boolean(body.hasReferenceImage)
         });

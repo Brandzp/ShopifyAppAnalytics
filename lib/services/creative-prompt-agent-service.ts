@@ -1,32 +1,54 @@
-// Creative agent prompt refinement — given the form fields the operator
-// fills in on /creative/new (product name, description, tone, brand notes,
-// custom prompt, asset type, aspect ratio), ask the Creative agent to
-// write the optimal visualPrompt for the image model.
+// Creative agent prompt refinement.
 //
-// Why have the agent do this instead of the template:
-// The existing creative-prompt-templates does mechanical concatenation
-// ("clean studio packshot. soft natural lighting. {product}.") which
-// produces correct-but-bland output. The Creative agent is tuned for
-// marketing copy and can write prompts that lead to better composition,
-// lighting language, and brand fit.
+// Given the operator's brief + the actual uploaded image roles, ask the
+// Creative agent to write the image-generation prompt that the image
+// model will receive verbatim.
 //
-// Fail-safe: returns null on any failure. Callers should fall back to the
-// existing template prompt — we never produce a worse result than today.
+// CRITICAL contract enforced here (the user kept hitting "the model
+// generates a NEW product instead of using mine"):
+//   - The PRODUCT image must be preserved EXACTLY — same bottle, label,
+//     color, proportions, branding. The agent is told this in caps and
+//     it's part of the prompt the image model receives.
+//   - REFERENCE images are inspiration ONLY (model pose, lighting,
+//     background style, mood) — never copied verbatim, never replaces the
+//     product, never adds new packaging.
+//
+// Hebrew input: the brief fields (productName/description/tone) can be
+// in Hebrew because the operator is Israeli. The agent must translate
+// concepts into English (image models reason in English) but never try
+// to render Hebrew text inside the image.
+//
+// Fail-safe: returns null on any failure. Callers fall back to the
+// deterministic template — never worse than today.
 
 import { askCreativeAgentJson, isBiAgentConfigured } from "@/lib/clients/bi-agent-client";
 import type { CreativeBrief, CreativeType, CreativeAspectRatio } from "@/lib/domain/creative-types";
+
+// One uploaded image with its role + label. Agent uses this to know
+// what to preserve vs what to use as inspiration.
+export interface PromptAgentReference {
+  // "product" → must be kept identical in the output.
+  // "reference" → inspiration only (model/lighting/background/mood).
+  role: "product" | "reference";
+  // Operator-supplied freeform label ("model pose", "lighting mood",
+  // "background scene"). For role=product, label is ignored — we name it
+  // "Product" so the agent treats it consistently.
+  label?: string | null;
+}
 
 export interface CraftPromptInput {
   creativeType: CreativeType;
   aspectRatio: CreativeAspectRatio;
   brief: CreativeBrief | null;
-  // Labels the operator gave to extra "reference" uploads (e.g.
-  // "model pose", "lighting style"). The image model only conditions on
-  // the actual reference bytes; these labels become text hints.
+  // Full per-image breakdown. When passed, the agent gets the structured
+  // role list (product vs each labelled reference). When NOT passed, we
+  // fall back to the legacy `referenceLabels` shape + `hasReferenceImage`
+  // boolean so existing callers don't break.
+  images?: PromptAgentReference[];
+  // Legacy: labels of non-product uploads. Used when `images` is absent.
   referenceLabels?: string[];
-  // Indicator that a product reference image will be passed to the
-  // generator. When true, the agent is told NOT to describe the product
-  // (the image handles that) and focus on the scene/lighting/styling.
+  // Legacy: indicator that ANY product image is attached. Used when
+  // `images` is absent. When `images` is passed we derive this from it.
   hasReferenceImage?: boolean;
 }
 
@@ -43,33 +65,100 @@ function typeStyleHint(t: CreativeType): string {
   }
 }
 
-function buildPrompt(input: CraftPromptInput): string {
+// Walk the images array and produce a human-readable role breakdown
+// the agent can reason about. Falls back to legacy shape if needed.
+function describeImages(input: CraftPromptInput): {
+  hasProduct: boolean;
+  productLines: string[];
+  referenceLines: string[];
+} {
+  if (input.images && input.images.length > 0) {
+    const productLines: string[] = [];
+    const referenceLines: string[] = [];
+    for (const img of input.images) {
+      if (img.role === "product") {
+        productLines.push("• PRODUCT image attached — this is the EXACT item that must appear in the output.");
+      } else {
+        const label = (img.label ?? "").trim() || "reference";
+        referenceLines.push(`• ${label} — use as INSPIRATION only (mood/composition/lighting/pose). Do NOT copy literally. Do NOT use any product, packaging or branding from this reference.`);
+      }
+    }
+    return {
+      hasProduct: productLines.length > 0,
+      productLines,
+      referenceLines
+    };
+  }
+  // Legacy fallback
+  const productLines = input.hasReferenceImage
+    ? ["• PRODUCT image attached — this is the EXACT item that must appear in the output."]
+    : [];
+  const referenceLines = (input.referenceLabels ?? [])
+    .filter((s) => s && s.trim())
+    .map((label) => `• ${label.trim()} — use as INSPIRATION only (mood/composition/lighting/pose). Do NOT copy literally.`);
+  return {
+    hasProduct: productLines.length > 0,
+    productLines,
+    referenceLines
+  };
+}
+
+function buildAgentInstruction(input: CraftPromptInput): string {
   const b = input.brief ?? {};
+  const { hasProduct, productLines, referenceLines } = describeImages(input);
+
+  const preservation = hasProduct
+    ? [
+        `PRODUCT PRESERVATION (hard rule — the user's #1 complaint is that we ignore this):`,
+        `  - The product reference image is the CANONICAL product. The image model will receive it.`,
+        `  - Output prompt MUST instruct the model to keep the bottle/box/package, all labels, all colors, all proportions, all branding, all printed text EXACTLY identical to the reference.`,
+        `  - The prompt MUST forbid: redesigning, recoloring, resizing, relabelling, adding new packaging, swapping the product for a different SKU, adding extra bottles or duplicates of the product.`,
+        `  - Do NOT describe the product's appearance — the reference image handles that. You describe ONLY the scene, lighting, surface, props, atmosphere.`
+      ].join("\n")
+    : `No product reference image. Describe the product visually so the model can render it from scratch using the product name/description below.`;
+
+  const referenceRule = referenceLines.length
+    ? [
+        `REFERENCE IMAGES (style / mood / pose inspiration only — NOT to be reproduced verbatim):`,
+        ...referenceLines,
+        `  - When you mention something from a reference (e.g. "match the lighting from the reference"), be explicit about which aspect: lighting / pose / background / mood — NEVER product or branding.`
+      ].join("\n")
+    : "";
+
   const lines = [
-    `You are a senior performance-marketing art director.`,
-    `Write a single, polished image-generation prompt for the brief below.`,
+    `You are a senior performance-marketing art director writing an image-generation prompt.`,
+    `The output is a SINGLE polished prompt the image model will receive verbatim.`,
     "",
     `Asset type: ${input.creativeType} — ${typeStyleHint(input.creativeType)}`,
     `Aspect ratio: ${input.aspectRatio}`,
-    b.productName ? `Product name: ${b.productName}` : null,
-    b.productDescription ? `Product description: ${b.productDescription}` : null,
-    b.headline ? `Headline being teased: ${b.headline}` : null,
-    b.tone ? `Tone: ${b.tone}` : null,
-    b.brandNotes ? `Brand notes: ${b.brandNotes}` : null,
-    b.customPrompt ? `Operator hint (use as inspiration, not verbatim): ${b.customPrompt}` : null,
-    b.realism ? `Realism preference: ${b.realism}` : null,
-    input.referenceLabels?.length ? `Reference image labels: ${input.referenceLabels.join(", ")}` : null,
     "",
-    input.hasReferenceImage
-      ? `IMPORTANT: a reference image of the actual product will be passed to the model. Do NOT describe the product's appearance, packaging, color, label, shape — the reference handles that. Describe the SCENE, lighting, composition, surface, props, atmosphere around the product.`
-      : `No reference image is available — describe the product visually so the model can render it from scratch.`,
+    `BRIEF FROM OPERATOR (may be in Hebrew — translate concepts to English; never render Hebrew text inside the image):`,
+    b.productName ? `  Product name: ${b.productName}` : null,
+    b.productDescription ? `  Product description: ${b.productDescription}` : null,
+    b.headline ? `  Headline being teased: ${b.headline}` : null,
+    b.tone ? `  Tone: ${b.tone}` : null,
+    b.brandNotes ? `  Brand notes: ${b.brandNotes}` : null,
+    b.customPrompt ? `  Operator hint (inspiration, not verbatim): ${b.customPrompt}` : null,
+    b.realism ? `  Realism preference: ${b.realism}` : null,
     "",
-    `RULES:`,
-    `  1. Output a SINGLE prompt string, ~3-5 sentences. English only.`,
-    `  2. Photography (not illustration). Mention camera/lens hints when useful.`,
-    `  3. Mention specific lighting direction (left/right/overhead), mood, surface.`,
-    `  4. Avoid generic words: "beautiful", "amazing", "stunning". Use specific visual nouns.`,
-    `  5. No prose-style adjectives chains. Use punchy directives.`,
+    `UPLOADED IMAGES (the image model will see these too):`,
+    ...(productLines.length ? productLines : ["• No product image attached."]),
+    ...(referenceLines.length ? referenceLines : ["• No additional reference images."]),
+    "",
+    preservation,
+    "",
+    referenceRule,
+    "",
+    `OUTPUT RULES:`,
+    `  1. SINGLE prompt string, ~4–6 sentences. ENGLISH ONLY (image models reason in English).`,
+    `  2. Photography (not illustration). Mention camera/lens hints when useful (e.g. "50mm prime, f/2.8, full-frame DSLR").`,
+    `  3. Specific lighting direction (left/right/overhead/backlit), mood, surface texture.`,
+    `  4. No generic adjectives ("beautiful", "amazing", "stunning"). Use specific visual nouns.`,
+    `  5. No prose-style chains. Punchy directives.`,
+    hasProduct
+      ? `  6. INCLUDE explicit preservation language: "keep the product (bottle/box/package), all labels, all colors, all proportions, all branding, all printed text EXACTLY identical to the uploaded reference. Do NOT redesign, recolor, resize, relabel, or duplicate the product."`
+      : `  6. Describe the product clearly enough for the model to render it from text alone.`,
+    `  7. If reference images are provided, name what aspect to borrow from each (lighting / pose / background) — never the product itself.`,
     "",
     `Output JSON object: { "prompt": "<the polished prompt>" }`
   ];
@@ -81,7 +170,7 @@ export async function craftPromptWithCreativeAgent(input: CraftPromptInput): Pro
   if (process.env.BI_AGENT_DISABLE === "1") return null;
   try {
     const parsed = await askCreativeAgentJson<{ prompt?: string }>({
-      question: buildPrompt(input),
+      question: buildAgentInstruction(input),
       jsonHint: 'object with prompt:string',
       timeoutMs: 45_000
     });
