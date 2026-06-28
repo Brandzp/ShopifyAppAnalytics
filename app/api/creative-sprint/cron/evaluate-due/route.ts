@@ -10,7 +10,8 @@
 // Auth: guarded by CRON_SECRET (x-cron-secret header). The middleware
 // requireCronSecret only covers /api/cron/* paths; this route lives at
 // /api/creative-sprint/cron/evaluate-due/ so it must self-enforce.
-// When CRON_SECRET is unset (local dev), the check is skipped.
+// DENY-by-default: when CRON_SECRET is absent, requests are rejected (401).
+// Set CRON_SECRET in all environments (including local dev) to permit calls.
 
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/server/db";
@@ -28,9 +29,12 @@ export const maxDuration = 300; // cascade eval can take a few minutes if many a
 // the caller is permitted to proceed. Mirrors the logic in middleware.ts
 // requireCronSecret() but is applied here directly because the middleware
 // only guards /api/cron/* and this route lives at /api/creative-sprint/cron/*.
-function checkCronSecret(request: Request): NextResponse | null {
+function checkCronSecret(request: Request): Response | null {
   const expected = process.env.CRON_SECRET?.trim();
-  if (!expected) return null; // not configured — allow (local dev)
+  // DENY-by-default: absent env var is NOT a pass-through — return 401 so the
+  // endpoint is never reachable without a properly configured secret, even in
+  // environments where CRON_SECRET was not set (fail-closed, not fail-open).
+  if (!expected) return new Response("Unauthorized", { status: 401 });
   const provided = request.headers.get("x-cron-secret")?.trim();
   if (provided && provided === expected) return null; // authorized
   return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
