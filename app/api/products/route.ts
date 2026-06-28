@@ -38,23 +38,28 @@ export interface ProductPickerRow {
   source: "db" | "shopify";
 }
 
-// Image-getting field chain. Different Shopify stores expose product
-// images through different fields depending on how they were uploaded:
-//   - featuredImage    → set when product has a designated "main" image
-//   - images(first:1)  → ANY image attached to the product (always populated
-//                        if there's at least one image, even when no
-//                        featured one is set explicitly)
-//   - media(first:1)   → handles videos + 3D models too, but for images
-//                        the `images` field is simpler
-// We ask for both so the consumer can fall back.
+// Image lookup uses Shopify's modern `media` / `featuredMedia` surface.
+// `Product.images` and `Product.featuredImage` are deprecated in newer
+// Admin API versions — `media` is the supported path and returns image
+// URLs via `MediaImage.image.url`.
+//
+// We ask for `featuredMedia` first (designated main image) and fall back
+// to the first IMAGE-type media node. Filtering by `media_type:IMAGE`
+// skips videos / 3D models cleanly.
 const NODES_QUERY = /* GraphQL */ `
   query GetProductImages($ids: [ID!]!) {
     nodes(ids: $ids) {
       ... on Product {
         id
-        featuredImage { url }
-        images(first: 1) { nodes { url } }
         description
+        featuredMedia {
+          ... on MediaImage { image { url } }
+        }
+        media(first: 1, query: "media_type:IMAGE") {
+          nodes {
+            ... on MediaImage { image { url } }
+          }
+        }
       }
     }
   }
@@ -74,8 +79,14 @@ const LIVE_SEARCH_QUERY = /* GraphQL */ `
           vendor
           productType
           description
-          featuredImage { url }
-          images(first: 1) { nodes { url } }
+          featuredMedia {
+            ... on MediaImage { image { url } }
+          }
+          media(first: 1, query: "media_type:IMAGE") {
+            nodes {
+              ... on MediaImage { image { url } }
+            }
+          }
           priceRangeV2 { minVariantPrice { amount } }
           variants(first: 3) { edges { node { sku } } }
         }
@@ -84,17 +95,19 @@ const LIVE_SEARCH_QUERY = /* GraphQL */ `
   }
 `;
 
-// Pull the best available image URL from a product node, trying each
-// known field in turn. Logged when null so we know which products to
-// audit on the Shopify side.
+// Shape the modern `media` / `featuredMedia` queries return — a wrapped
+// `image { url }` rather than a flat `url` field.
+type MediaImageNode = { image?: { url?: string | null } | null } | null | undefined;
+
+// Pull the best available image URL from a product node, preferring the
+// designated featured media and falling back to the first IMAGE node.
 function extractImageUrl(node: {
-  id?: string;
-  featuredImage?: { url?: string } | null;
-  images?: { nodes?: Array<{ url?: string }> } | null;
+  featuredMedia?: MediaImageNode;
+  media?: { nodes?: MediaImageNode[] } | null;
 }): string | null {
   return (
-    node.featuredImage?.url ??
-    node.images?.nodes?.[0]?.url ??
+    node.featuredMedia?.image?.url ??
+    node.media?.nodes?.[0]?.image?.url ??
     null
   );
 }
@@ -177,34 +190,42 @@ export async function GET(request: Request) {
     let nodesReturned = 0;
     let nodesWithImage = 0;
     let nodesWithDescription = 0;
+    let firstNodeRaw: unknown = null;
+    let firstGidSent: string | null = null;
+    // Map of DB row index → enrichment payload. We zip positionally instead
+    // of by `node.id` because Shopify's response could (rarely) normalize
+    // the GID differently from what we sent — `nodes(ids:)` guarantees
+    // SAME-ORDER output with nulls for missing.
+    const enrichmentByIndex = new Map<number, { imageUrl: string | null; description: string | null }>();
 
     if (products.length > 0) {
-      // Enrich with images + descriptions in one GraphQL call.
-      const imageByGid = new Map<string, { imageUrl: string | null; description: string | null }>();
       if (shopifyClient) {
         enrichmentAttempted = true;
         try {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const gids = products.map((p: any) => gidForProduct(p.shopifyProductId));
+          firstGidSent = gids[0] ?? null;
           const result = await shopifyClient.request<{
             nodes: Array<{
               id: string;
-              featuredImage?: { url?: string } | null;
-              images?: { nodes?: Array<{ url?: string }> } | null;
               description?: string | null;
+              featuredMedia?: MediaImageNode;
+              media?: { nodes?: MediaImageNode[] } | null;
             } | null>;
           }>(NODES_QUERY, { ids: gids });
-          nodesReturned = (result.nodes ?? []).filter(Boolean).length;
+          const nodes = result.nodes ?? [];
+          nodesReturned = nodes.filter(Boolean).length;
+          firstNodeRaw = nodes[0] ?? null;
           let missingImages = 0;
-          for (const node of result.nodes ?? []) {
-            if (!node) continue;
+          nodes.forEach((node, i) => {
+            if (!node) return;
             const url = extractImageUrl(node);
             const desc = node.description ?? null;
             if (!url) missingImages += 1;
             if (url) nodesWithImage += 1;
             if (desc && desc.trim()) nodesWithDescription += 1;
-            imageByGid.set(node.id, { imageUrl: url, description: desc });
-          }
+            enrichmentByIndex.set(i, { imageUrl: url, description: desc });
+          });
           console.log(
             `[api/products] enriched ${nodesReturned} products: ${nodesWithImage} with images, ${nodesWithDescription} with descriptions, ${missingImages} missing images`
           );
@@ -216,8 +237,8 @@ export async function GET(request: Request) {
         enrichmentError = "No Shopify connection — install/reconnect Shopify to enable product images and descriptions.";
       }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      rows = products.map((p: any) => {
-        const enrichment = imageByGid.get(gidForProduct(p.shopifyProductId));
+      rows = products.map((p: any, i: number) => {
+        const enrichment = enrichmentByIndex.get(i);
         return {
           id: p.id,
           shopifyProductId: p.shopifyProductId,
@@ -257,8 +278,8 @@ export async function GET(request: Request) {
                 vendor?: string | null;
                 productType?: string | null;
                 description?: string | null;
-                featuredImage?: { url?: string } | null;
-                images?: { nodes?: Array<{ url?: string }> } | null;
+                featuredMedia?: MediaImageNode;
+                media?: { nodes?: MediaImageNode[] } | null;
                 priceRangeV2?: { minVariantPrice?: { amount?: string } };
                 variants?: { edges?: Array<{ node: { sku?: string | null } }> };
               };
@@ -315,7 +336,12 @@ export async function GET(request: Request) {
           error: enrichmentError,
           nodesReturned,
           nodesWithImage,
-          nodesWithDescription
+          nodesWithDescription,
+          // Raw first node from Shopify's response — lets us see if Shopify
+          // is returning the fields at all, and if their shape matches what
+          // we expect (e.g. `featuredImage: null` vs the key being absent).
+          firstGidSent,
+          firstNodeRaw
         }
       }
     });
