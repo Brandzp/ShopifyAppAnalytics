@@ -270,6 +270,13 @@ export async function generatePackshotSync(
       return await assetToSummary(updated);
     }
 
+    // Hand Higgsfield (and any other URL-aware provider) the already-hosted
+    // R2/local URL of the product source. Saves an upload round-trip and
+    // works correctly with backends where re-uploading would collide on
+    // the same key. `getReadableUrl()` returns a presigned R2 URL when
+    // CREATIVE_STORAGE_BACKEND=s3 — Higgsfield can fetch it directly.
+    const referenceImageUrl = await getReadableUrl(product.storageKey).catch(() => null);
+
     const result = await generateImage({
       provider,
       prompt,
@@ -280,6 +287,7 @@ export async function generatePackshotSync(
         contentType: referenceImageBuffer.contentType,
         label: "product"
       },
+      referenceImageUrl,
       additionalReferenceImages
     });
 
@@ -457,6 +465,7 @@ export async function retryAssetGeneration(
       return await assetToSummary(updated);
     }
 
+    const retryReferenceImageUrl = await getReadableUrl(retryProduct.storageKey).catch(() => null);
     const result = await generateImage({
       provider,
       prompt,
@@ -467,6 +476,7 @@ export async function retryAssetGeneration(
         contentType: referenceImageBuffer.contentType,
         label: "product"
       },
+      referenceImageUrl: retryReferenceImageUrl,
       additionalReferenceImages: retryAdditionalReferences
     });
     const finalKey = buildStorageKey({

@@ -170,11 +170,19 @@ export async function GET(request: Request) {
       : null;
 
     let rows: ProductPickerRow[] = [];
+    // Diagnostic captures — surfaced in the JSON response so we can debug
+    // "no images / no descriptions" without tailing Render logs.
+    let enrichmentError: string | null = null;
+    let enrichmentAttempted = false;
+    let nodesReturned = 0;
+    let nodesWithImage = 0;
+    let nodesWithDescription = 0;
 
     if (products.length > 0) {
       // Enrich with images + descriptions in one GraphQL call.
       const imageByGid = new Map<string, { imageUrl: string | null; description: string | null }>();
       if (shopifyClient) {
+        enrichmentAttempted = true;
         try {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const gids = products.map((p: any) => gidForProduct(p.shopifyProductId));
@@ -186,22 +194,26 @@ export async function GET(request: Request) {
               description?: string | null;
             } | null>;
           }>(NODES_QUERY, { ids: gids });
+          nodesReturned = (result.nodes ?? []).filter(Boolean).length;
           let missingImages = 0;
           for (const node of result.nodes ?? []) {
             if (!node) continue;
             const url = extractImageUrl(node);
+            const desc = node.description ?? null;
             if (!url) missingImages += 1;
-            imageByGid.set(node.id, {
-              imageUrl: url,
-              description: node.description ?? null
-            });
+            if (url) nodesWithImage += 1;
+            if (desc && desc.trim()) nodesWithDescription += 1;
+            imageByGid.set(node.id, { imageUrl: url, description: desc });
           }
-          if (missingImages > 0) {
-            console.log(`[api/products] ${missingImages}/${result.nodes?.length ?? 0} products had no featuredImage or images.nodes[0]`);
-          }
+          console.log(
+            `[api/products] enriched ${nodesReturned} products: ${nodesWithImage} with images, ${nodesWithDescription} with descriptions, ${missingImages} missing images`
+          );
         } catch (err) {
+          enrichmentError = err instanceof Error ? err.message : String(err);
           console.warn("[api/products] failed to fetch images from Shopify:", err);
         }
+      } else {
+        enrichmentError = "No Shopify connection — install/reconnect Shopify to enable product images and descriptions.";
       }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       rows = products.map((p: any) => {
@@ -286,7 +298,26 @@ export async function GET(request: Request) {
     return NextResponse.json({
       ok: true,
       products: rows,
-      diagnostics: { dbCount: products.length, totalReturned: rows.length, hasShopifyConnection: hasShopify }
+      diagnostics: {
+        storeId,
+        dbCount: products.length,
+        totalReturned: rows.length,
+        hasShopifyConnection: hasShopify,
+        shopDomain: connection?.shopDomain ?? null,
+        // Enrichment outcome — explains "all cards show no image" cases:
+        //   - enrichmentError set → Shopify call failed (read message)
+        //   - enrichmentAttempted=false → no Shopify creds for this store
+        //   - nodesReturned=0 → Shopify silently returned no nodes (token scope?)
+        //   - nodesWithImage=0 → call worked but Shopify products genuinely
+        //     have no media uploaded (check Products admin)
+        enrichment: {
+          attempted: enrichmentAttempted,
+          error: enrichmentError,
+          nodesReturned,
+          nodesWithImage,
+          nodesWithDescription
+        }
+      }
     });
   } catch (error) {
     const status = error instanceof AppError ? error.statusCode : 500;

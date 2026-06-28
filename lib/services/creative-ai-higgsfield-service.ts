@@ -1,145 +1,81 @@
-// Higgsfield AI provider client.
+// Higgsfield AI provider client — thin wrapper around the modern
+// higgsfield-client. The original implementation in this file talked to
+// `/v1/assets` and `/v1/generations`, which DO NOT EXIST on Higgsfield's
+// current API and were returning Cloudflare 521s. The correct surface lives
+// in `lib/clients/higgsfield-client.ts`:
 //
-// Higgsfield offers two product families that map cleanly onto our Creative
-// feature:
-//   - Soul (image generation) → covers PACKSHOT / INSTAGRAM_POST / META_AD
-//   - DoP / Higgsfield Video (image-to-video with cinematic camera motion)
-//     → covers UGC_VIDEO and gives us a second video provider beside Veo.
+//   POST /v1/text2image/soul    (with `params` wrapper + enum width_and_height)
+//   GET  /v1/job-sets/{id}      (note: hyphen, not underscore)
 //
-// Their API uses an async pattern: POST a generation request, get an id,
-// poll the status endpoint until the asset is ready, then download from the
-// returned URL. This file implements a sync wrapper (submit → poll → fetch
-// bytes) so callers can use it the same way they use the Replicate service
-// for M1. The M2 queue worker will swap to fire-and-forget + webhook.
+// We delegate here so the existing call sites (creative-ai-image-service.ts
+// for the "/creative/new" wizard) keep their function signatures, but
+// route to the working endpoints.
 //
-// ─────────────────────────────────────────────────────────────────────────
-// NOTE on endpoint paths and request shape:
-// Higgsfield's public API surface evolves quickly and exact paths sometimes
-// change between rollouts. The constants below match their documented v1
-// shape; if a request 404s or 422s, check the latest docs and adjust the
-// HIGGSFIELD_* env vars or the keys in `buildImagePayload`/`buildVideoPayload`
-// below — the rest of the integration (auth, polling, file download) is
-// generic.
-// ─────────────────────────────────────────────────────────────────────────
+// Reference images: Higgsfield wants a URL it can fetch publicly. The caller
+// either passes `referenceImageUrl` (preferred — already-hosted on R2 or our
+// proxy) or `referenceImageBuffer` (legacy — we upload it to R2 under a
+// `sources/_higgsfield-tmp/` scope and pass that URL). When the storage
+// backend is `local`, the relative `/api/creative/files/...` path is NOT
+// reachable from Higgsfield's data centres — so a buffer-only call with
+// local backend is logged + sent without a reference (degrades to text-only).
 
 import type { BuiltPrompt } from "@/lib/services/creative-prompt-templates";
 import type { CreativeAspectRatio } from "@/lib/domain/creative-types";
+import {
+  createHiggsfieldJob,
+  downloadHiggsfieldAsset,
+  pollHiggsfieldUntilDone,
+  type HiggsfieldCreateJobInput
+} from "@/lib/clients/higgsfield-client";
+import {
+  buildStorageKey,
+  getReadableUrl,
+  putObject,
+  suggestFilename
+} from "@/lib/services/creative-storage-service";
+import { randomUUID } from "node:crypto";
 
-const DEFAULT_BASE_URL = "https://api.higgsfield.ai/v1";
-const DEFAULT_IMAGE_MODEL = "soul";
-const DEFAULT_VIDEO_MODEL = "dop-v1";
-const DEFAULT_POLL_INTERVAL_MS = 3000;
-const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000;
-
-interface HiggsfieldGenerationStatus {
-  id: string;
-  status: "queued" | "running" | "completed" | "failed" | string;
-  output_url?: string;
-  output?: { url?: string };
-  error?: string | { message?: string };
+// Map our internal CreativeAspectRatio strings to the modern client's
+// supported set. Falls back to 9:16 (Soul's default) for anything else.
+function toClientAspect(ratio: CreativeAspectRatio): HiggsfieldCreateJobInput["aspectRatio"] {
+  if (ratio === "1:1" || ratio === "4:5" || ratio === "9:16" || ratio === "16:9") return ratio;
+  return "9:16";
 }
 
-function getApiKey(): string {
-  const key = process.env.HIGGSFIELD_API_KEY;
-  if (!key) {
-    throw new Error("HIGGSFIELD_API_KEY is not set. Add it to .env to use the Higgsfield provider.");
-  }
-  return key;
+function extFromContentType(ct: string | null | undefined): string {
+  if (!ct) return "bin";
+  if (ct.includes("png")) return "png";
+  if (ct.includes("jpeg") || ct.includes("jpg")) return "jpg";
+  if (ct.includes("webp")) return "webp";
+  return "bin";
 }
 
-function getBaseUrl(): string {
-  return (process.env.HIGGSFIELD_API_BASE_URL || DEFAULT_BASE_URL).replace(/\/$/, "");
-}
-
-function authHeaders(): Record<string, string> {
-  return {
-    Authorization: `Bearer ${getApiKey()}`,
-    "Content-Type": "application/json"
-  };
-}
-
-async function postJson<T>(path: string, body: unknown): Promise<T> {
-  const url = `${getBaseUrl()}${path}`;
-  const response = await fetch(url, {
-    method: "POST",
-    headers: authHeaders(),
-    body: JSON.stringify(body)
-  });
-  if (!response.ok) {
-    const text = await response.text().catch(() => "");
-    throw new Error(`Higgsfield ${path} failed: ${response.status} ${text.slice(0, 200)}`);
-  }
-  return (await response.json()) as T;
-}
-
-async function getJson<T>(path: string): Promise<T> {
-  const url = `${getBaseUrl()}${path}`;
-  const response = await fetch(url, { method: "GET", headers: authHeaders() });
-  if (!response.ok) {
-    const text = await response.text().catch(() => "");
-    throw new Error(`Higgsfield ${path} failed: ${response.status} ${text.slice(0, 200)}`);
-  }
-  return (await response.json()) as T;
-}
-
-async function pollUntilComplete(generationId: string): Promise<HiggsfieldGenerationStatus> {
-  const deadline = Date.now() + DEFAULT_TIMEOUT_MS;
-  while (Date.now() < deadline) {
-    const status = await getJson<HiggsfieldGenerationStatus>(`/generations/${generationId}`);
-    if (status.status === "completed") return status;
-    if (status.status === "failed") {
-      const message = typeof status.error === "string" ? status.error : status.error?.message;
-      throw new Error(`Higgsfield generation failed: ${message ?? "no message"}`);
-    }
-    await new Promise((resolve) => setTimeout(resolve, DEFAULT_POLL_INTERVAL_MS));
-  }
-  throw new Error(`Higgsfield generation timed out after ${DEFAULT_TIMEOUT_MS}ms.`);
-}
-
-async function downloadAsBuffer(url: string): Promise<{ buffer: Buffer; contentType: string }> {
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error(`Failed to download Higgsfield output: ${response.status}`);
-  }
-  const buffer = Buffer.from(await response.arrayBuffer());
-  return {
-    buffer,
-    contentType: response.headers.get("content-type") ?? "application/octet-stream"
-  };
-}
-
-/**
- * Higgsfield doesn't take a raw multipart upload in its generation endpoint —
- * it expects a publicly fetchable URL. For local dev we POST the bytes to
- * their assets endpoint first and get back a URL we can pass to the
- * generation call. Mirrors the Replicate `files.create()` pattern.
- */
-async function uploadReferenceImage(input: {
+// Upload a reference image buffer to R2 (or local FS) so Higgsfield has a URL
+// to fetch from. Uses a synthetic "sources" scope under a sentinel storeId
+// so we don't pollute any real store namespace.
+async function hostReferenceImageBuffer(input: {
   buffer: Buffer;
   contentType: string;
-}): Promise<string> {
-  // Higgsfield's asset upload uses a presigned-URL flow: POST metadata,
-  // receive a put URL + final URL, PUT the bytes. We expose this as one
-  // async call.
-  const meta = await postJson<{ upload_url: string; asset_url: string }>(`/assets`, {
-    content_type: input.contentType,
-    byte_length: input.buffer.length
+}): Promise<{ url: string; backend: "s3" | "local" }> {
+  const backend = (process.env.CREATIVE_STORAGE_BACKEND ?? "local").toLowerCase();
+  const isS3 = backend === "s3" || backend === "r2";
+  const key = buildStorageKey({
+    storeId: "_system",
+    scope: "sources",
+    segments: ["higgsfield-tmp"],
+    filename: suggestFilename(null, extFromContentType(input.contentType)) || `${randomUUID()}.${extFromContentType(input.contentType)}`
   });
-  const putResponse = await fetch(meta.upload_url, {
-    method: "PUT",
-    headers: { "Content-Type": input.contentType },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    body: input.buffer as any
-  });
-  if (!putResponse.ok) {
-    throw new Error(`Higgsfield asset PUT failed: ${putResponse.status}`);
-  }
-  return meta.asset_url;
+  await putObject({ key, body: input.buffer, contentType: input.contentType });
+  const url = await getReadableUrl(key);
+  return { url, backend: isS3 ? "s3" : "local" };
 }
 
 export interface HiggsfieldGenerateImageInput {
   prompt: BuiltPrompt;
   aspectRatio: CreativeAspectRatio;
+  // Preferred: a publicly-fetchable URL Higgsfield can pull. If absent and
+  // a buffer is provided, we host the buffer first.
+  referenceImageUrl?: string | null;
   referenceImageBuffer?: { buffer: Buffer; contentType: string } | null;
   seed?: number;
   model?: string;
@@ -156,66 +92,50 @@ export interface HiggsfieldGenerateImageOutput {
 export async function higgsfieldGenerateImage(
   input: HiggsfieldGenerateImageInput
 ): Promise<HiggsfieldGenerateImageOutput> {
-  const model = input.model || process.env.HIGGSFIELD_IMAGE_MODEL || DEFAULT_IMAGE_MODEL;
-
-  const referenceUrl = input.referenceImageBuffer
-    ? await uploadReferenceImage(input.referenceImageBuffer)
-    : null;
-
-  const payload = buildImagePayload({
-    model,
-    prompt: input.prompt.prompt,
-    negativePrompt: input.prompt.negativePrompt,
-    aspectRatio: input.aspectRatio,
-    referenceUrl,
-    seed: input.seed
-  });
-
-  const created = await postJson<{ id: string }>(`/generations`, payload);
-  const status = await pollUntilComplete(created.id);
-  const url = status.output_url || status.output?.url;
-  if (!url) {
-    throw new Error("Higgsfield completed without an output URL.");
+  let referenceUrl = input.referenceImageUrl ?? null;
+  if (!referenceUrl && input.referenceImageBuffer) {
+    const hosted = await hostReferenceImageBuffer(input.referenceImageBuffer);
+    if (hosted.backend === "local") {
+      // Local backend yields a relative `/api/creative/files/...` path —
+      // Higgsfield can't reach localhost. Drop the reference and proceed
+      // text-only so we at least produce something instead of failing.
+      console.warn(
+        "[higgsfield-service] CREATIVE_STORAGE_BACKEND=local — Higgsfield cannot fetch local proxy URLs. Reference image dropped; generating text-only."
+      );
+      referenceUrl = null;
+    } else {
+      referenceUrl = hosted.url;
+    }
   }
-  const downloaded = await downloadAsBuffer(url);
+
+  const job = await createHiggsfieldJob({
+    assetType: "image",
+    prompt: input.prompt.prompt,
+    aspectRatio: toClientAspect(input.aspectRatio),
+    referenceImageUrl: referenceUrl
+  });
+  const completed = job.status === "completed" ? job : await pollHiggsfieldUntilDone(job.id);
+  if (completed.status !== "completed" || !completed.assetUrl) {
+    throw new Error(
+      completed.errorMessage || `Higgsfield job ended in status=${completed.status}`
+    );
+  }
+  const buffer = await downloadHiggsfieldAsset(completed.assetUrl);
   return {
-    buffer: downloaded.buffer,
-    contentType: downloaded.contentType,
-    modelUsed: `higgsfield/${model}`,
+    buffer,
+    contentType: completed.assetMimeType || "image/png",
+    modelUsed: `higgsfield/${input.model || process.env.HIGGSFIELD_IMAGE_MODEL || "soul"}`,
     promptUsed: input.prompt.prompt,
     seedUsed: typeof input.seed === "number" ? input.seed : null
   };
 }
 
-function buildImagePayload(args: {
-  model: string;
-  prompt: string;
-  negativePrompt: string;
-  aspectRatio: CreativeAspectRatio;
-  referenceUrl: string | null;
-  seed?: number;
-}): Record<string, unknown> {
-  const payload: Record<string, unknown> = {
-    model: args.model,
-    type: "image",
-    prompt: args.prompt,
-    negative_prompt: args.negativePrompt || undefined,
-    aspect_ratio: args.aspectRatio
-  };
-  if (args.referenceUrl) {
-    payload.reference_image_url = args.referenceUrl;
-  }
-  if (typeof args.seed === "number") {
-    payload.seed = args.seed;
-  }
-  return payload;
-}
-
 export interface HiggsfieldGenerateVideoInput {
   prompt: BuiltPrompt;
   aspectRatio: CreativeAspectRatio;
-  // Higgsfield is image-to-video — you must provide a source frame.
-  referenceImageBuffer: { buffer: Buffer; contentType: string };
+  // Higgsfield is image-to-video — a source frame is required.
+  referenceImageBuffer?: { buffer: Buffer; contentType: string } | null;
+  referenceImageUrl?: string | null;
   durationSeconds?: number;
   seed?: number;
   model?: string;
@@ -233,56 +153,40 @@ export interface HiggsfieldGenerateVideoOutput {
 export async function higgsfieldGenerateVideo(
   input: HiggsfieldGenerateVideoInput
 ): Promise<HiggsfieldGenerateVideoOutput> {
-  const model = input.model || process.env.HIGGSFIELD_VIDEO_MODEL || DEFAULT_VIDEO_MODEL;
-  const referenceUrl = await uploadReferenceImage(input.referenceImageBuffer);
-
-  const payload = buildVideoPayload({
-    model,
-    prompt: input.prompt.prompt,
-    negativePrompt: input.prompt.negativePrompt,
-    aspectRatio: input.aspectRatio,
-    referenceUrl,
-    durationSeconds: input.durationSeconds ?? 6,
-    seed: input.seed
-  });
-
-  const created = await postJson<{ id: string }>(`/generations`, payload);
-  const status = await pollUntilComplete(created.id);
-  const url = status.output_url || status.output?.url;
-  if (!url) {
-    throw new Error("Higgsfield video completed without an output URL.");
+  let referenceUrl = input.referenceImageUrl ?? null;
+  if (!referenceUrl && input.referenceImageBuffer) {
+    const hosted = await hostReferenceImageBuffer(input.referenceImageBuffer);
+    if (hosted.backend === "local") {
+      throw new Error(
+        "Higgsfield video requires a publicly-fetchable reference image, but CREATIVE_STORAGE_BACKEND is set to 'local'. Set it to 'r2' or 's3' to enable Higgsfield video."
+      );
+    }
+    referenceUrl = hosted.url;
   }
-  const downloaded = await downloadAsBuffer(url);
+  if (!referenceUrl) {
+    throw new Error("Higgsfield video requires a reference image (URL or buffer).");
+  }
+
+  const job = await createHiggsfieldJob({
+    assetType: "video",
+    prompt: input.prompt.prompt,
+    aspectRatio: toClientAspect(input.aspectRatio),
+    referenceImageUrl: referenceUrl,
+    durationSec: input.durationSeconds ?? 6
+  });
+  const completed = job.status === "completed" ? job : await pollHiggsfieldUntilDone(job.id);
+  if (completed.status !== "completed" || !completed.assetUrl) {
+    throw new Error(
+      completed.errorMessage || `Higgsfield video job ended in status=${completed.status}`
+    );
+  }
+  const buffer = await downloadHiggsfieldAsset(completed.assetUrl);
   return {
-    buffer: downloaded.buffer,
-    contentType: downloaded.contentType,
-    modelUsed: `higgsfield/${model}`,
+    buffer,
+    contentType: completed.assetMimeType || "video/mp4",
+    modelUsed: `higgsfield/${input.model || process.env.HIGGSFIELD_VIDEO_MODEL || "dop"}`,
     promptUsed: input.prompt.prompt,
     seedUsed: typeof input.seed === "number" ? input.seed : null,
-    durationMs: (input.durationSeconds ?? 6) * 1000
+    durationMs: completed.durationMs ?? (input.durationSeconds ?? 6) * 1000
   };
-}
-
-function buildVideoPayload(args: {
-  model: string;
-  prompt: string;
-  negativePrompt: string;
-  aspectRatio: CreativeAspectRatio;
-  referenceUrl: string;
-  durationSeconds: number;
-  seed?: number;
-}): Record<string, unknown> {
-  const payload: Record<string, unknown> = {
-    model: args.model,
-    type: "video",
-    prompt: args.prompt,
-    negative_prompt: args.negativePrompt || undefined,
-    aspect_ratio: args.aspectRatio,
-    source_image_url: args.referenceUrl,
-    duration_seconds: args.durationSeconds
-  };
-  if (typeof args.seed === "number") {
-    payload.seed = args.seed;
-  }
-  return payload;
 }

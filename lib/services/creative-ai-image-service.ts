@@ -67,6 +67,9 @@ export async function generateImage(input: GenerateImageInput): Promise<Generate
     const result = await higgsfieldGenerateImage({
       prompt: input.prompt,
       aspectRatio: input.aspectRatio,
+      // URL preferred — Higgsfield fetches it directly. If we only have a
+      // buffer, the service uploads to R2 first and uses the resulting URL.
+      referenceImageUrl: input.referenceImageUrl ?? null,
       referenceImageBuffer: input.referenceImageBuffer ?? null,
       seed: input.seed
     });
