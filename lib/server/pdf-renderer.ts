@@ -78,16 +78,44 @@ export async function renderPdfFromUrl(input: RenderPdfInput): Promise<Buffer> {
 
     const page = await context.newPage();
 
-    // `networkidle` waits for ~500ms with no in-flight requests — needed
-    // because the print page may fetch images/fonts after the initial paint.
+    // Block third-party hosts that the print page never needs for rendering
+    // (analytics, telemetry, the BI agent tunnel if it's referenced inline).
+    // `networkidle` waits for ALL in-flight requests to settle — any single
+    // hanging request (a stale tunnel URL, a dead analytics beacon) keeps it
+    // from firing and we time out at the gate. Blocking them at the network
+    // layer lets the page finish.
+    await page.route("**/*", (route) => {
+      const url = route.request().url();
+      const blocked = [
+        ".trycloudflare.com",
+        "google-analytics.com",
+        "googletagmanager.com",
+        "doubleclick.net",
+        "facebook.com",
+        "facebook.net",
+        "segment.io",
+        "mixpanel.com",
+        "hotjar.com"
+      ];
+      if (blocked.some((host) => url.includes(host))) {
+        return route.abort();
+      }
+      return route.continue();
+    });
+
+    // Wait until the HTML response arrives (`domcontentloaded`). The print
+    // page is fully server-rendered — once we have the HTML we have all the
+    // content. Then try to wait for `load` (images/fonts) and `networkidle`
+    // but DON'T fail if either doesn't settle. A single hanging fetch
+    // (stale BI tunnel, dead R2 URL, slow analytics script) shouldn't kill
+    // the whole PDF.
     //
-    // Timeout bumped to 180s because the executive page does multiple
-    // sequential OpenAI calls + the influencer intelligence service before
-    // first paint. Until we cache those, the worst-case page load (cold dev
-    // compile + fresh insight generation) can take 60-90s. 180s gives us
-    // safe headroom; production builds without dev compile drop this back
-    // under 30s naturally.
-    await page.goto(input.url, { waitUntil: "networkidle", timeout: 180_000 });
+    // Timeout 180s on goto because the SSR itself may invoke 2 BI agent
+    // calls (60s each timeout) + OpenAI brand/IG insights + heavy DB
+    // aggregations before the HTML response can start streaming.
+    await page.goto(input.url, { waitUntil: "domcontentloaded", timeout: 180_000 });
+    await page.waitForLoadState("load", { timeout: 20_000 }).catch(() => undefined);
+    await page.waitForLoadState("networkidle", { timeout: 15_000 }).catch(() => undefined);
 
     const pdf = await page.pdf({
       format: input.format ?? "A4",

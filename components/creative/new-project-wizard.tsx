@@ -141,37 +141,39 @@ export function NewProjectWizard({
   const [error, setError] = useState<string | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewText, setPreviewText] = useState<string | null>(null);
+  const [previewAgentText, setPreviewAgentText] = useState<string | null>(null);
+  const [previewAgentError, setPreviewAgentError] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewAgentLoading, setPreviewAgentLoading] = useState(false);
 
-  const togglePreview = async () => {
-    if (previewOpen) {
-      setPreviewOpen(false);
-      return;
-    }
-    setPreviewOpen(true);
+  const buildPreviewBody = (useAgent: boolean) => ({
+    creativeType,
+    aspectRatio,
+    brief: {
+      productName: productName || undefined,
+      productDescription: productDescription || undefined,
+      tone: tone || undefined,
+      customPrompt: customPrompt || undefined,
+      realism
+    },
+    // Only labels of reference (non-product) uploads — the product
+    // upload is implicit in the prompt template.
+    referenceLabels: files
+      .map((_, i) => ({ role: fileRoles[i] ?? "reference", label: fileLabels[i] ?? "" }))
+      .filter((x) => x.role === "reference")
+      .map((x) => x.label),
+    index: 0,
+    useAgent,
+    hasReferenceImage: fileRoles.includes("product") || files.length > 0
+  });
+
+  const loadTemplatePreview = async () => {
     setPreviewLoading(true);
     try {
       const resp = await fetch("/api/creative/prompt-preview", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          creativeType,
-          aspectRatio,
-          brief: {
-            productName: productName || undefined,
-            productDescription: productDescription || undefined,
-            tone: tone || undefined,
-            customPrompt: customPrompt || undefined,
-            realism
-          },
-          // Only labels of reference (non-product) uploads — the product
-          // upload is implicit in the prompt template.
-          referenceLabels: files
-            .map((_, i) => ({ role: fileRoles[i] ?? "reference", label: fileLabels[i] ?? "" }))
-            .filter((x) => x.role === "reference")
-            .map((x) => x.label),
-          index: 0
-        })
+        body: JSON.stringify(buildPreviewBody(false))
       });
       const body = await resp.json().catch(() => ({}));
       setPreviewText(body?.ok && typeof body.prompt === "string" ? body.prompt : null);
@@ -179,6 +181,46 @@ export function NewProjectWizard({
       setPreviewText(null);
     } finally {
       setPreviewLoading(false);
+    }
+  };
+
+  const togglePreview = async () => {
+    if (previewOpen) {
+      setPreviewOpen(false);
+      return;
+    }
+    setPreviewOpen(true);
+    await loadTemplatePreview();
+  };
+
+  const generateAgentPrompt = async () => {
+    if (!previewOpen) setPreviewOpen(true);
+    setPreviewAgentLoading(true);
+    setPreviewAgentError(null);
+    try {
+      const resp = await fetch("/api/creative/prompt-preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(buildPreviewBody(true))
+      });
+      const body = await resp.json().catch(() => ({}));
+      if (body?.ok) {
+        const agent = typeof body.agentPrompt === "string" ? body.agentPrompt.trim() : "";
+        const finalText = typeof body.prompt === "string" ? body.prompt : null;
+        setPreviewAgentText(agent || null);
+        setPreviewText(finalText);
+        setPreviewAgentError(
+          !agent && typeof body.agentError === "string" ? body.agentError : null
+        );
+      } else {
+        setPreviewAgentError(
+          isHe ? "הסוכן לא הצליח לכתוב פרומפט." : "Agent failed to write a prompt."
+        );
+      }
+    } catch (err) {
+      setPreviewAgentError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setPreviewAgentLoading(false);
     }
   };
 
@@ -634,43 +676,111 @@ export function NewProjectWizard({
           </label>
 
           <div className="space-y-2">
-            <button
-              type="button"
-              onClick={togglePreview}
-              className="inline-flex items-center gap-2 text-xs font-semibold text-indigo-700 hover:text-indigo-900"
-            >
-              <span>{previewOpen ? "▾" : "▸"}</span>
-              {isHe
-                ? previewOpen
-                  ? "הסתר את הפרומפט הסופי"
-                  : "הצג את הפרומפט הסופי לפני יצירה"
-                : previewOpen
-                  ? "Hide final prompt"
-                  : "Preview the final prompt that will be sent to the AI"}
-            </button>
-            {previewOpen ? (
-              <div className="rounded-xl border border-indigo-200 bg-indigo-50/40 p-3">
-                {previewLoading ? (
-                  <p className="flex items-center gap-2 text-[11px] text-muted-foreground">
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={togglePreview}
+                className="inline-flex items-center gap-2 text-xs font-semibold text-indigo-700 hover:text-indigo-900"
+              >
+                <span>{previewOpen ? "▾" : "▸"}</span>
+                {isHe
+                  ? previewOpen
+                    ? "הסתר את הפרומפט הסופי"
+                    : "הצג את הפרומפט הסופי לפני יצירה"
+                  : previewOpen
+                    ? "Hide final prompt"
+                    : "Preview the final prompt that will be sent to the AI"}
+              </button>
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                onClick={generateAgentPrompt}
+                disabled={previewAgentLoading}
+                className="h-7 gap-1.5 px-2.5 text-[11px]"
+              >
+                {previewAgentLoading ? (
+                  <>
                     <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
-                    {isHe ? "טוען תצוגה מקדימה…" : "Building prompt…"}
-                  </p>
-                ) : previewText ? (
-                  <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words text-[11px] leading-5 text-slate-900">
-                    {previewText}
-                  </pre>
+                    {isHe ? "כותב…" : "Writing…"}
+                  </>
                 ) : (
-                  <p className="text-[11px] text-rose-700">
-                    {isHe
-                      ? "נכשל בטעינת התצוגה המקדימה. נסו שוב."
-                      : "Couldn't build a preview. Try again."}
-                  </p>
+                  <>
+                    <Sparkles className="h-3 w-3" aria-hidden />
+                    {isHe ? "צור פרומפט עם הסוכן" : "Generate prompt with agent"}
+                  </>
                 )}
-                <p className="mt-2 text-[10px] leading-4 text-muted-foreground">
-                  {isHe
-                    ? "זהו הטקסט המדויק שיישלח לדגם. כל שינוי בשדות מעלה ייצור פרומפט חדש."
-                    : "This is the exact text we'll send to the model. Changes to fields above produce a new prompt — click again to refresh."}
-                </p>
+              </Button>
+              {previewOpen && previewText && !previewLoading ? (
+                <button
+                  type="button"
+                  onClick={loadTemplatePreview}
+                  className="text-[11px] font-semibold text-muted-foreground hover:text-foreground"
+                  title={isHe ? "טען מחדש את הטקסט מהטופס" : "Reload from current form fields"}
+                >
+                  {isHe ? "רענן" : "Refresh"}
+                </button>
+              ) : null}
+            </div>
+            {previewOpen ? (
+              <div className="space-y-3">
+                {previewAgentText || previewAgentError || previewAgentLoading ? (
+                  <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-3">
+                    <p className="mb-2 inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-emerald-800">
+                      <Sparkles className="h-3 w-3" aria-hidden />
+                      {isHe ? "הסוכן כתב:" : "Agent wrote:"}
+                    </p>
+                    {previewAgentLoading ? (
+                      <p className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                        <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
+                        {isHe
+                          ? "הסוכן עובד… זה יכול לקחת 5-30 שניות."
+                          : "Agent thinking… 5–30 seconds."}
+                      </p>
+                    ) : previewAgentText ? (
+                      <pre className="max-h-56 overflow-auto whitespace-pre-wrap break-words text-[12px] leading-5 text-slate-900">
+                        {previewAgentText}
+                      </pre>
+                    ) : (
+                      <p className="text-[11px] text-rose-700">
+                        {previewAgentError ??
+                          (isHe ? "הסוכן לא החזיר טקסט." : "Agent returned no text.")}
+                      </p>
+                    )}
+                  </div>
+                ) : null}
+                <div className="rounded-xl border border-indigo-200 bg-indigo-50/40 p-3">
+                  <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-indigo-800">
+                    {isHe
+                      ? previewAgentText
+                        ? "הטקסט המלא שיישלח לדגם (כולל פלט הסוכן):"
+                        : "הטקסט המלא שיישלח לדגם (תבנית בלבד):"
+                      : previewAgentText
+                        ? "Full text sent to the model (template + agent output):"
+                        : "Full text sent to the model (template only):"}
+                  </p>
+                  {previewLoading ? (
+                    <p className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                      <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
+                      {isHe ? "טוען תצוגה מקדימה…" : "Building prompt…"}
+                    </p>
+                  ) : previewText ? (
+                    <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words text-[11px] leading-5 text-slate-900">
+                      {previewText}
+                    </pre>
+                  ) : (
+                    <p className="text-[11px] text-rose-700">
+                      {isHe
+                        ? "נכשל בטעינת התצוגה המקדימה. נסו שוב."
+                        : "Couldn't build a preview. Try again."}
+                    </p>
+                  )}
+                  <p className="mt-2 text-[10px] leading-4 text-muted-foreground">
+                    {isHe
+                      ? "כל שינוי בשדות מעלה — הקליקו \"רענן\" או \"צור פרומפט עם הסוכן\" כדי לראות את הטקסט המעודכן."
+                      : "Edit fields above and click \"Refresh\" or \"Generate prompt with agent\" to see the updated text."}
+                  </p>
+                </div>
               </div>
             ) : null}
           </div>
