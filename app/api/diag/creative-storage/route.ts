@@ -2,11 +2,11 @@
 // so we can see what's actually live in a given environment without
 // guessing. Hit `GET /api/diag/creative-storage` and look at the JSON.
 //
-// Security: returns NO secrets — only env-var PRESENCE booleans, plus a
-// safe "host" extraction from the endpoint URL so you can confirm you're
-// not pointing at the BI tunnel by mistake.
+// Security: requires an authenticated Shopify store session. Returns only
+// env-var PRESENCE booleans and safe host extractions (no secret values).
 
 import { NextResponse } from "next/server";
+import { getAuthContext } from "@/lib/auth/session";
 
 export const dynamic = "force-dynamic";
 
@@ -29,6 +29,11 @@ function isProbablyTunnel(host: string): boolean {
 }
 
 export async function GET() {
+  const auth = await getAuthContext();
+  if (!auth.userId) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
+  }
+
   const backendRaw = (process.env.CREATIVE_STORAGE_BACKEND ?? "local").toLowerCase();
   const backend = backendRaw === "s3" || backendRaw === "r2" ? "s3" : "local";
   const endpoint = process.env.CREATIVE_S3_ENDPOINT;
