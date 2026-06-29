@@ -9,6 +9,7 @@ import {
   type CreativeBrief,
   type CreativeType
 } from "@/lib/domain/creative-types";
+import { getAuthContext } from "@/lib/auth/session";
 
 // Build and return the would-be AI prompt for a wizard configuration without
 // running generation. The wizard's "Preview prompt" button hits this so users
@@ -23,6 +24,11 @@ import {
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
+  const auth = await getAuthContext();
+  if (!auth.userId) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
+  }
+
   try {
     const body = (await request.json()) as {
       creativeType?: string;
