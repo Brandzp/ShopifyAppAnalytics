@@ -546,6 +546,43 @@ export function GanttStudio({ initialSheets }: { initialSheets: GanttSheetSummar
 
       {sheet && !loadingSheet ? (
         <>
+          {/* ── Parsed range banner — visual sanity check ──────────── */}
+          <div className="rounded-xl border border-indigo-200 bg-indigo-50/50 p-3 text-sm">
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="font-semibold text-indigo-900">📅 טווח הגאנט:</span>
+              <span className="font-mono text-indigo-800">
+                {sheet.rangeStart
+                  ? new Date(sheet.rangeStart).toLocaleDateString("he-IL", {
+                      day: "2-digit",
+                      month: "short",
+                      year: "numeric"
+                    })
+                  : "—"}
+                {" → "}
+                {sheet.rangeEnd
+                  ? new Date(sheet.rangeEnd).toLocaleDateString("he-IL", {
+                      day: "2-digit",
+                      month: "short",
+                      year: "numeric"
+                    })
+                  : "—"}
+              </span>
+              <span className="text-xs text-muted-foreground">
+                לשונית מקור: <strong>{sheet.parsedSheetName ?? "?"}</strong> · {sheet.rowCount} משימות
+              </span>
+              {sheet.rangeStart &&
+              sheet.rangeEnd &&
+              sheet.parsedSheetName &&
+              !sheet.parsedSheetName.toLowerCase().includes(
+                new Date(sheet.rangeStart).toLocaleString("he-IL", { month: "long" })
+              ) ? (
+                <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
+                  ⚠ שם הלשונית לא מתאים לטווח התאריכים — ייתכן שהלשונית שגויה
+                </span>
+              ) : null}
+            </div>
+          </div>
+
           {/* ── BI insights pane ────────────────────────────────────── */}
           <div className="rounded-2xl border border-border bg-card p-5">
             <div className="flex flex-wrap items-center justify-between gap-3">

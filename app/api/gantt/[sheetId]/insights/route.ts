@@ -7,6 +7,7 @@
 
 import { NextResponse } from "next/server";
 import { AppError, toErrorMessage } from "@/lib/server/errors";
+import { friendlyDbError } from "@/lib/server/db-error-friendly";
 import { resolveActiveStoreId } from "@/lib/services/offline-sales-service";
 import { assertStoreInActiveOrg } from "@/lib/auth/guards";
 import { getDb } from "@/lib/server/db";
@@ -76,10 +77,13 @@ export async function POST(
 
     // Compact the row data into a digest the agent can reason about
     // without blowing context. We list each task by date + channel +
-    // role + first 120 chars of the description.
+    // role + first 120 chars. Rows are capped at 80 for speed — the
+    // BI tunnel gets choked when we send 300+ rows and the round-trip
+    // starts overflowing Cloudflare's ~100s timeout.
     const ROW_PREVIEW_CHARS = 120;
+    const MAX_ROWS_TO_AGENT = 80;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const rowsDigest = sheet.rows.map((r: any) => ({
+    const rowsDigest = sheet.rows.slice(0, MAX_ROWS_TO_AGENT).map((r: any) => ({
       date: r.startDate ? r.startDate.toISOString().slice(0, 10) : null,
       category: r.category,
       role: r.role,
@@ -89,10 +93,28 @@ export async function POST(
           ? r.task.slice(0, ROW_PREVIEW_CHARS) + "…"
           : r.task
     }));
+    const truncatedNote =
+      sheet.rows.length > MAX_ROWS_TO_AGENT
+        ? `\n(NOTE: only the first ${MAX_ROWS_TO_AGENT} of ${sheet.rows.length} rows shown to fit the token budget.)`
+        : "";
 
+    // Explicit date-range prelude at the very top of the prompt so the
+    // agent can't drift on WHICH month it's analyzing. This is a common
+    // failure — the agent sees "20/12/2025" in a task and starts writing
+    // as if the whole plan is December, even when the calendar range is
+    // clearly labeled otherwise.
+    const rangeStartIso = sheet.rangeStart?.toISOString().slice(0, 10) ?? "unknown";
+    const rangeEndIso = sheet.rangeEnd?.toISOString().slice(0, 10) ?? "unknown";
     const question = [
       `You are a senior marketing strategist reviewing a marketing calendar (Gantt) for an Israeli e-commerce brand.`,
-      `The calendar covers ${sheet.rangeStart?.toISOString().slice(0, 10) ?? "?"} → ${sheet.rangeEnd?.toISOString().slice(0, 10) ?? "?"}.`,
+      ``,
+      `ANCHOR — DATE RANGE OF THIS CALENDAR (do not stray from these dates):`,
+      `  Start: ${rangeStartIso}`,
+      `  End:   ${rangeEndIso}`,
+      `Every insight, action, and date reference MUST fall inside this range. If a task's date is outside this range, ignore it — it's a data anomaly.`,
+      `${truncatedNote}`,
+      ``,
+      `The calendar covers ${rangeStartIso} → ${rangeEndIso}.`,
       `Channels (rows in the source sheet): ${(sheet.categoriesJson as string[]).join(", ") || "(none labeled)"}.`,
       `Owner roles: ${(sheet.rolesJson as string[]).join(", ") || "(none labeled)"}.`,
       `Team structure: web (website + landing pages), social (organic posts/stories/reels), graphic (banners, images, video), affiliates (influencers), email (newsletter + SMS), marketing (promos + discounts). Customer service is not an owner but must be briefed on every discount + launch.`,
@@ -167,7 +189,8 @@ export async function POST(
       generatedAt: updated.insightsGeneratedAt?.toISOString() ?? null,
       insights: agentJson
     });
-  } catch (error) {
+  } catch (rawError) {
+    const error = friendlyDbError(rawError);
     const status = error instanceof AppError ? error.statusCode : 500;
     return NextResponse.json({ ok: false, error: toErrorMessage(error) }, { status });
   }

@@ -6,6 +6,7 @@
 
 import { NextResponse } from "next/server";
 import { AppError, toErrorMessage } from "@/lib/server/errors";
+import { friendlyDbError } from "@/lib/server/db-error-friendly";
 import { resolveActiveStoreId } from "@/lib/services/offline-sales-service";
 import { assertStoreInActiveOrg } from "@/lib/auth/guards";
 import { getDb } from "@/lib/server/db";
@@ -100,7 +101,8 @@ export async function POST(
       generatedAt: updated.briefGeneratedAt?.toISOString() ?? null,
       brief
     });
-  } catch (error) {
+  } catch (rawError) {
+    const error = friendlyDbError(rawError);
     const status = error instanceof AppError ? error.statusCode : 500;
     return NextResponse.json({ ok: false, error: toErrorMessage(error) }, { status });
   }

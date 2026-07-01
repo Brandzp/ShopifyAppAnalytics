@@ -282,11 +282,22 @@ function fallbackBrief(input: BriefGeneratorInput): MarketingBrief {
 // ─── LLM prompt ───────────────────────────────────────────────────────
 
 function buildAgentPrompt(digests: RowDigest[], input: BriefGeneratorInput): string {
+  // Derive the actual date range from the digest so the agent can't drift
+  // to a different month. This is the fix for "the app shows December
+  // dates but my file is July" — we anchor the agent explicitly.
+  const validDates = digests.map((d) => d.date).filter(Boolean) as string[];
+  const rangeStart = validDates.length ? validDates.reduce((a, b) => (a < b ? a : b)) : "unknown";
+  const rangeEnd = validDates.length ? validDates.reduce((a, b) => (a > b ? a : b)) : "unknown";
   return [
     `You are a senior marketing operations lead for the Israeli e-commerce brand "${input.storeBrandName}".`,
     `Turn the Gantt data below into a monthly marketing brief in the EXACT format the team uses.`,
     ``,
-    `Month: ${input.monthLabel}`,
+    `ANCHOR — DATE RANGE OF THIS PLAN (every offer's validity dates MUST be inside this window):`,
+    `  Start: ${rangeStart}`,
+    `  End:   ${rangeEnd}`,
+    `Do NOT invent dates outside this range. If a task's date field is null, mark validity as null — never guess.`,
+    ``,
+    `Month label: ${input.monthLabel}`,
     ``,
     `SECTIONS the brief MUST have (Hebrew content, RTL):`,
     `  1. Header — brand, month, theme sentence (1 line, sets the mood for the month), campaign summary (3-5 lines), kpis (target metrics as short chips: budget, ROAS, revenue).`,
@@ -335,10 +346,14 @@ export async function generateMarketingBrief(input: BriefGeneratorInput): Promis
   }
   const digests = input.rows.map(digestRow);
   try {
+    // 75s so we finish before Cloudflare's ~100s edge timeout — if we
+    // hit Cloudflare's cap we lose the ability to return JSON and the
+    // client sees an HTML error page (the "char '{' is not expected"
+    // parse failure). Keep this below 90s at all costs.
     const raw = await askBiAgentJson<Partial<MarketingBrief>>({
       question: buildAgentPrompt(digests, input),
       jsonHint: "object matching the MarketingBrief schema in the prompt",
-      timeoutMs: 90_000
+      timeoutMs: 75_000
     });
     // Merge with fallback so missing keys don't leave the print page
     // rendering `undefined`. Agent fields take precedence when present.

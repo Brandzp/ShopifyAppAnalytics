@@ -2,7 +2,8 @@
 // Compact summary used by the Gantt UI's "your sheets" dropdown.
 
 import { NextResponse } from "next/server";
-import { toErrorMessage } from "@/lib/server/errors";
+import { AppError, toErrorMessage } from "@/lib/server/errors";
+import { friendlyDbError } from "@/lib/server/db-error-friendly";
 import { resolveActiveStoreId } from "@/lib/services/offline-sales-service";
 import { getDb } from "@/lib/server/db";
 
@@ -33,7 +34,9 @@ export async function GET() {
       }
     });
     return NextResponse.json({ ok: true, sheets });
-  } catch (error) {
-    return NextResponse.json({ ok: false, error: toErrorMessage(error) }, { status: 500 });
+  } catch (rawError) {
+    const error = friendlyDbError(rawError);
+    const status = error instanceof AppError ? error.statusCode : 500;
+    return NextResponse.json({ ok: false, error: toErrorMessage(error) }, { status });
   }
 }
