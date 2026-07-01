@@ -75,6 +75,18 @@ export async function GET() {
       url: maskHost(process.env.BI_AGENT_URL),
       hasToken: Boolean(process.env.BI_AGENT_TOKEN?.trim())
     },
+    creativeAgent: {
+      // If CREATIVE_AGENT_URL is set → dedicated tunnel mode.
+      // If not → shared with BI agent, routed to /creative/ask on BI_AGENT_URL.
+      mode: process.env.CREATIVE_AGENT_URL?.trim() ? "dedicated" : "shared-with-bi",
+      url: maskHost(process.env.CREATIVE_AGENT_URL || process.env.BI_AGENT_URL),
+      path: process.env.CREATIVE_AGENT_PATH?.trim()
+        || (process.env.CREATIVE_AGENT_URL?.trim() ? "/ask" : "/creative/ask"),
+      hasToken: Boolean(
+        process.env.CREATIVE_AGENT_TOKEN?.trim() || process.env.BI_AGENT_TOKEN?.trim()
+      ),
+      usingDedicatedToken: Boolean(process.env.CREATIVE_AGENT_TOKEN?.trim())
+    },
     higgsfield: {
       hasApiKey: Boolean(process.env.HIGGSFIELD_API_KEY?.trim()),
       hasApiSecret: Boolean(process.env.HIGGSFIELD_API_SECRET?.trim())
