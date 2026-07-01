@@ -360,20 +360,57 @@ function parseTabular(rows: unknown[][]): {
   return { rows: parsed, rangeStart, rangeEnd, roles, categories };
 }
 
+// Read one worksheet as a 2-D array, expanding Excel merged cells across
+// their span so a task that spans day 4→day 8 shows up in each of those
+// day columns. Without this step, only the top-left cell of the merge
+// carries the value and days 5→8 look empty.
+function readSheetAsRows(ws: XLSX.WorkSheet): unknown[][] {
+  const rows = XLSX.utils.sheet_to_json<unknown[]>(ws, {
+    header: 1,
+    raw: false,
+    defval: null,
+    blankrows: false
+  });
+  const merges = ws["!merges"] ?? [];
+  for (const m of merges) {
+    // `m` = {s:{r,c}, e:{r,c}} — start/end row+col of the merge.
+    const src = rows[m.s.r]?.[m.s.c];
+    if (src == null || src === "") continue;
+    for (let r = m.s.r; r <= m.e.r; r++) {
+      const row = rows[r] ?? (rows[r] = []);
+      for (let c = m.s.c; c <= m.e.c; c++) {
+        if (r === m.s.r && c === m.s.c) continue;
+        // Only fill if the target cell is empty — never overwrite real data.
+        if (row[c] == null || row[c] === "") row[c] = src;
+      }
+    }
+  }
+  return rows;
+}
+
 // ─── Sheet picking ────────────────────────────────────────────────────
-// Workbooks sometimes have one tab per month. Pick the first sheet whose
-// row 1 has 5+ date cells (matrix) or whose header row contains at least
-// 3 of our known tabular fields. Falls back to the first sheet.
-function pickSheet(workbook: XLSX.WorkBook): { name: string; rows: unknown[][] } {
+// Workbooks sometimes have one tab per month. When `preferredSheetName` is
+// given, use it verbatim (fails loudly if it doesn't exist). Otherwise
+// pick the first sheet whose row 1 has 5+ date cells (matrix) or whose
+// header row contains at least 3 of our known tabular fields. Falls back
+// to the first sheet.
+function pickSheet(
+  workbook: XLSX.WorkBook,
+  preferredSheetName?: string | null
+): { name: string; rows: unknown[][] } {
+  if (preferredSheetName) {
+    const ws = workbook.Sheets[preferredSheetName];
+    if (!ws) {
+      throw new Error(
+        `Requested sheet "${preferredSheetName}" not found. Available: ${workbook.SheetNames.join(", ")}`
+      );
+    }
+    return { name: preferredSheetName, rows: readSheetAsRows(ws) };
+  }
   for (const name of workbook.SheetNames) {
     const ws = workbook.Sheets[name];
     if (!ws) continue;
-    const rows = XLSX.utils.sheet_to_json<unknown[]>(ws, {
-      header: 1,
-      raw: false,
-      defval: null,
-      blankrows: false
-    });
+    const rows = readSheetAsRows(ws);
     if (rows.length === 0) continue;
     const layout = detectLayout(rows);
     if (layout === "matrix") return { name, rows };
@@ -384,20 +421,16 @@ function pickSheet(workbook: XLSX.WorkBook): { name: string; rows: unknown[][] }
   // Fallback: first non-empty sheet.
   const fallback = workbook.SheetNames[0];
   const ws = workbook.Sheets[fallback];
-  const rows = ws
-    ? XLSX.utils.sheet_to_json<unknown[]>(ws, {
-        header: 1,
-        raw: false,
-        defval: null,
-        blankrows: false
-      })
-    : [];
+  const rows = ws ? readSheetAsRows(ws) : [];
   return { name: fallback, rows };
 }
 
-export function parseGanttWorkbook(buffer: Buffer): ParsedGanttSheet {
+export function parseGanttWorkbook(
+  buffer: Buffer,
+  options: { sheetName?: string | null } = {}
+): ParsedGanttSheet {
   const workbook = XLSX.read(buffer, { type: "buffer", cellDates: true });
-  const { name, rows } = pickSheet(workbook);
+  const { name, rows } = pickSheet(workbook, options.sheetName ?? null);
   const layout = detectLayout(rows);
   const result = layout === "matrix" ? parseMatrix(rows) : parseTabular(rows);
   return {

@@ -26,13 +26,22 @@ const ALLOWED_MIMES = new Set([
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   "application/vnd.ms-excel",
   "application/octet-stream", // some browsers misreport — accept if extension is .xlsx/.xls
+  "text/csv",
+  "application/csv",
   ""
 ]);
 const MAX_BYTES = 20 * 1024 * 1024; // 20MB
 
-function hasXlsxExtension(name: string): boolean {
+// Accept .xlsx / .xls AND .csv. The `xlsx` library parses all three
+// transparently. CSV is the common failure — operators export from Google
+// Sheets / an Excel "Save as" step and get .csv without realising.
+function hasSpreadsheetExtension(name: string): boolean {
   const lower = name.toLowerCase();
-  return lower.endsWith(".xlsx") || lower.endsWith(".xls");
+  return (
+    lower.endsWith(".xlsx") ||
+    lower.endsWith(".xls") ||
+    lower.endsWith(".csv")
+  );
 }
 
 export async function POST(request: Request) {
@@ -42,19 +51,54 @@ export async function POST(request: Request) {
     await assertStoreInActiveOrg(storeId);
 
     const form = await request.formData();
-    const file = form.get("file");
-    if (!(file instanceof File)) {
-      throw new AppError("Upload a Gantt .xlsx file in the 'file' field.", 400);
+
+    // Multipart robustness — Hebrew filenames (יולי.xlsx) sometimes fail
+    // the standard `form.get("file")` path because the multipart parser
+    // is strict about RFC 5987 filename encoding. Fall through the field
+    // aliases and, as a last resort, grab the first File in the form.
+    const FIELD_ALIASES = ["file", "gantt", "upload", "sheet", "xlsx"];
+    let file: File | null = null;
+    for (const key of FIELD_ALIASES) {
+      const candidate = form.get(key);
+      if (candidate instanceof File && candidate.size > 0) {
+        file = candidate;
+        break;
+      }
     }
-    if (file.size === 0) {
-      throw new AppError("Uploaded file is empty.", 400);
+    if (!file) {
+      // Sweep every entry — if the client used a random field name we still
+      // want to accept a valid File.
+      for (const entry of form.values()) {
+        if (entry instanceof File && entry.size > 0) {
+          file = entry;
+          break;
+        }
+      }
+    }
+    if (!file) {
+      // Return the field shape so the operator (and I, next time) knows
+      // exactly what got sent. This turns a silent multipart failure into
+      // an actionable diagnostic.
+      const observed: string[] = [];
+      for (const [name, value] of form.entries()) {
+        if (value instanceof File) {
+          observed.push(`${name} = File(name="${value.name}", size=${value.size}, type="${value.type}")`);
+        } else {
+          observed.push(`${name} = string(len=${String(value).length})`);
+        }
+      }
+      throw new AppError(
+        `No file received. Multipart body carried: ${observed.length ? observed.join("; ") : "(no fields)"}. ` +
+          `If the filename contains Hebrew, try renaming to ASCII (e.g. gantt-july.xlsx) and re-uploading.`,
+        400
+      );
     }
     if (file.size > MAX_BYTES) {
       throw new AppError(`File too large (max ${MAX_BYTES / 1024 / 1024}MB).`, 400);
     }
-    if (!ALLOWED_MIMES.has(file.type) && !hasXlsxExtension(file.name)) {
+    if (!ALLOWED_MIMES.has(file.type) && !hasSpreadsheetExtension(file.name)) {
       throw new AppError(
-        `Unexpected file type "${file.type}". Upload an Excel .xlsx file.`,
+        `Unexpected file type "${file.type}" (filename: "${file.name}"). Upload an Excel .xlsx or .csv file.`,
         400
       );
     }
@@ -63,12 +107,19 @@ export async function POST(request: Request) {
       typeof titleField === "string" && titleField.trim()
         ? titleField.trim()
         : file.name.replace(/\.[^.]+$/, "");
+    // Optional — operator explicitly says "parse this tab". Otherwise the
+    // parser auto-picks the first Gantt-shaped tab.
+    const sheetNameField = form.get("sheetName");
+    const preferredSheetName =
+      typeof sheetNameField === "string" && sheetNameField.trim()
+        ? sheetNameField.trim()
+        : null;
 
     const buffer = Buffer.from(await file.arrayBuffer());
 
     let parsed;
     try {
-      parsed = parseGanttWorkbook(buffer);
+      parsed = parseGanttWorkbook(buffer, { sheetName: preferredSheetName });
     } catch (err) {
       throw new AppError(
         `Could not parse the workbook. ${err instanceof Error ? err.message : String(err)}`,
@@ -114,7 +165,9 @@ export async function POST(request: Request) {
         rangeEnd: parsed.rangeEnd,
         rowCount: parsed.rows.length,
         rolesJson: parsed.roles,
-        categoriesJson: parsed.categories
+        categoriesJson: parsed.categories,
+        sheetNamesJson: parsed.sheetNamesInWorkbook,
+        parsedSheetName: parsed.parsedSheetName
       }
     });
 

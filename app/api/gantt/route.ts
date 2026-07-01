@@ -26,6 +26,8 @@ export async function GET() {
         rowCount: true,
         rolesJson: true,
         categoriesJson: true,
+        sheetNamesJson: true,
+        parsedSheetName: true,
         insightsGeneratedAt: true,
         createdAt: true
       }

@@ -66,6 +66,8 @@ type GanttSheetSummary = {
   rowCount: number;
   rolesJson: string[];
   categoriesJson: string[];
+  sheetNamesJson: string[];
+  parsedSheetName: string | null;
   insightsGeneratedAt: string | null;
   createdAt: string;
 };
@@ -192,6 +194,9 @@ export function GanttStudio({ initialSheets }: { initialSheets: GanttSheetSummar
   const [insightsError, setInsightsError] = useState<string | null>(null);
   const [executingRowId, setExecutingRowId] = useState<string | null>(null);
   const [downloadingRole, setDownloadingRole] = useState<string | null>(null);
+  const [dayModalOpen, setDayModalOpen] = useState(false);
+  const [reparsing, setReparsing] = useState(false);
+  const [reparseError, setReparseError] = useState<string | null>(null);
 
   // Load the full sheet (with rows) whenever the selected id changes.
   useEffect(() => {
@@ -241,14 +246,26 @@ export function GanttStudio({ initialSheets }: { initialSheets: GanttSheetSummar
   }, [selectedSheetId]);
 
   const handleUpload = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
+    const original = event.target.files?.[0];
     event.target.value = "";
-    if (!file) return;
+    if (!original) return;
     setUploadError(null);
     setUploading(true);
     try {
+      // Guard against multipart parsers that choke on non-ASCII filenames
+      // (Hebrew, emoji, etc.) by rewrapping the file with a safe name +
+      // sending the original name as a separate title field so we don't
+      // lose it. Same bytes, safer filename on the wire.
+      const safeName = original.name.replace(/[^\w.\- ]+/g, "_") || "gantt.xlsx";
+      const file =
+        safeName === original.name
+          ? original
+          : new File([original], safeName, {
+              type: original.type || "application/octet-stream"
+            });
       const fd = new FormData();
       fd.append("file", file);
+      fd.append("title", original.name.replace(/\.[^.]+$/, ""));
       const res = await fetch("/api/gantt/upload", { method: "POST", body: fd });
       const body = await res.json();
       if (!res.ok || !body.ok) throw new Error(body.error || `HTTP ${res.status}`);
@@ -304,6 +321,33 @@ export function GanttStudio({ initialSheets }: { initialSheets: GanttSheetSummar
       alert(`PDF נכשל: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setDownloadingRole(null);
+    }
+  };
+
+  const handleReparse = async (nextSheetName: string) => {
+    if (!selectedSheetId || !sheet) return;
+    if (nextSheetName === sheet.parsedSheetName) return;
+    setReparseError(null);
+    setReparsing(true);
+    try {
+      const url = `/api/gantt/${selectedSheetId}/reparse?sheetName=${encodeURIComponent(nextSheetName)}`;
+      const res = await fetch(url, { method: "POST" });
+      const body = await res.json();
+      if (!res.ok || !body.ok) throw new Error(body.error || `HTTP ${res.status}`);
+      // Re-fetch the full sheet so rows + calendar refresh.
+      const refreshed = await fetch(`/api/gantt/${selectedSheetId}`).then((r) => r.json());
+      if (refreshed.ok) {
+        setSheet(refreshed.sheet);
+        const first = refreshed.sheet.rows.find((r: GanttRow) => r.startDate)?.startDate;
+        setSelectedDay(first ? dayKey(first) : null);
+      }
+      // Also refresh the sheet list summary (parsedSheetName may have changed).
+      const listRes = await fetch("/api/gantt").then((r) => r.json());
+      if (listRes.ok) setSheets(listRes.sheets);
+    } catch (err) {
+      setReparseError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setReparsing(false);
     }
   };
 
@@ -373,10 +417,10 @@ export function GanttStudio({ initialSheets }: { initialSheets: GanttSheetSummar
             ) : (
               <Upload className="h-4 w-4" aria-hidden />
             )}
-            {uploading ? "מעלה…" : "העלה גאנט (.xlsx)"}
+            {uploading ? "מעלה…" : "העלה גאנט (.xlsx / .csv)"}
             <input
               type="file"
-              accept=".xlsx,.xls"
+              accept=".xlsx,.xls,.csv"
               className="hidden"
               onChange={handleUpload}
             />
@@ -404,6 +448,36 @@ export function GanttStudio({ initialSheets }: { initialSheets: GanttSheetSummar
                 </option>
               ))}
             </select>
+            {/* Tab picker — most impactful when a workbook has multiple
+                month tabs and the auto-picker landed on the wrong one.
+                Hidden when the workbook has only one sheet. */}
+            {sheet && sheet.sheetNamesJson.length > 1 ? (
+              <>
+                <span className="ms-2 text-xs font-semibold text-muted-foreground">
+                  לשונית בקובץ:
+                </span>
+                <select
+                  className="h-9 rounded-lg border border-border bg-background px-3 text-sm"
+                  value={sheet.parsedSheetName ?? ""}
+                  disabled={reparsing}
+                  onChange={(e) => handleReparse(e.target.value)}
+                >
+                  {sheet.sheetNamesJson.map((name) => (
+                    <option key={name} value={name}>
+                      {name}
+                    </option>
+                  ))}
+                </select>
+                {reparsing ? (
+                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                ) : null}
+              </>
+            ) : null}
+          </div>
+        ) : null}
+        {reparseError ? (
+          <div className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+            {reparseError}
           </div>
         ) : null}
       </div>
@@ -590,7 +664,10 @@ export function GanttStudio({ initialSheets }: { initialSheets: GanttSheetSummar
                   <button
                     key={key}
                     type="button"
-                    onClick={() => setSelectedDay(key)}
+                    onClick={() => {
+                      setSelectedDay(key);
+                      if (tasks.length > 0) setDayModalOpen(true);
+                    }}
                     className={cn(
                       "flex h-20 flex-col rounded-lg border p-1.5 text-start transition-colors",
                       selected
@@ -621,124 +698,147 @@ export function GanttStudio({ initialSheets }: { initialSheets: GanttSheetSummar
             </div>
           </div>
 
-          {/* ── Day drill-down ──────────────────────────────────────── */}
-          <div className="rounded-2xl border border-border bg-card p-5">
-            <div className="mb-3 flex items-center gap-3">
-              <button
-                type="button"
-                onClick={() => {
-                  if (!selectedDay) return;
-                  const d = new Date(selectedDay);
-                  d.setUTCDate(d.getUTCDate() - 1);
-                  setSelectedDay(dayKey(d));
-                }}
-                className="rounded-lg border border-border p-1.5 hover:border-indigo-300"
+          {/* ── Day-of-tasks MODAL (opens on calendar click) ─────────── */}
+          {dayModalOpen && selectedDay ? (
+            <div
+              className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4"
+              onClick={() => setDayModalOpen(false)}
+            >
+              <div
+                dir="rtl"
+                className="max-h-[85vh] w-full max-w-2xl overflow-hidden rounded-2xl bg-white shadow-2xl"
+                onClick={(e) => e.stopPropagation()}
               >
-                <ChevronRight className="h-4 w-4" aria-hidden />
-              </button>
-              <h3 className="text-base font-semibold">
-                {selectedDay
-                  ? new Date(selectedDay).toLocaleDateString("he-IL", {
+                <div className="flex items-center gap-3 border-b border-border px-5 py-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const d = new Date(selectedDay);
+                      d.setUTCDate(d.getUTCDate() - 1);
+                      setSelectedDay(dayKey(d));
+                    }}
+                    className="rounded-lg border border-border p-1.5 hover:border-indigo-300"
+                    title="יום קודם"
+                  >
+                    <ChevronRight className="h-4 w-4" aria-hidden />
+                  </button>
+                  <h3 className="flex-1 text-base font-semibold">
+                    {new Date(selectedDay).toLocaleDateString("he-IL", {
                       weekday: "long",
                       day: "2-digit",
                       month: "long",
                       year: "numeric"
-                    })
-                  : "בחרו יום מהלוח"}
-              </h3>
-              <button
-                type="button"
-                onClick={() => {
-                  if (!selectedDay) return;
-                  const d = new Date(selectedDay);
-                  d.setUTCDate(d.getUTCDate() + 1);
-                  setSelectedDay(dayKey(d));
-                }}
-                className="rounded-lg border border-border p-1.5 hover:border-indigo-300"
-              >
-                <ChevronLeft className="h-4 w-4" aria-hidden />
-              </button>
-              <span className="text-xs text-muted-foreground">
-                {tasksForSelectedDay.length} משימות
-              </span>
-            </div>
-            {tasksForSelectedDay.length === 0 ? (
-              <p className="text-sm text-muted-foreground">אין משימות מתוכננות ליום זה.</p>
-            ) : (
-              <ul className="space-y-3">
-                {tasksForSelectedDay.map((row) => {
-                  const meta = row.actionType ? ACTION_META[row.actionType] : null;
-                  const Icon = meta?.icon ?? FileText;
-                  const executed = Boolean(row.executionJson?.executedAt);
-                  return (
-                    <li
-                      key={row.id}
-                      className={cn(
-                        "rounded-xl border p-4",
-                        executed
-                          ? "border-emerald-200 bg-emerald-50/40"
-                          : "border-border bg-background"
-                      )}
-                    >
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div className="flex-1 space-y-1">
-                          <div className="flex items-center gap-2 text-[11px]">
-                            <Icon className="h-3.5 w-3.5 text-indigo-600" aria-hidden />
-                            <span className="font-semibold text-indigo-700">
-                              {row.category ?? "—"}
-                            </span>
-                            {row.role ? (
-                              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-600">
-                                {row.role}
-                              </span>
-                            ) : null}
-                            {meta ? (
-                              <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-semibold text-indigo-700">
-                                {meta.label}
-                              </span>
-                            ) : null}
-                          </div>
-                          <p className="whitespace-pre-wrap text-sm leading-6">{row.task}</p>
-                          {executed ? (
-                            <p className="flex items-center gap-1 text-[11px] text-emerald-700">
-                              <CheckCircle2 className="h-3 w-3" aria-hidden />
-                              סומן כבוצע{" "}
-                              {row.executionJson?.executedAt
-                                ? new Date(row.executionJson.executedAt).toLocaleString("he-IL", {
-                                    dateStyle: "short",
-                                    timeStyle: "short"
-                                  })
-                                : ""}
-                            </p>
-                          ) : null}
-                        </div>
-                        {meta ? (
-                          <button
-                            type="button"
-                            onClick={() => handleExecuteRow(row)}
-                            disabled={executingRowId === row.id}
+                    })}
+                    <span className="ms-3 text-xs font-normal text-muted-foreground">
+                      {tasksForSelectedDay.length} משימות
+                    </span>
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const d = new Date(selectedDay);
+                      d.setUTCDate(d.getUTCDate() + 1);
+                      setSelectedDay(dayKey(d));
+                    }}
+                    className="rounded-lg border border-border p-1.5 hover:border-indigo-300"
+                    title="יום הבא"
+                  >
+                    <ChevronLeft className="h-4 w-4" aria-hidden />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDayModalOpen(false)}
+                    className="rounded-lg border border-border p-1.5 hover:border-rose-300 hover:bg-rose-50"
+                    title="סגור"
+                  >
+                    ✕
+                  </button>
+                </div>
+                <div className="max-h-[calc(85vh-60px)] overflow-y-auto p-5">
+                  {tasksForSelectedDay.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      אין משימות מתוכננות ליום זה.
+                    </p>
+                  ) : (
+                    <ul className="space-y-3">
+                      {tasksForSelectedDay.map((row) => {
+                        const meta = row.actionType ? ACTION_META[row.actionType] : null;
+                        const Icon = meta?.icon ?? FileText;
+                        const executed = Boolean(row.executionJson?.executedAt);
+                        return (
+                          <li
+                            key={row.id}
                             className={cn(
-                              "inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold transition-colors disabled:opacity-50",
+                              "rounded-xl border p-4",
                               executed
-                                ? "border border-emerald-300 bg-white text-emerald-700"
-                                : "bg-indigo-600 text-white hover:bg-indigo-700"
+                                ? "border-emerald-200 bg-emerald-50/40"
+                                : "border-border bg-background"
                             )}
                           >
-                            {executingRowId === row.id ? (
-                              <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
-                            ) : (
-                              <Icon className="h-3.5 w-3.5" aria-hidden />
-                            )}
-                            {executed ? "פתח שוב" : meta.ctaLabel}
-                          </button>
-                        ) : null}
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </div>
+                            <div className="flex flex-wrap items-start justify-between gap-3">
+                              <div className="flex-1 space-y-1">
+                                <div className="flex items-center gap-2 text-[11px]">
+                                  <Icon className="h-3.5 w-3.5 text-indigo-600" aria-hidden />
+                                  <span className="font-semibold text-indigo-700">
+                                    {row.category ?? "—"}
+                                  </span>
+                                  {row.role ? (
+                                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-600">
+                                      {row.role}
+                                    </span>
+                                  ) : null}
+                                  {meta ? (
+                                    <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-semibold text-indigo-700">
+                                      {meta.label}
+                                    </span>
+                                  ) : null}
+                                </div>
+                                <p className="whitespace-pre-wrap text-sm leading-6">
+                                  {row.task}
+                                </p>
+                                {executed ? (
+                                  <p className="flex items-center gap-1 text-[11px] text-emerald-700">
+                                    <CheckCircle2 className="h-3 w-3" aria-hidden />
+                                    סומן כבוצע{" "}
+                                    {row.executionJson?.executedAt
+                                      ? new Date(row.executionJson.executedAt).toLocaleString("he-IL", {
+                                          dateStyle: "short",
+                                          timeStyle: "short"
+                                        })
+                                      : ""}
+                                  </p>
+                                ) : null}
+                              </div>
+                              {meta ? (
+                                <button
+                                  type="button"
+                                  onClick={() => handleExecuteRow(row)}
+                                  disabled={executingRowId === row.id}
+                                  className={cn(
+                                    "inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold transition-colors disabled:opacity-50",
+                                    executed
+                                      ? "border border-emerald-300 bg-white text-emerald-700"
+                                      : "bg-indigo-600 text-white hover:bg-indigo-700"
+                                  )}
+                                >
+                                  {executingRowId === row.id ? (
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                                  ) : (
+                                    <Icon className="h-3.5 w-3.5" aria-hidden />
+                                  )}
+                                  {executed ? "פתח שוב" : meta.ctaLabel}
+                                </button>
+                              ) : null}
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </div>
+              </div>
+            </div>
+          ) : null}
         </>
       ) : null}
 

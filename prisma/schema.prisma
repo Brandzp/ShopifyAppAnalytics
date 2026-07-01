@@ -1505,6 +1505,11 @@ model GanttSheet {
   // so the UI can render filter chips without re-aggregating.
   rolesJson     Json        @default("[]")
   categoriesJson Json       @default("[]")
+  // Every tab in the uploaded workbook + which one we actually parsed.
+  // Lets the UI offer a "wrong tab? switch to..." picker without needing
+  // to re-open the raw file server-side.
+  sheetNamesJson Json       @default("[]")
+  parsedSheetName String?
   // Cached BI agent output. Shape:
   //   { generatedAt, summary, insights: [{title, severity, body}], actions: [...] }
   insightsJson  Json?
