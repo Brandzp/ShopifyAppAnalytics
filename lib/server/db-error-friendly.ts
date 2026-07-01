@@ -24,6 +24,26 @@ const MIGRATION_HINT_PATTERNS: Array<{ pattern: RegExp; hint: string }> = [
   {
     pattern: /P2022/i,
     hint: "Prisma reports a column not found. Run the pending Gantt migration in Supabase."
+  },
+  // AWS SDK for R2/S3 — when the endpoint returns an HTML error page
+  // (Cloudflare 5xx, wrong host, bad creds), the smithy deserializer
+  // throws with "Deserialization error: ... inspect the hidden field
+  // {error}.$response on this object". Nobody outside the SDK is going
+  // to know what that means — translate to something operational.
+  {
+    pattern: /Deserialization error.*\$response on this object/i,
+    hint:
+      "R2 (Creative storage) returned a non-XML/JSON response — usually Cloudflare's HTML " +
+      "error page. Check /api/diag/creative-storage: CREATIVE_S3_ENDPOINT must be " +
+      "https://<account-id>.r2.cloudflarestorage.com (NOT a trycloudflare.com tunnel), " +
+      "CREATIVE_S3_ACCESS_KEY_ID / CREATIVE_S3_SECRET_ACCESS_KEY must both be present " +
+      "and pointing at a token that has Object Read & Write on the bucket."
+  },
+  {
+    pattern: /char\s+['"]{['"]\s+is not expected/i,
+    hint:
+      "R2 (Creative storage) returned an HTML error page instead of an S3 response. " +
+      "Same fix as above — verify /api/diag/creative-storage."
   }
 ];
 
