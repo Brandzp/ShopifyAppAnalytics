@@ -32,7 +32,9 @@ CREATE INDEX IF NOT EXISTS "GanttSheet_storeId_createdAt_idx"
 -- Columns added after initial migration. Idempotent so re-running is safe.
 ALTER TABLE "GanttSheet"
   ADD COLUMN IF NOT EXISTS "sheetNamesJson" JSONB NOT NULL DEFAULT '[]'::jsonb,
-  ADD COLUMN IF NOT EXISTS "parsedSheetName" TEXT;
+  ADD COLUMN IF NOT EXISTS "parsedSheetName" TEXT,
+  ADD COLUMN IF NOT EXISTS "briefJson" JSONB,
+  ADD COLUMN IF NOT EXISTS "briefGeneratedAt" TIMESTAMP(3);
 
 -- ─── GanttRow ─────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS "GanttRow" (

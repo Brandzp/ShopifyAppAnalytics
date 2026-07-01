@@ -46,9 +46,24 @@ function hasSpreadsheetExtension(name: string): boolean {
 
 export async function POST(request: Request) {
   try {
-    const storeId = await resolveActiveStoreId();
+    let storeId: string | null = null;
+    try {
+      storeId = await resolveActiveStoreId();
+    } catch (err) {
+      throw new AppError(
+        `Could not resolve active store: ${err instanceof Error ? err.message : String(err)}. Try logging out and back in.`,
+        401
+      );
+    }
     if (!storeId) throw new AppError("No active store.", 400);
-    await assertStoreInActiveOrg(storeId);
+    try {
+      await assertStoreInActiveOrg(storeId);
+    } catch (err) {
+      throw new AppError(
+        `Store guard failed: ${err instanceof Error ? err.message : String(err)}`,
+        403
+      );
+    }
 
     const form = await request.formData();
 
@@ -189,6 +204,16 @@ export async function POST(request: Request) {
       }))
     });
 
+    // Diagnostic: the first 3 tasks (date + category + first 60 chars) so
+    // the operator can immediately verify "did we parse the right tab
+    // with the right dates?" without leaving the upload flow.
+    const firstThree = parsed.rows.slice(0, 3).map((r) => ({
+      date: r.startDate?.toISOString().slice(0, 10) ?? null,
+      category: r.category,
+      role: r.role,
+      preview: r.task.length > 60 ? r.task.slice(0, 60) + "…" : r.task
+    }));
+
     return NextResponse.json({
       ok: true,
       sheetId: sheet.id,
@@ -200,7 +225,8 @@ export async function POST(request: Request) {
       rangeStart: parsed.rangeStart?.toISOString().slice(0, 10) ?? null,
       rangeEnd: parsed.rangeEnd?.toISOString().slice(0, 10) ?? null,
       roles: parsed.roles,
-      categories: parsed.categories
+      categories: parsed.categories,
+      diagnostic: { firstThree }
     });
   } catch (error) {
     const status = error instanceof AppError ? error.statusCode : 500;

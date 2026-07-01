@@ -64,11 +64,34 @@ export default async function GanttBriefPrintPage({
   if (!storeId) return notFound();
 
   const db = getDb();
+  // Virtual role: "customer_service" isn't a real role in the parsed
+  // rows — it's a synthesized view that shows every discount / promo
+  // task so the CS team can answer "does coupon X work?" questions
+  // without needing to check the calendar themselves.
+  const isCustomerServiceView = role === "customer_service";
+
   const sheet = await db.ganttSheet.findFirst({
     where: { id: sheetId, storeId },
     include: {
       rows: {
-        where: role ? { role } : undefined,
+        where: isCustomerServiceView
+          ? {
+              // CS sees everything the customer might mention:
+              // active discounts, launches, promotions, coupon codes.
+              OR: [
+                { actionType: "discount_code" },
+                { task: { contains: "קופון", mode: "insensitive" } },
+                { task: { contains: "מבצע", mode: "insensitive" } },
+                { task: { contains: "הנחה", mode: "insensitive" } },
+                { task: { contains: "coupon", mode: "insensitive" } },
+                { task: { contains: "discount", mode: "insensitive" } },
+                { task: { contains: "promo", mode: "insensitive" } },
+                { task: { contains: "השקה", mode: "insensitive" } }
+              ]
+            }
+          : role
+            ? { role }
+            : undefined,
         orderBy: [{ startDate: "asc" }, { category: "asc" }, { rowIndex: "asc" }]
       }
     }
@@ -97,10 +120,31 @@ export default async function GanttBriefPrintPage({
     });
   }
 
-  const heading = role
+  const ROLE_LABEL_HE: Record<string, string> = {
+    web: "צוות אתר",
+    social: "צוות סושיאל",
+    graphic: "צוות גרפיקה",
+    affiliates: "צוות אפיליאייטים / משפיענים",
+    email: "צוות אימייל ו-SMS",
+    marketing: "צוות שיווק / מבצעים",
+    customer_service: "שירות לקוחות — מבצעים והשקות"
+  };
+  const ROLE_LABEL_EN: Record<string, string> = {
+    web: "Web team",
+    social: "Social team",
+    graphic: "Graphic / creative team",
+    affiliates: "Affiliates / influencers",
+    email: "Email & SMS team",
+    marketing: "Marketing / promotions",
+    customer_service: "Customer service — promos & launches"
+  };
+  const roleLabel = role
+    ? (isHe ? ROLE_LABEL_HE[role] ?? role : ROLE_LABEL_EN[role] ?? role)
+    : null;
+  const heading = roleLabel
     ? isHe
-      ? `סיכום משימות — ${role}`
-      : `Task brief — ${role}`
+      ? `סיכום משימות — ${roleLabel}`
+      : `Task brief — ${roleLabel}`
     : isHe
       ? "סיכום משימות — כל הצוותים"
       : "Task brief — all teams";

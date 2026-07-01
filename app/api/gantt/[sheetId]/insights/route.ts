@@ -91,10 +91,11 @@ export async function POST(
     }));
 
     const question = [
-      `You are a senior marketing strategist reviewing a marketing calendar (Gantt).`,
+      `You are a senior marketing strategist reviewing a marketing calendar (Gantt) for an Israeli e-commerce brand.`,
       `The calendar covers ${sheet.rangeStart?.toISOString().slice(0, 10) ?? "?"} → ${sheet.rangeEnd?.toISOString().slice(0, 10) ?? "?"}.`,
-      `Channels in use: ${(sheet.categoriesJson as string[]).join(", ") || "(none labeled)"}.`,
-      `Roles in use: ${(sheet.rolesJson as string[]).join(", ") || "(none labeled)"}.`,
+      `Channels (rows in the source sheet): ${(sheet.categoriesJson as string[]).join(", ") || "(none labeled)"}.`,
+      `Owner roles: ${(sheet.rolesJson as string[]).join(", ") || "(none labeled)"}.`,
+      `Team structure: web (website + landing pages), social (organic posts/stories/reels), graphic (banners, images, video), affiliates (influencers), email (newsletter + SMS), marketing (promos + discounts). Customer service is not an owner but must be briefed on every discount + launch.`,
       ``,
       `Calendar data (each task is one channel × one date cell):`,
       JSON.stringify(rowsDigest, null, 2),

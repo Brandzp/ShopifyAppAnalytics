@@ -66,47 +66,63 @@ export type ParsedActionType =
 // column in tabular) to an action type the UI can wire to an existing
 // service. Match is case-insensitive substring on the normalized text.
 //
-// Each entry also names a default role so the per-role PDF grouping has
-// something sensible to use even when the source sheet has no explicit
-// role column (which is the common case).
+// Roles match the operator team's actual structure — the person who owns
+// the task per channel:
+//   web       — website / landing pages / product pages
+//   social    — organic posts, stories, reels, tiktok
+//   graphic   — banners, image + video creatives (was "designer")
+//   affiliates— influencers, ambassadors, affiliate campaigns
+//   email     — newsletter, email flows, sms (same operator IRL)
+//   marketing — coupon / promo owners (also drives customer-service PDF)
+//
+// Note: customer-service is a VIRTUAL role added at PDF time — it doesn't
+// live here because CS doesn't own tasks directly, they need visibility
+// into every discount so they can answer customer questions. See the
+// print page.
 const CHANNEL_RULES: Array<{
   patterns: RegExp[];
   action: ParsedActionType;
   role: string;
 }> = [
-  // Discounts / promos / coupons. Highest priority — operators sometimes
+  // Affiliates / influencers / ambassadors — before "social" so a
+  // "משפיענים" (influencers) row goes to affiliates, not social.
+  {
+    patterns: [/משפיע/i, /affiliate/i, /ambassador/i, /שותפ/i, /יוצרות תוכן/i, /יוצרי תוכן/i, /creator/i, /קריאטור/i, /influenc/i],
+    action: "social_post",
+    role: "affiliates"
+  },
+  // Discounts / promos / coupons. High priority — operators sometimes
   // mention a coupon code (NAME15) inside an Instagram post row, which
   // should still surface the discount action.
   {
-    patterns: [/קופון/i, /מבצע/i, /הנחה/i, /promo/i, /discount/i, /coupon/i, /code/i],
+    patterns: [/קופון/i, /מבצע/i, /הנחה/i, /promo/i, /discount/i, /coupon/i, /code/i, /קוד/i],
     action: "discount_code",
     role: "marketing"
   },
   // Banners / image creatives
   {
-    patterns: [/באנר/i, /banner/i, /הירו/i, /hero/i],
+    patterns: [/באנר/i, /banner/i, /הירו/i, /hero/i, /גרפי/i],
     action: "creative_banner",
-    role: "designer"
+    role: "graphic"
   },
   // Video / reels
   {
-    patterns: [/וידאו/i, /סרטון/i, /ריל/i, /reel/i, /video/i, /tiktok/i],
+    patterns: [/וידאו/i, /סרטון/i, /ריל/i, /reel/i, /video/i, /tiktok/i, /טיק ?טוק/i],
     action: "creative_video",
-    role: "designer"
+    role: "graphic"
   },
   // Social posts / stories
   {
-    patterns: [/פוסט/i, /post/i, /סטור/i, /story/i, /stories/i, /אינסט/i, /instagram/i, /facebook/i, /פייסבוק/i, /social/i, /סושיאל/i],
+    patterns: [/פוסט/i, /post/i, /סטור/i, /story/i, /stories/i, /אינסט/i, /instagram/i, /facebook/i, /פייסבוק/i, /social/i, /סושיאל/i, /סיפור/i],
     action: "social_post",
     role: "social"
   },
-  // Email / newsletter
+  // Email / newsletter / SMS (same operator in most teams)
   {
     patterns: [/אימייל/i, /מייל/i, /ניוזלטר/i, /newsletter/i, /email/i, /e-?mail/i],
     action: "email_campaign",
     role: "email"
   },
-  // SMS
   {
     patterns: [/סמס/i, /sms/i, /מסרון/i, /text/i],
     action: "sms_campaign",
@@ -114,21 +130,21 @@ const CHANNEL_RULES: Array<{
   },
   // Web / landing pages
   {
-    patterns: [/אתר/i, /website/i, /landing/i, /דף נחיתה/i, /home ?page/i, /הומפ/i],
+    patterns: [/אתר/i, /website/i, /landing/i, /דף נחיתה/i, /home ?page/i, /הומפ/i, /עמוד/i, /גלויה/i],
     action: "web_update",
     role: "web"
   },
-  // Blog
+  // Blog / content articles
   {
     patterns: [/blog/i, /בלוג/i, /מאמר/i, /article/i],
     action: "blog_post",
-    role: "content"
+    role: "web"
   },
-  // Generic images / creative
+  // Generic images / creative (fallback for anything image-ish)
   {
-    patterns: [/תמונה/i, /image/i, /creative/i, /יצירה/i, /ויזואל/i, /visual/i],
+    patterns: [/תמונה/i, /image/i, /creative/i, /יצירה/i, /ויזואל/i, /visual/i, /קריאייטיב/i],
     action: "creative_image",
-    role: "designer"
+    role: "graphic"
   }
 ];
 
@@ -167,10 +183,20 @@ function matchHeader(header: string): keyof typeof HEADER_ALIASES | null {
 //   1. JS Date — xlsx already parsed it (we use { cellDates: true })
 //   2. Excel serial number (e.g. 45838) — convert via SSF
 //   3. String — try DD/MM/YYYY then YYYY-MM-DD then native Date()
+// Normalize any Date into midnight-UTC on the *intended calendar date*.
+// This prevents day-shift when the browser (or Prisma / Postgres) renders
+// the value in a non-UTC timezone. `xlsx` with `cellDates:true` returns
+// dates in UTC already, so we peel the Y/M/D via getUTC* — never the
+// timezone-sensitive getFullYear / getMonth / getDate variants.
+function normalizeToUtcMidnight(d: Date): Date {
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+}
+
 function parseCellAsDate(value: unknown): Date | null {
   if (value == null || value === "") return null;
   if (value instanceof Date) {
-    return Number.isNaN(value.getTime()) ? null : value;
+    if (Number.isNaN(value.getTime())) return null;
+    return normalizeToUtcMidnight(value);
   }
   if (typeof value === "number" && Number.isFinite(value)) {
     // xlsx serial → JS date via SSF helper
@@ -182,19 +208,30 @@ function parseCellAsDate(value: unknown): Date | null {
   if (typeof value === "string") {
     const trimmed = value.trim();
     if (!trimmed) return null;
-    // DD/MM/YYYY or DD.MM.YYYY — the Israeli default
+    // DD/MM/YYYY or DD.MM.YYYY — the Israeli default. Israeli operators
+    // consistently write day-first; if we ever see a workbook that
+    // stores month-first strings we'll need a per-store toggle.
     const dmy = trimmed.match(/^(\d{1,2})[/.\-](\d{1,2})[/.\-](\d{2,4})$/);
     if (dmy) {
       const day = Number(dmy[1]);
       const month = Number(dmy[2]);
       let year = Number(dmy[3]);
       if (year < 100) year += 2000;
+      // Reject nonsense before we accidentally build a valid Date for it.
+      if (day < 1 || day > 31 || month < 1 || month > 12) return null;
       const d = new Date(Date.UTC(year, month - 1, day));
       return Number.isNaN(d.getTime()) ? null : d;
     }
-    // Last-resort native parse
+    // ISO YYYY-MM-DD is unambiguous — try it before native parse.
+    const iso = trimmed.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+    if (iso) {
+      const d = new Date(Date.UTC(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3])));
+      return Number.isNaN(d.getTime()) ? null : d;
+    }
+    // Last-resort native parse — normalize to midnight-UTC to be safe.
     const d = new Date(trimmed);
-    return Number.isNaN(d.getTime()) ? null : d;
+    if (Number.isNaN(d.getTime())) return null;
+    return normalizeToUtcMidnight(d);
   }
   return null;
 }

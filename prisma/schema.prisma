@@ -1514,6 +1514,9 @@ model GanttSheet {
   //   { generatedAt, summary, insights: [{title, severity, body}], actions: [...] }
   insightsJson  Json?
   insightsGeneratedAt DateTime?
+  // Cached MarketingBrief output (see gantt-brief-generator-service).
+  briefJson     Json?
+  briefGeneratedAt DateTime?
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
   store         Store       @relation(fields: [storeId], references: [id], onDelete: Cascade)
