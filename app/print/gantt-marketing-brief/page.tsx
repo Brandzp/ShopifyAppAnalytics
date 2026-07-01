@@ -9,6 +9,7 @@ import { notFound } from "next/navigation";
 import { getDb } from "@/lib/server/db";
 import { resolveActiveStoreId } from "@/lib/services/offline-sales-service";
 import type { MarketingBrief, BriefOffer } from "@/lib/services/gantt-brief-generator-service";
+import { getAuthContext } from "@/lib/auth/session";
 
 export const dynamic = "force-dynamic";
 
@@ -104,6 +105,9 @@ export default async function MarketingBriefPrintPage({
 }: {
   searchParams: Promise<SearchParams>;
 }) {
+  const auth = await getAuthContext();
+  if (!auth.orgId) return notFound();
+
   const { sheetId } = await searchParams;
   if (!sheetId) return notFound();
 

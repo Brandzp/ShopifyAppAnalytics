@@ -8,6 +8,7 @@
 import { notFound } from "next/navigation";
 import { getDb } from "@/lib/server/db";
 import { resolveActiveStoreId } from "@/lib/services/offline-sales-service";
+import { getAuthContext } from "@/lib/auth/session";
 
 export const dynamic = "force-dynamic";
 
@@ -53,6 +54,9 @@ export default async function GanttBriefPrintPage({
 }: {
   searchParams: Promise<SearchParams>;
 }) {
+  const auth = await getAuthContext();
+  if (!auth.orgId) return notFound();
+
   const params = await searchParams;
   const sheetId = params.sheetId;
   const role = (params.role ?? "").trim() || null;
