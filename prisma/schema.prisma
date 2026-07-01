@@ -229,6 +229,8 @@ model Store {
   searchConsoleMetrics       SearchConsoleMetric[]
   searchConsolePages         SearchConsolePage[]
   searchConsoleQueries       SearchConsoleQuery[]
+  ganttSheets                GanttSheet[]
+  ganttRows                  GanttRow[]
   createdAt                  DateTime                      @default(now())
   updatedAt                  DateTime                      @updatedAt
 
@@ -1477,4 +1479,85 @@ model SprintAd {
   @@index([sprintId, finalStatus])
   @@index([storeId, createdAt(sort: Desc)])
   @@index([metaAdsetId])
+}
+
+// Uploaded Gantt file. Each upload is immutable — operator re-uploads to
+// replace. The parsed rows live in GanttRow. BI insights are cached as
+// JSON on this row so the UI can re-render without a fresh agent call.
+model GanttSheet {
+  id            String      @id @default(cuid())
+  storeId       String
+  // Operator-visible label, defaults to the uploaded filename.
+  title         String
+  // Original filename + content type, for download / debugging.
+  originalName  String
+  contentType   String
+  bytesLength   Int
+  // R2/local key — the raw .xlsx is preserved so we can re-parse with
+  // future schema improvements without asking the operator to re-upload.
+  storageKey    String?
+  // Span of the parsed rows (min start, max end) — cached for the UI list.
+  rangeStart    DateTime?
+  rangeEnd      DateTime?
+  // Count of rows that parsed cleanly.
+  rowCount      Int         @default(0)
+  // Distinct roles + categories detected. Stored as JSON string arrays
+  // so the UI can render filter chips without re-aggregating.
+  rolesJson     Json        @default("[]")
+  categoriesJson Json       @default("[]")
+  // Cached BI agent output. Shape:
+  //   { generatedAt, summary, insights: [{title, severity, body}], actions: [...] }
+  insightsJson  Json?
+  insightsGeneratedAt DateTime?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  store         Store       @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  rows          GanttRow[]
+
+  @@index([storeId, createdAt(sort: Desc)])
+}
+
+// One task row parsed from a Gantt upload. Minimum required fields are
+// task name + role + category + start + end. Action mapping is optional —
+// `actionType` lets the UI render an "execute" button (create discount,
+// open Creative wizard, etc.). When null, the row is informational only.
+model GanttRow {
+  id           String     @id @default(cuid())
+  sheetId      String
+  // Denormalized for fast multi-tenant queries.
+  storeId      String
+  // 1-based index inside the source sheet — preserves the operator's
+  // intentional ordering even after filtering.
+  rowIndex     Int
+  task         String
+  role         String?
+  category     String?
+  startDate    DateTime?
+  endDate      DateTime?
+  // Free-form status text from the sheet (todo / in progress / done / etc.).
+  status       String?
+  // Optional action wiring. Values we currently understand:
+  //   "discount_code" | "creative_image" | "creative_banner" |
+  //   "creative_video" | "email_campaign" | "social_post" | "blog_post"
+  // The UI maps each to an existing service. Null = no action button.
+  actionType   String?
+  // Action-specific payload (discount %, creative brief, etc.) — kept as
+  // a JSON blob so different action types can use different schemas.
+  actionPayloadJson Json?
+  // Execution outcome — recorded when the operator clicks the action
+  // button. Shape: { executedAt, providerRef, providerUrl, error }.
+  executionJson Json?
+  // Raw parsed cells from the row — kept for round-trip + debug. JSON
+  // object keyed by lowercased header.
+  rawJson      Json?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  sheet        GanttSheet @relation(fields: [sheetId], references: [id], onDelete: Cascade)
+  store        Store      @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@unique([sheetId, rowIndex])
+  @@index([sheetId, role])
+  @@index([sheetId, category])
+  @@index([sheetId, startDate])
+  @@index([storeId, startDate])
 }
