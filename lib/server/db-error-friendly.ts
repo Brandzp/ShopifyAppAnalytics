@@ -40,7 +40,7 @@ const MIGRATION_HINT_PATTERNS: Array<{ pattern: RegExp; hint: string }> = [
       "and pointing at a token that has Object Read & Write on the bucket."
   },
   {
-    pattern: /char\s+['"]{['"]\s+is not expected/i,
+    pattern: /char\s+'?\{'\s+is not expected/i,
     hint:
       "R2 (Creative storage) returned an HTML error page instead of an S3 response. " +
       "Same fix as above — verify /api/diag/creative-storage."

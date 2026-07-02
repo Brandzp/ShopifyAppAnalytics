@@ -21,7 +21,7 @@
 // Fail-safe: returns null on any failure. Callers fall back to the
 // deterministic template — never worse than today.
 
-import { askCreativeAgentJson, isBiAgentConfigured } from "@/lib/clients/bi-agent-client";
+import { askCreativeAgentJson, isBiAgentConfigured, isCreativeAgentConfigured } from "@/lib/clients/bi-agent-client";
 import type { CreativeBrief, CreativeType, CreativeAspectRatio } from "@/lib/domain/creative-types";
 
 // One uploaded image with its role + label. Agent uses this to know
@@ -166,7 +166,7 @@ function buildAgentInstruction(input: CraftPromptInput): string {
 }
 
 export async function craftPromptWithCreativeAgent(input: CraftPromptInput): Promise<string | null> {
-  if (!isBiAgentConfigured()) return null;
+  if (!isCreativeAgentConfigured()) return null;
   if (process.env.BI_AGENT_DISABLE === "1") return null;
   try {
     const parsed = await askCreativeAgentJson<{ prompt?: string }>({
