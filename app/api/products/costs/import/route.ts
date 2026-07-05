@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { AppError, toErrorMessage } from "@/lib/server/errors";
+import { readUploadAsCsv } from "@/lib/server/file-upload";
 import { resolveActiveStoreId } from "@/lib/services/offline-sales-service";
 import { importProductCostsCsv } from "@/lib/services/product-cost-service";
 
@@ -25,12 +26,12 @@ export async function POST(request: Request) {
     const form = await request.formData();
     const file = form.get("file");
     if (!(file instanceof File)) {
-      throw new AppError("Upload a CSV file using the 'file' field.", 400);
+      throw new AppError("Upload a CSV or Excel (.xlsx) file using the 'file' field.", 400);
     }
     if (file.size === 0) throw new AppError("Uploaded file is empty.", 400);
     if (file.size > 10 * 1024 * 1024) throw new AppError("File too large (max 10MB).", 400);
 
-    const csvContent = await file.text();
+    const csvContent = await readUploadAsCsv(file);
     const result = await importProductCostsCsv({ storeId, csvContent });
     return NextResponse.json({ ...result, fileName: file.name });
   } catch (error) {

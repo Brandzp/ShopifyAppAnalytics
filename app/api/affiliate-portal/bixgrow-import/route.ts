@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { AppError, toErrorMessage } from "@/lib/server/errors";
+import { readUploadAsCsv } from "@/lib/server/file-upload";
 import { resolveActiveStoreId } from "@/lib/services/offline-sales-service";
 import { assertStoreInActiveOrg } from "@/lib/auth/guards";
 import { syncBixGrowAttribution } from "@/lib/services/bixgrow-service";
@@ -37,7 +38,7 @@ export async function POST(request: Request) {
     const form = await request.formData();
     const file = form.get("file");
     if (!(file instanceof File)) {
-      throw new AppError("Upload a CSV file using the 'file' field.", 400);
+      throw new AppError("Upload a CSV or Excel (.xlsx) file using the 'file' field.", 400);
     }
     if (file.size === 0) {
       throw new AppError("Uploaded file is empty.", 400);
@@ -48,7 +49,7 @@ export async function POST(request: Request) {
       throw new AppError("File too large (max 30MB).", 400);
     }
 
-    const csvContent = await file.text();
+    const csvContent = await readUploadAsCsv(file);
     const result = await syncBixGrowAttribution(storeId, csvContent);
     return NextResponse.json({ ...result, fileName: file.name });
   } catch (error) {

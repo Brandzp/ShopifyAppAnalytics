@@ -2,64 +2,103 @@
 
 import Link, { useLinkStatus } from "next/link";
 import { usePathname } from "next/navigation";
-import { CalendarRange, LayoutDashboard, Loader2, Megaphone, Menu, Settings2, Sparkles, type LucideIcon } from "lucide-react";
+import {
+  Bell,
+  CalendarRange,
+  FileText,
+  LayoutDashboard,
+  Loader2,
+  Megaphone,
+  Menu,
+  PackageSearch,
+  Settings2,
+  Sparkles,
+  Store as StoreIcon,
+  UserRound,
+  type LucideIcon
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useMemo, useState } from "react";
 import type { AppLocale } from "@/lib/i18n";
 
-// Nav collapse — 2026-07-01 (product strategy memo, initiative 2.1).
+// Two-group nav — 2026-07-05.
 //
-// The sidebar previously showed 14 items competing for the operator's
-// attention. Every extra item made the "one weekly growth brain" pitch
-// less credible. This is the visual-cut phase (option B): the sidebar
-// now shows 5 owner-language labels; every removed route is still
-// reachable by URL.
-//
-// Removed from the sidebar, still routable:
-//   /profit          /sales-summary          /retention
-//   /product-follow-ups   /creator-flow   /creative/sprint
-//   /weekly-summary  /alerts                 /portfolio
-//
-// Future work (memo initiative 2.3 — Alerts inline, 2.2 — Sprint tabbed
-// under Creative) will fold the removed routes into their parent screens
-// with proper tabs / banners. For now they live at their old URLs.
-function getNavigation(locale: AppLocale) {
+// The 2.1 memo cut the sidebar to 5 owner-language anchors, but that
+// pushed the direct dashboards (Weekly Summary, Alerts, Offline,
+// Product Follow-ups, Creator Flow) out of reach for founders who
+// still navigate by task rather than by growth loop. This restores
+// them under a second "Dashboards" heading — the 5 anchors stay
+// primary at the top, the discovery-fallback dashboards live below.
+type NavItem = {
+  href: string;
+  label: string;
+  icon: LucideIcon;
+};
+
+function getNavigation(locale: AppLocale): {
+  primary: readonly NavItem[];
+  dashboards: readonly NavItem[];
+  dashboardsHeading: string;
+} {
   const isHe = locale === "he";
-  return [
-    // 1. Command Center — the weekly growth brain. Absorbs Alerts + Portfolio
-    //    switcher in a later phase; today it's just the current Overview.
-    {
-      href: "/",
-      label: isHe ? "מרכז פיקוד" : "Command Center",
-      icon: LayoutDashboard
-    },
-    // 2. Plan the month — Marketing Gantt is the anchor. Grows to include
-    //    Weekly Report + Product Follow-ups as tabs later.
-    {
-      href: "/marketing-planner",
-      label: isHe ? "תכנון החודש" : "Plan the month",
-      icon: CalendarRange
-    },
-    // 3. Creative Studio — Studio subsumes Sprint as a tab in a later phase.
-    {
-      href: "/creative",
-      label: isHe ? "סטודיו קריאייטיב" : "Creative Studio",
-      icon: Sparkles
-    },
-    // 4. Affiliates — Affiliate Portal is the anchor. Creator Flow folds in.
-    {
-      href: "/affiliate-portal",
-      label: isHe ? "שותפים" : "Affiliates",
-      icon: Megaphone
-    },
-    // 5. Settings — connections, billing, teammates.
-    {
-      href: "/settings",
-      label: isHe ? "הגדרות" : "Settings",
-      icon: Settings2
-    }
-  ] as const;
+  return {
+    primary: [
+      {
+        href: "/",
+        label: isHe ? "מרכז פיקוד" : "Command Center",
+        icon: LayoutDashboard
+      },
+      {
+        href: "/marketing-planner",
+        label: isHe ? "תכנון החודש" : "Plan the month",
+        icon: CalendarRange
+      },
+      {
+        href: "/creative",
+        label: isHe ? "סטודיו קריאייטיב" : "Creative Studio",
+        icon: Sparkles
+      },
+      {
+        href: "/affiliate-portal",
+        label: isHe ? "שותפים" : "Affiliates",
+        icon: Megaphone
+      },
+      {
+        href: "/settings",
+        label: isHe ? "הגדרות" : "Settings",
+        icon: Settings2
+      }
+    ],
+    dashboards: [
+      {
+        href: "/weekly-summary",
+        label: isHe ? "סיכום שבועי" : "Weekly summary",
+        icon: FileText
+      },
+      {
+        href: "/creator-flow",
+        label: isHe ? "יוצרים ומכירות" : "Creators & sales",
+        icon: UserRound
+      },
+      {
+        href: "/sales-summary",
+        label: isHe ? "מצב אופליין" : "Offline status",
+        icon: StoreIcon
+      },
+      {
+        href: "/product-follow-ups",
+        label: isHe ? "מעקב מוצרים" : "Product follow-ups",
+        icon: PackageSearch
+      },
+      {
+        href: "/alerts",
+        label: isHe ? "התראות" : "Alerts",
+        icon: Bell
+      }
+    ],
+    dashboardsHeading: isHe ? "דשבורדים נוספים" : "More dashboards"
+  };
 }
 
 /**
@@ -96,6 +135,35 @@ function NavContent({
 }) {
   const navigation = useMemo(() => getNavigation(locale), [locale]);
 
+  const renderNavLink = (item: NavItem) => {
+    const Icon = item.icon;
+    const isActive = pathname === item.href || (item.href !== "/" && pathname.startsWith(`${item.href}/`));
+    return (
+      <Link
+        key={item.href}
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        href={item.href as any}
+        aria-current={isActive ? "page" : undefined}
+        className={cn(
+          "group/nav relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
+          isActive
+            ? "bg-card text-foreground shadow-soft"
+            : "text-muted-foreground hover:bg-card/70 hover:text-foreground"
+        )}
+      >
+        <span
+          aria-hidden
+          className={cn(
+            "absolute inset-y-2 start-0 w-1 rounded-full transition-colors",
+            isActive ? "bg-foreground" : "bg-transparent group-hover/nav:bg-border"
+          )}
+        />
+        <NavLinkIcon Icon={Icon} isActive={isActive} />
+        <span className="truncate">{item.label}</span>
+      </Link>
+    );
+  };
+
   return (
     <div className="flex h-full flex-col">
       <div className="px-4 pb-8 pt-6">
@@ -109,35 +177,14 @@ function NavContent({
           </p>
         </div>
       </div>
-      <nav className="flex-1 space-y-1 px-3" aria-label="Primary">
-        {navigation.map((item) => {
-          const Icon = item.icon;
-          const isActive = pathname === item.href || (item.href !== "/" && pathname.startsWith(`${item.href}/`));
-          return (
-            <Link
-              key={item.href}
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              href={item.href as any}
-              aria-current={isActive ? "page" : undefined}
-              className={cn(
-                "group/nav relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
-                isActive
-                  ? "bg-card text-foreground shadow-soft"
-                  : "text-muted-foreground hover:bg-card/70 hover:text-foreground"
-              )}
-            >
-              <span
-                aria-hidden
-                className={cn(
-                  "absolute inset-y-2 start-0 w-1 rounded-full transition-colors",
-                  isActive ? "bg-foreground" : "bg-transparent group-hover/nav:bg-border"
-                )}
-              />
-              <NavLinkIcon Icon={Icon} isActive={isActive} />
-              <span className="truncate">{item.label}</span>
-            </Link>
-          );
-        })}
+      <nav className="flex-1 space-y-4 px-3" aria-label="Primary">
+        <div className="space-y-1">{navigation.primary.map(renderNavLink)}</div>
+        <div className="space-y-1">
+          <p className="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+            {navigation.dashboardsHeading}
+          </p>
+          {navigation.dashboards.map(renderNavLink)}
+        </div>
       </nav>
       <div className="px-4 pb-4 pt-6">
         <div className="rounded-2xl border border-border bg-card/80 p-4">

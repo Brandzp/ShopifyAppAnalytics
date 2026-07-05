@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { AppError, toErrorMessage } from "@/lib/server/errors";
+import { readUploadAsCsv } from "@/lib/server/file-upload";
 import { resolveActiveStoreId } from "@/lib/services/offline-sales-service";
 import { importAffiliateConversionsCsv } from "@/lib/services/affiliate-conversion-import-service";
 
@@ -18,7 +19,7 @@ export async function POST(request: Request) {
     const form = await request.formData();
     const file = form.get("file");
     if (!(file instanceof File)) {
-      throw new AppError("Upload a CSV file using the 'file' field.", 400);
+      throw new AppError("Upload a CSV or Excel (.xlsx) file using the 'file' field.", 400);
     }
     if (file.size === 0) {
       throw new AppError("Uploaded file is empty.", 400);
@@ -29,7 +30,7 @@ export async function POST(request: Request) {
       throw new AppError("File too large (max 30MB).", 400);
     }
 
-    const text = await file.text();
+    const text = await readUploadAsCsv(file);
     const result = await importAffiliateConversionsCsv({ storeId, csvText: text });
     return NextResponse.json({ ok: true, result, fileName: file.name });
   } catch (error) {
