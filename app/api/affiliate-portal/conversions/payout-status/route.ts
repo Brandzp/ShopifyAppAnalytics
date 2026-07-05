@@ -5,6 +5,7 @@
 
 import { NextResponse } from "next/server";
 import { AppError, toErrorMessage } from "@/lib/server/errors";
+import { getAuthContext } from "@/lib/auth/session";
 import { resolveActiveStoreId } from "@/lib/services/offline-sales-service";
 import {
   updatePayoutStatus,
@@ -24,6 +25,8 @@ interface Body {
 
 export async function POST(request: Request) {
   try {
+    const auth = await getAuthContext();
+    if (!auth.userId) return NextResponse.json({ ok: false, error: "Unauthorized." }, { status: 401 });
     const storeId = await resolveActiveStoreId();
     if (!storeId) throw new AppError("No active store.", 400);
 

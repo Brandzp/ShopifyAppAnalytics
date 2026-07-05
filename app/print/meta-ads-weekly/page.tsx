@@ -1,3 +1,5 @@
+import { notFound } from "next/navigation";
+import { getAuthContext } from "@/lib/auth/session";
 import { resolveActiveStoreId } from "@/lib/services/offline-sales-service";
 import {
   buildMetaAdsWeeklyReport,
@@ -137,6 +139,9 @@ export default async function MetaAdsWeeklyPrintPage({
 }: {
   searchParams: Promise<SearchParams>;
 }) {
+  const auth = await getAuthContext();
+  if (!auth.orgId) return notFound();
+
   const params = await searchParams;
   // Locale: URL param wins, cookie fallback, default Hebrew.
   const cookieLocale = await getAppLocale();
