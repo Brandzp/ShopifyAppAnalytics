@@ -599,7 +599,18 @@ export const prismaAnalyticsRepository: AnalyticsRepository = {
   async getProducts(storeId) {
     const store = await getStoreRecord(storeId);
     if (!store) return [];
-    const products = await withOptionalDb((db) => db.product.findMany({ where: { storeId: store.id } }), []);
+    // 5000-product ceiling — every downstream consumer is O(all products),
+    // so ballooning past this without warning starts eating memory + turning
+    // simple pages into 10s renders. Merchants north of 5k SKUs are rare
+    // among our target segment; we surface a warning and let them opt into
+    // a paginated view later if that changes.
+    const products = await withOptionalDb(
+      (db) => db.product.findMany({ where: { storeId: store.id }, take: 5000 }),
+      []
+    );
+    if (products.length === 5000) {
+      console.warn("[prisma-analytics-repository] getProducts hit 5000-row cap for store", store.id);
+    }
     return products.map((product: any) => ({
       id: product.id,
       title: product.title,
@@ -617,7 +628,22 @@ export const prismaAnalyticsRepository: AnalyticsRepository = {
   async getCustomers(storeId) {
     const store = await getStoreRecord(storeId);
     if (!store) return [];
-    const customers = await withOptionalDb((db) => db.customer.findMany({ where: { storeId: store.id } }), []);
+    // 10 000-customer ceiling. Retention analytics compute over ALL customers
+    // so the cap is a soft limit that keeps the page responsive; stores over
+    // this will need warehouse-backed retention (see cohortPlaceholder in
+    // getRetentionAnalyticsFromDb).
+    const customers = await withOptionalDb(
+      (db) =>
+        db.customer.findMany({
+          where: { storeId: store.id },
+          take: 10000,
+          orderBy: { totalOrders: "desc" }
+        }),
+      []
+    );
+    if (customers.length === 10000) {
+      console.warn("[prisma-analytics-repository] getCustomers hit 10000-row cap for store", store.id);
+    }
     return customers.map((customer: any) => ({
       id: customer.id,
       name: customer.name,
@@ -670,7 +696,10 @@ export const prismaAnalyticsRepository: AnalyticsRepository = {
     const range = await getActiveRange();
     const orderRecords = await getOrdersForRange(store.id, range.current.start, range.current.end);
     const orders = mapOrders(orderRecords);
-    const products = await withOptionalDb((db) => db.product.findMany({ where: { storeId: store.id } }), []);
+    const products = await withOptionalDb(
+      (db) => db.product.findMany({ where: { storeId: store.id }, take: 5000 }),
+      []
+    );
     const [stockLookup, collectionsLookup] = await Promise.all([
       buildProductStockLookup(store.id),
       buildProductCollectionsLookup(store.id)
@@ -895,16 +924,39 @@ export async function getRetentionAnalyticsFromDb() {
     getOrdersForRange(store.id, range.current.start, range.current.end),
     getOrdersForRange(store.id, range.previous.start, range.previous.end),
     getCustomerOrderHistory(store.id),
+    // Retention needs LIFETIME order history to compute 1st vs 2nd order
+    // products. We cap at a 3-year window + 20 000 rows so a 5-year-old
+    // store with 100 000 orders doesn't blow the request path. Warn when
+    // capped so it's visible in Sentry breadcrumbs.
+    (async () => {
+      const threeYearsAgo = new Date();
+      threeYearsAgo.setUTCFullYear(threeYearsAgo.getUTCFullYear() - 3);
+      const rows = await withOptionalDb(
+        (db) =>
+          db.order.findMany({
+            where: withAnalyticsOrderFilters({
+              storeId: store.id,
+              createdAt: { gte: threeYearsAgo }
+            }),
+            include: { lineItems: true, discountUsages: true },
+            orderBy: { createdAt: "asc" },
+            take: 20000
+          }),
+        []
+      );
+      if (rows.length === 20000) {
+        console.warn(
+          "[prisma-analytics-repository] retention allOrders hit 20000-row cap for store",
+          store.id,
+          "— retention math will be biased toward oldest orders in the window."
+        );
+      }
+      return rows;
+    })(),
     withOptionalDb(
-      (db) =>
-        db.order.findMany({
-          where: withAnalyticsOrderFilters({ storeId: store.id }),
-          include: { lineItems: true, discountUsages: true },
-          orderBy: { createdAt: "asc" }
-        }),
+      (db) => db.product.findMany({ where: { storeId: store.id }, take: 5000 }),
       []
-    ),
-    withOptionalDb((db) => db.product.findMany({ where: { storeId: store.id } }), [])
+    )
   ]);
   const normalizedOrders = mapOrders(orders);
   const normalizedPrevOrders = mapOrders(prevOrders);

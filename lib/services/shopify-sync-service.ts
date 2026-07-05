@@ -1,5 +1,6 @@
 import { getDb, withOptionalDb } from "@/lib/server/db";
 import { AppError, toErrorMessage } from "@/lib/server/errors";
+import { reportError } from "@/lib/server/error-report";
 import { aggregateDailyMetrics, persistSummary } from "@/lib/services/daily-metric-aggregator";
 import { createShopifyClient, ShopifyGraphQLClient } from "@/lib/shopify/client";
 import { COLLECTIONS_QUERY, COLLECTION_PRODUCTS_PAGE_QUERY } from "@/lib/shopify/queries/collections";
@@ -738,12 +739,7 @@ export async function runFullInitialSync(storeId: string): Promise<SyncRunSummar
     // ── DATA-03: materialise DailyMetric rows from synced orders ────────
     // Full initial sync — aggregate the last COVERAGE_DAYS (90) of orders.
     const dailyMetricsUpserted = await aggregateDailyMetrics(storeId, null).catch((err) => {
-      console.error("[SA-SILENT-FAIL] aggregateDailyMetrics failed:", {
-        op: "aggregateDailyMetrics",
-        storeId,
-        mode: "initial",
-        err: err instanceof Error ? err.message : String(err)
-      });
+      reportError("aggregateDailyMetrics", err, { storeId, mode: "initial" });
       return 0;
     });
     if (dailyMetricsUpserted > 0) {
@@ -764,12 +760,7 @@ export async function runFullInitialSync(storeId: string): Promise<SyncRunSummar
     }
     // Persist a Summary row after the metrics are fresh.
     await persistSummary(storeId).catch((err) => {
-      console.error("[SA-SILENT-FAIL] persistSummary failed:", {
-        op: "persistSummary",
-        storeId,
-        mode: "initial",
-        err: err instanceof Error ? err.message : String(err)
-      });
+      reportError("persistSummary", err, { storeId, mode: "initial" });
     });
 
     const result = await finishSyncRun(syncRun.id, {
@@ -835,12 +826,7 @@ export async function runIncrementalSync(storeId: string): Promise<SyncRunSummar
     // Incremental sync — narrow the aggregation window to changed days plus
     // a 1-day look-back (handled inside aggregateDailyMetrics via syncFrom).
     const dailyMetricsUpserted = await aggregateDailyMetrics(storeId, syncFrom).catch((err) => {
-      console.error("[SA-SILENT-FAIL] aggregateDailyMetrics failed:", {
-        op: "aggregateDailyMetrics",
-        storeId,
-        mode: "incremental",
-        err: err instanceof Error ? err.message : String(err)
-      });
+      reportError("aggregateDailyMetrics", err, { storeId, mode: "incremental" });
       return 0;
     });
     if (dailyMetricsUpserted > 0) {
@@ -859,12 +845,7 @@ export async function runIncrementalSync(storeId: string): Promise<SyncRunSummar
       }
     }
     await persistSummary(storeId).catch((err) => {
-      console.error("[SA-SILENT-FAIL] persistSummary failed:", {
-        op: "persistSummary",
-        storeId,
-        mode: "incremental",
-        err: err instanceof Error ? err.message : String(err)
-      });
+      reportError("persistSummary", err, { storeId, mode: "incremental" });
     });
 
     const result = await finishSyncRun(syncRun.id, {

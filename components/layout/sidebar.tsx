@@ -2,52 +2,63 @@
 
 import Link, { useLinkStatus } from "next/link";
 import { usePathname } from "next/navigation";
-import { Bell, Building2, CalendarRange, Camera, LayoutDashboard, LineChart, Loader2, Menu, PackageCheck, Rocket, Settings2, Sparkles, Users2, Megaphone, Bot, FileSpreadsheet, type LucideIcon } from "lucide-react";
+import { CalendarRange, LayoutDashboard, Loader2, Megaphone, Menu, Settings2, Sparkles, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useMemo, useState } from "react";
 import type { AppLocale } from "@/lib/i18n";
 
-function getNavigation(
-  labels: { nav: Record<string, string> },
-  locale: AppLocale,
-  showPortfolio: boolean
-) {
+// Nav collapse — 2026-07-01 (product strategy memo, initiative 2.1).
+//
+// The sidebar previously showed 14 items competing for the operator's
+// attention. Every extra item made the "one weekly growth brain" pitch
+// less credible. This is the visual-cut phase (option B): the sidebar
+// now shows 5 owner-language labels; every removed route is still
+// reachable by URL.
+//
+// Removed from the sidebar, still routable:
+//   /profit          /sales-summary          /retention
+//   /product-follow-ups   /creator-flow   /creative/sprint
+//   /weekly-summary  /alerts                 /portfolio
+//
+// Future work (memo initiative 2.3 — Alerts inline, 2.2 — Sprint tabbed
+// under Creative) will fold the removed routes into their parent screens
+// with proper tabs / banners. For now they live at their old URLs.
+function getNavigation(locale: AppLocale) {
+  const isHe = locale === "he";
   return [
-    { href: "/", label: labels.nav.overview, icon: LayoutDashboard },
-    // Portfolio view only appears when the org has 2+ brands — a portfolio
-    // of one is just the Overview.
-    ...(showPortfolio
-      ? [
-          {
-            href: "/portfolio",
-            label: locale === "he" ? "תיק המותגים" : "Portfolio",
-            icon: Building2
-          }
-        ]
-      : []),
-    { href: "/profit", label: labels.nav.profit, icon: LineChart },
+    // 1. Command Center — the weekly growth brain. Absorbs Alerts + Portfolio
+    //    switcher in a later phase; today it's just the current Overview.
     {
-      href: "/sales-summary",
-      label: locale === "he" ? "מצב אופליין" : "Offline Status",
-      icon: FileSpreadsheet
+      href: "/",
+      label: isHe ? "מרכז פיקוד" : "Command Center",
+      icon: LayoutDashboard
     },
-    { href: "/retention", label: labels.nav.retention, icon: Users2 },
+    // 2. Plan the month — Marketing Gantt is the anchor. Grows to include
+    //    Weekly Report + Product Follow-ups as tabs later.
     {
-      href: "/product-follow-ups",
-      label: locale === "he" ? "מעקב מוצרים" : "Product follow-ups",
-      icon: PackageCheck
+      href: "/marketing-planner",
+      label: isHe ? "תכנון החודש" : "Plan the month",
+      icon: CalendarRange
     },
-    { href: "/affiliate-portal", label: locale === "he" ? "פורטל שותפים" : "Affiliate Portal", icon: Megaphone },
-    { href: "/creator-flow", label: labels.nav.creatorFlow, icon: Camera },
-    { href: "/creative", label: locale === "he" ? "סטודיו קריאייטיב" : "Creative", icon: Sparkles },
-    { href: "/creative/sprint", label: locale === "he" ? "ספרינט קריאייטיב" : "Creative Sprint", icon: Rocket },
-    { href: "/weekly-summary", label: labels.nav.weeklySummary, icon: Sparkles },
-    // Growth Agent — hidden from nav until the automation loop is shipped.
-    // Routes still exist at /growth-agent/* for direct access if needed.
-    { href: "/marketing-planner", label: locale === "he" ? "גאנט שיווקי" : "Marketing Planner", icon: CalendarRange },
-    { href: "/alerts", label: labels.nav.alerts, icon: Bell },
-    { href: "/settings", label: labels.nav.settings, icon: Settings2 }
+    // 3. Creative Studio — Studio subsumes Sprint as a tab in a later phase.
+    {
+      href: "/creative",
+      label: isHe ? "סטודיו קריאייטיב" : "Creative Studio",
+      icon: Sparkles
+    },
+    // 4. Affiliates — Affiliate Portal is the anchor. Creator Flow folds in.
+    {
+      href: "/affiliate-portal",
+      label: isHe ? "שותפים" : "Affiliates",
+      icon: Megaphone
+    },
+    // 5. Settings — connections, billing, teammates.
+    {
+      href: "/settings",
+      label: isHe ? "הגדרות" : "Settings",
+      icon: Settings2
+    }
   ] as const;
 }
 
@@ -73,8 +84,7 @@ function NavContent({
   pathname,
   storeName,
   locale,
-  labels,
-  showPortfolio
+  labels
 }: {
   pathname: string;
   storeName: string;
@@ -83,12 +93,8 @@ function NavContent({
     common: Record<string, string>;
     nav: Record<string, string>;
   };
-  showPortfolio: boolean;
 }) {
-  const navigation = useMemo(
-    () => getNavigation(labels, locale, showPortfolio),
-    [labels, locale, showPortfolio]
-  );
+  const navigation = useMemo(() => getNavigation(locale), [locale]);
 
   return (
     <div className="flex h-full flex-col">
@@ -149,6 +155,7 @@ export function Sidebar({
   storeName,
   locale,
   labels,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   showPortfolio = false
 }: {
   storeName: string;
@@ -157,8 +164,10 @@ export function Sidebar({
     common: Record<string, string>;
     nav: Record<string, string>;
   };
-  // Show the Portfolio nav item — true when the org has ≥2 connected
-  // brands. Defaults to false so callers that don't yet pass it stay safe.
+  // Kept in the API for back-compat with existing callers (app-shell.tsx
+  // still passes it). Ignored today — Portfolio was cut from the sidebar
+  // in the 2026-07 nav collapse. Will re-emerge as a Command Center brand
+  // switcher, not a nav item, in memo initiative 2.1 phase C.
   showPortfolio?: boolean;
 }) {
   const pathname = usePathname();
@@ -184,7 +193,6 @@ export function Sidebar({
           storeName={storeName}
           locale={locale}
           labels={labels}
-          showPortfolio={showPortfolio}
         />
       </aside>
       {open ? (
@@ -195,7 +203,6 @@ export function Sidebar({
               storeName={storeName}
               locale={locale}
               labels={labels}
-              showPortfolio={showPortfolio}
             />
           </div>
         </div>

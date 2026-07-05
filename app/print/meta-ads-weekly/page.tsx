@@ -51,6 +51,10 @@ import {
   generateWeeklyBiCommentary,
   type BiWeeklyCommentary
 } from "@/lib/services/weekly-report-bi-commentary-service";
+import {
+  readCachedInsights,
+  writeCachedInsights
+} from "@/lib/services/weekly-report-cache";
 
 // Print-only weekly Meta Ads report. Server-rendered, no client JS,
 // captured to PDF by Playwright (or visible directly in a browser).
@@ -179,11 +183,21 @@ export default async function MetaAdsWeeklyPrintPage({
     ? await getRecentlyResolvedWithOutcomes({ storeId, lookbackDays: 14, limit: 8 }).catch(() => [])
     : [];
 
+  // Try the WeeklyReport insight cache first — reads the scheduled cron's
+  // stored biCommentary / brandInsights / igInsights when they're < 24h
+  // old. Turns a 60-90s PDF render into a 3-5s one when the operator
+  // re-opens the same window.
+  const cachedInsights = storeId
+    ? await readCachedInsights(storeId, start, end).catch(() => null)
+    : null;
+
   // BI agent executive commentary. Best-effort: returns null if the agent
   // is unconfigured or throws — the section just won't render. Wrapped in
   // a try/catch so a tunnel hiccup never blocks the rest of the PDF.
   let biCommentary: BiWeeklyCommentary | null = null;
-  if (storeId && report) {
+  if (cachedInsights?.biCommentary) {
+    biCommentary = cachedInsights.biCommentary;
+  } else if (storeId && report) {
     biCommentary = await generateWeeklyBiCommentary({
       storeName: null, // print page doesn't load the store name; agent infers from data
       periodStart: start.toISOString().slice(0, 10),
@@ -226,14 +240,26 @@ export default async function MetaAdsWeeklyPrintPage({
 
   const insightsByBrand = new Map<string, BrandInsights>();
   if (report && report.brands.length > 0) {
-    const results = await Promise.all(
-      report.brands.map((brand) =>
-        generateBrandInsights(brand, report!.dateRange, isHe ? "he" : "en", {
-          prior: priorByBrand.get(brand.name) ?? null
-        }).then((insights) => [brand.name, insights] as const)
-      )
+    // Seed from cache first, then only regenerate brands the cache misses.
+    // A partial cache is common when a new brand was added since last run.
+    const cachedBrandInsights = cachedInsights?.brandInsights ?? {};
+    const brandsToGenerate = report.brands.filter(
+      (brand) => !cachedBrandInsights[brand.name]
     );
-    for (const [name, insights] of results) insightsByBrand.set(name, insights);
+    for (const brand of report.brands) {
+      const cached = cachedBrandInsights[brand.name];
+      if (cached) insightsByBrand.set(brand.name, cached);
+    }
+    if (brandsToGenerate.length > 0) {
+      const results = await Promise.all(
+        brandsToGenerate.map((brand) =>
+          generateBrandInsights(brand, report!.dateRange, isHe ? "he" : "en", {
+            prior: priorByBrand.get(brand.name) ?? null
+          }).then((insights) => [brand.name, insights] as const)
+        )
+      );
+      for (const [name, insights] of results) insightsByBrand.set(name, insights);
+    }
   }
 
   let influencer: Awaited<ReturnType<typeof buildMarketingPlannerInfluencerIntelligence>> | null = null;
@@ -290,8 +316,8 @@ export default async function MetaAdsWeeklyPrintPage({
   }
 
   // Instagram AI insights — fed off the same data the section renders.
-  let igInsights: InstagramInsights | null = null;
-  if (influencer) {
+  let igInsights: InstagramInsights | null = cachedInsights?.igInsights ?? null;
+  if (!igInsights && influencer) {
     const profiles = influencer.instagramCrawl?.affiliateProfiles ?? [];
     const topCreatorsLookup = new Map<string, { sales: number; orders: number }>();
     for (const c of influencer.topCreators ?? []) {
@@ -314,6 +340,22 @@ export default async function MetaAdsWeeklyPrintPage({
       },
       isHe ? "he" : "en"
     ).catch(() => null);
+  }
+
+  // Write freshly-generated insights back into the cache so subsequent
+  // renders (email cron re-send, second PDF download) skip the expensive
+  // BI + OpenAI calls. No-op when no WeeklyReport row exists for this
+  // window — see writeCachedInsights contract.
+  if (storeId && !cachedInsights) {
+    const brandInsightsRecord: Record<string, BrandInsights> = {};
+    for (const [name, insights] of insightsByBrand) {
+      brandInsightsRecord[name] = insights;
+    }
+    await writeCachedInsights(storeId, start, end, {
+      biCommentary,
+      brandInsights: brandInsightsRecord,
+      igInsights
+    }).catch(() => undefined);
   }
 
   const t = isHe

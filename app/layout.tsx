@@ -3,6 +3,7 @@ import "./globals.css";
 import { getAppLocale, getLocaleDirection } from "@/lib/i18n";
 import { CookieBanner } from "@/components/compliance/cookie-banner";
 import { PlausibleScript } from "@/components/compliance/plausible-script";
+import { Toaster } from "@/components/ui/toast";
 
 export const metadata: Metadata = {
   title: "Brandzp — Founder Analytics for Shopify",
@@ -21,6 +22,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
     <html lang={locale} dir={getLocaleDirection(locale)}>
       <body>
         {children}
+        <Toaster locale={localeFor} />
         <CookieBanner locale={localeFor} />
         <PlausibleScript />
       </body>

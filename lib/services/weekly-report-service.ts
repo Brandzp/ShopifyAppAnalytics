@@ -317,9 +317,15 @@ export async function persistWeeklyReport(input: {
       periodStart: new Date(input.bundle.periodStart),
       periodEnd: new Date(input.bundle.periodEnd),
       dataJson: input.bundle as unknown as object,
+      // Cache shape matches lib/services/weekly-report-cache.ts so
+      // subsequent PDF renders (email re-send, on-demand download) can
+      // read directly from here instead of calling OpenAI / BI agent
+      // again. biCommentary is included so the exec-summary section
+      // renders in ~5s instead of ~60s on second view.
       insightsJson: {
-        metaAds: input.bundle.metaAdsInsightsByBrand,
-        instagram: input.bundle.instagramInsights
+        brandInsights: input.bundle.metaAdsInsightsByBrand,
+        igInsights: input.bundle.instagramInsights,
+        biCommentary: input.bundle.biAgentCommentary ?? null
       } as unknown as object
     },
     select: { id: true }

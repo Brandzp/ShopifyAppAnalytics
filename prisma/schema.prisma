@@ -556,6 +556,10 @@ model Order {
   @@index([storeId, createdAt])
   @@index([storeId, updatedAt])
   @@index([customerId])
+  // Affiliate-conversion importer + reconciler filter by
+  // `{ storeId, orderNumber: { in: [...] } }` on every BixGrow re-delivery.
+  // Without this, that lookup does a sequential scan of the store's orders.
+  @@index([storeId, orderNumber])
 }
 
 model OrderLineItem {
@@ -887,6 +891,13 @@ model AffiliateMember {
   salesTotal          Decimal                     @default(0) @db.Decimal(12, 2)
   commissionTotal     Decimal                     @default(0) @db.Decimal(12, 2)
   approvedBalance     Decimal                     @default(0) @db.Decimal(12, 2)
+  // Per-affiliate commission override. When null, the program's
+  // commissionRate is used. Values 0.00–1.00 (fraction of sale).
+  commissionRateOverride Decimal?                 @db.Decimal(5, 4)
+  // Payout instrument free-form ("PayPal: name@…" / "Bit: 05x-…" /
+  // "IBAN: IL…"). Not validated — merchants have their own conventions.
+  payoutMethod        String?
+  payoutDetails       String?
   joinedAt            DateTime                    @default(now())
   lastLoginAt         DateTime?
   createdAt           DateTime                    @default(now())
@@ -968,6 +979,23 @@ model AffiliateAttribution {
   // Mirrors what the merchant sees on the BixGrow side, and unlocks
   // a "Coupon" column on the conversions table.
   couponCode          String?
+  // ─── Payout state (BixGrow-like commission tracking) ─────────────
+  // Values: "unpaid" | "approved" | "paid" | "cancelled" | "refunded"
+  // "unpaid"    — default. Commission owed but not yet approved for
+  //               payment (e.g. still in return window).
+  // "approved"  — merchant has confirmed the sale is real; ready for
+  //               the next payout run.
+  // "paid"      — commission was included in a payout. `paidAt` set.
+  // "cancelled" — sale rejected (fraud, chargeback before pay).
+  // "refunded"  — order refunded; commission should be clawed back.
+  payoutStatus        String          @default("unpaid")
+  paidAt              DateTime?
+  // Free-form note attached to the row — e.g. payout batch id, reason
+  // for cancellation, or a Stripe/Wise transaction id.
+  payoutNote          String?
+  // Explicit "this row was entered by hand" flag so the UI can filter
+  // manual vs synced conversions (BixGrow webhook / Shopify sync).
+  manualEntry         Boolean         @default(false)
   occurredAt          DateTime        @default(now())
   createdAt           DateTime        @default(now())
   updatedAt           DateTime        @updatedAt
@@ -977,6 +1005,13 @@ model AffiliateAttribution {
 
   @@unique([affiliateMemberId, orderId])
   @@index([storeId, occurredAt])
+  // Coupon lookups drive the "who owns this coupon" reconciliation and
+  // the customer-service export in the Gantt brief pipeline. Both filter
+  // by { storeId, couponCode }.
+  @@index([storeId, couponCode])
+  // Payout dashboard filters by { storeId, payoutStatus } — the
+  // "Approved" pile is the payout queue.
+  @@index([storeId, payoutStatus])
 }
 
 model AgentSettings {
@@ -1117,6 +1152,10 @@ model WebhookEvent {
 
   @@index([storeId, topic, createdAt(sort: Desc)])
   @@index([storeId, status])
+  // Dedup lookup — the ingestor filters by
+  // `{ storeId, platform, externalId: { in: [...] } }` to skip webhooks
+  // it's already processed. Composite ordering matches the query shape.
+  @@index([storeId, platform, externalId])
 }
 
 model OfflineSalesImport {
@@ -1479,6 +1518,9 @@ model SprintAd {
   @@index([sprintId, finalStatus])
   @@index([storeId, createdAt(sort: Desc)])
   @@index([metaAdsetId])
+  // Meta reconciler + cascade evaluator filter by metaAdId when correlating
+  // Meta insights back to the sprint slot that produced each ad.
+  @@index([metaAdId])
 }
 
 // Uploaded Gantt file. Each upload is immutable — operator re-uploads to

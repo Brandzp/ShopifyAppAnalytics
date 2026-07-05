@@ -9,6 +9,7 @@ import type {
 } from "@/lib/domain/marketing-planner-types";
 import { AppError } from "@/lib/server/errors";
 import { getDb } from "@/lib/server/db";
+import { reportBreadcrumb } from "@/lib/server/error-report";
 import { buildMarketingPlannerCustomerVoice } from "@/lib/services/flashy-review-service";
 import { crawlPublicInstagramProfiles } from "@/lib/services/instagram-public-crawler-service";
 import {
@@ -316,16 +317,26 @@ export async function buildMarketingPlannerDataReadiness(
   const refreshWarnings: string[] = [];
 
   if (input.refresh && storeScope.connected && storeScope.storeId) {
-    await runIncrementalSync(storeScope.storeId).catch((error) => {
-      refreshWarnings.push(`Shopify refresh skipped or failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+    const scopedStoreId = storeScope.storeId;
+    await runIncrementalSync(scopedStoreId).catch((error) => {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      refreshWarnings.push(`Shopify refresh skipped or failed: ${message}`);
+      // Breadcrumb, not a full error report: this is a KNOWN-degraded case
+      // (surfaced to caller via refreshWarnings). Left as trail so if a
+      // later error surfaces we can see the refresh already degraded.
+      reportBreadcrumb("marketing-planner:shopify-refresh", message, { storeId: scopedStoreId });
     });
 
-    await crawlPublicInstagramProfiles({ storeId: storeScope.storeId }).catch((error) => {
-      refreshWarnings.push(`Instagram refresh failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+    await crawlPublicInstagramProfiles({ storeId: scopedStoreId }).catch((error) => {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      refreshWarnings.push(`Instagram refresh failed: ${message}`);
+      reportBreadcrumb("marketing-planner:instagram-refresh", message, { storeId: scopedStoreId });
     });
 
-    await syncMetaAdsCampaignInsights({ storeId: storeScope.storeId, datePreset: "last_30d" }).catch((error) => {
-      refreshWarnings.push(`Meta Ads refresh failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+    await syncMetaAdsCampaignInsights({ storeId: scopedStoreId, datePreset: "last_30d" }).catch((error) => {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      refreshWarnings.push(`Meta Ads refresh failed: ${message}`);
+      reportBreadcrumb("marketing-planner:meta-ads-refresh", message, { storeId: scopedStoreId });
     });
   }
 

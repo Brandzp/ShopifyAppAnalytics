@@ -3,6 +3,7 @@ import { SectionHeading } from "@/components/ui/section-heading";
 import { AffiliatePortalNav } from "@/components/affiliate-portal/portal-nav";
 import { AffiliateAttributionSyncButton } from "@/components/affiliate-portal/affiliate-attribution-sync-button";
 import { UploadConversionsCsvButton } from "@/components/affiliate-portal/upload-conversions-csv-button";
+import { ManualConversionButton } from "@/components/affiliate-portal/manual-conversion-button";
 import { getAppChromeData } from "@/lib/services/analytics-service";
 import { getAffiliateConversions } from "@/lib/services/affiliate-portal-service";
 import { DataTable } from "@/components/shared/data-table";
@@ -49,6 +50,7 @@ export default async function ConversionsPage() {
             description={heading.description}
           />
           <div className="flex flex-wrap items-start gap-3">
+            <ManualConversionButton locale={isHe ? "he" : "en"} />
             <AffiliateAttributionSyncButton storeId={chrome.store.id} />
             <UploadConversionsCsvButton />
             <a href="/api/affiliate-portal/conversions/export" className={buttonVariants({ variant: "secondary" })}>
