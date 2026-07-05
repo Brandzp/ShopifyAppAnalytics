@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/server/db";
-import { runFullInitialSync } from "@/lib/services/shopify-sync-service";
+import { runIncrementalSync } from "@/lib/services/shopify-sync-service";
 import { syncMetaAdsCampaignInsights } from "@/lib/services/meta-ads-service";
 import { syncInstagramPostsForStore } from "@/lib/services/instagram-service";
 import { refreshMetaTokensNearExpiry } from "@/lib/services/meta-token-refresh-service";
@@ -153,7 +153,7 @@ async function handler(request: Request) {
 
       // ── Shopify (mandatory if connected) ──────────────────────────
       try {
-        await runFullInitialSync(store.id);
+        await runIncrementalSync(store.id);
         result.shopify = { ok: true };
       } catch (err) {
         // 409 = a sync is already running for this store — that's not a
