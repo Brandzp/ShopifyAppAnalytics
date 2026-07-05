@@ -18,9 +18,9 @@
 //   - /api/auth/callback (Supabase verification redirect)
 //   - /api/webhooks/* (Shopify, BixGrow, etc — auth via signature)
 //   - /api/cron/* (cron self-pings — locked behind CRON_SECRET; see
-//     requireCronSecret below. When CRON_SECRET is set, these routes require
-//     a matching x-cron-secret header; when unset, the check is skipped so
-//     local dev keeps working.)
+//     requireCronSecret below. These routes ALWAYS require a matching
+//     x-cron-secret header. When CRON_SECRET is absent the guard returns
+//     401 (fail-closed) — CRON_SECRET must be set in all environments.)
 //   - /api/meta/data-deletion (Meta deletion callback protocol)
 //
 // Static assets (_next, favicon, robots, etc) bypass middleware via
@@ -83,16 +83,16 @@ function isPublic(pathname: string): boolean {
 // Cron routes are session-less (the in-process schedulers self-ping them, and
 // an external scheduler may hit them too). To stop anyone on the internet from
 // triggering a full sync / email blast, gate /api/cron/* behind a shared
-// secret: when CRON_SECRET is set, the request MUST carry a matching
-// `x-cron-secret` header. When CRON_SECRET is unset (local dev), the check is
-// skipped so the dev server keeps working without the var.
+// secret: the request MUST carry a matching `x-cron-secret` header.
+// CRON_SECRET MUST be set in all environments (local dev and production).
+// When CRON_SECRET is absent the guard returns 401 (fail-closed, not fail-open).
 //
 // Returns a 401 NextResponse to short-circuit with, or null to allow through.
 function requireCronSecret(req: NextRequest): NextResponse | null {
   if (!req.nextUrl.pathname.startsWith("/api/cron/")) return null;
 
   const expected = process.env.CRON_SECRET?.trim();
-  if (!expected) return null; // not configured — skip the check (dev)
+  if (!expected) return NextResponse.json({ error: "Unauthorized" }, { status: 401 }); // fail-closed: deny when CRON_SECRET is not configured
 
   const provided = req.headers.get("x-cron-secret")?.trim();
   if (provided && provided === expected) return null; // authorized
