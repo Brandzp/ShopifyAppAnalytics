@@ -1302,16 +1302,25 @@ function pickMainRisk(
   recon: ReconciliationReport,
   isHe: boolean
 ): string {
-  // Priority: errors > warnings > healthy.
-  const err = recon.validation.warnings.find((w) => w.severity === "error");
+  // The top-risk card on page 1 is for BUSINESS attention, not data-pipeline
+  // warnings. Sync gaps, missing-day info and other kind:"data" notes live
+  // in the reconciliation section (page 3) and shouldn't be repeated here.
+  // Business-severity errors still win (missing Meta connection blocks the
+  // whole report, so it must escalate to the top).
+  const err = recon.validation.warnings.find((w) => w.severity === "error" && w.kind === "business");
   if (err) return isHe ? err.messageHe : err.messageEn;
-  const warn = recon.validation.warnings.find((w) => w.severity === "warning");
-  if (warn) return isHe ? warn.messageHe : warn.messageEn;
+  const businessWarn = recon.validation.warnings.find((w) => w.severity === "warning" && w.kind === "business");
+  if (businessWarn) return isHe ? businessWarn.messageHe : businessWarn.messageEn;
   if (recon.blended.roas != null && recon.blended.roas < 2) {
     return isHe
       ? `ROAS המשוקלל נמוך מ־2x (${recon.blended.roas.toFixed(2)}x). יש לבחון את הקמפיינים החזקים והחלשים בפירוט.`
       : `Blended ROAS is below 2x (${recon.blended.roas.toFixed(2)}x). Drill into top + worst campaigns.`;
   }
+  // Fall back to a data-error only if there's genuinely nothing else — e.g.,
+  // no Meta connection means the whole report is empty and the founder needs
+  // to know before scrolling further.
+  const criticalDataErr = recon.validation.warnings.find((w) => w.severity === "error");
+  if (criticalDataErr) return isHe ? criticalDataErr.messageHe : criticalDataErr.messageEn;
   return isHe ? "אין סיכונים מהותיים שעלו מתהליך האימות." : "No material risks raised during validation.";
 }
 
@@ -2239,9 +2248,14 @@ function AffiliatePerformancePage({
         <Tile label={lang("סה״כ מכירות", "Total sales")} value={fmt(deepDive.totals.sales)} source="S" />
         <Tile label={lang("הזמנות", "Orders")} value={String(deepDive.totals.orders)} source="S" />
         <Tile
-          label={lang("עמלות ששולמו", "Commission paid")}
+          // Renamed from "Commission paid" — AffiliateAttribution stores
+          // ONLY the accrued amount (commissionAmount). Payout status
+          // (unpaid / approved / paid) lives on AffiliateConversion.
+          // Showing ₪0 under a "paid" label was misleading; "accrued"
+          // is what the number actually represents.
+          label={lang("עמלות שנצברו", "Commission accrued")}
           value={fmt(deepDive.totals.commission)}
-          source="S"
+          source="Calc"
         />
         <Tile
           label={lang("נתח מסך החנות", "Share of store revenue")}
@@ -2249,6 +2263,14 @@ function AffiliatePerformancePage({
           source="Calc"
         />
       </div>
+      {deepDive.totals.commission === 0 && deepDive.totals.sales > 0 ? (
+        <p className="pwr-recon-warning pwr-recon-warning-info" style={{ marginBottom: 10 }}>
+          {lang(
+            "עמלות מוצגות כ־₪0 מפני שהעמלה למשווקות לא הוגדרה בהגדרות התוכנית. הגדירו אחוז עמלה כדי לראות את הסכומים המחושבים.",
+            "Commission shows as ₪0 because no commission rate is configured on the affiliate program. Set a rate in program settings to see the calculated amounts."
+          )}
+        </p>
+      ) : null}
 
       <div className="pwr-kpi-row" style={{ marginBottom: 14 }}>
         <Tile

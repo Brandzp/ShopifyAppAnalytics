@@ -72,33 +72,77 @@ export async function POST(
     }
 
     const monthLabel = monthLabelFromRange(sheet.rangeStart, sheet.rangeEnd);
-    const brief: MarketingBrief = await generateMarketingBrief({
-      storeBrandName: sheet.store?.name ?? "",
-      monthLabel,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      rows: sheet.rows.map((r: any) => ({
-        id: r.id,
-        task: r.task,
-        category: r.category,
-        role: r.role,
-        startDate: r.startDate,
-        endDate: r.endDate,
-        actionType: r.actionType
-      }))
-    });
+    // Wrap the generator in a try/catch even though it has its OWN
+    // fallback inside — belt-and-braces so a bug in the fallback path
+    // (or in the extract-* helpers) doesn't crash the whole route and
+    // leave the operator staring at "HTTP 500". The endpoint's job is
+    // to always return a usable brief; if everything fails, hand back
+    // an empty-but-valid MarketingBrief so the UI can still render.
+    let brief: MarketingBrief;
+    try {
+      brief = await generateMarketingBrief({
+        storeBrandName: sheet.store?.name ?? "",
+        monthLabel,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        rows: sheet.rows.map((r: any) => ({
+          id: r.id,
+          task: r.task ?? "",
+          category: r.category,
+          role: r.role,
+          startDate: r.startDate,
+          endDate: r.endDate,
+          actionType: r.actionType
+        }))
+      });
+    } catch (err) {
+      console.warn(
+        "[gantt-brief] generateMarketingBrief threw, returning empty shell:",
+        err instanceof Error ? err.message : String(err)
+      );
+      brief = {
+        header: {
+          brandName: sheet.store?.name ?? "",
+          monthLabel,
+          theme: null,
+          campaignSummary: null,
+          kpis: []
+        },
+        permanentOffers: {
+          shipping: { text: "" },
+          memberSignup: { text: "" },
+          abandonedCart: { text: "" }
+        },
+        influencerBlocks: [],
+        siteDiscounts: [],
+        paidPromotion: { budgetSummary: null, roasTarget: null, campaigns: [] },
+        ugcContent: [],
+        generatedAt: new Date().toISOString(),
+        rowCount: sheet.rows.length
+      };
+    }
 
-    const updated = await db.ganttSheet.update({
-      where: { id: sheet.id },
-      data: {
-        briefJson: brief as unknown as object,
-        briefGeneratedAt: new Date()
-      }
-    });
+    // Best-effort cache — if the write fails we still return the brief.
+    let generatedAt: string | null = new Date().toISOString();
+    try {
+      const updated = await db.ganttSheet.update({
+        where: { id: sheet.id },
+        data: {
+          briefJson: brief as unknown as object,
+          briefGeneratedAt: new Date()
+        }
+      });
+      generatedAt = updated.briefGeneratedAt?.toISOString() ?? generatedAt;
+    } catch (err) {
+      console.warn(
+        "[gantt-brief] failed to cache brief on GanttSheet.briefJson:",
+        err instanceof Error ? err.message : String(err)
+      );
+    }
 
     return NextResponse.json({
       ok: true,
       cached: false,
-      generatedAt: updated.briefGeneratedAt?.toISOString() ?? null,
+      generatedAt,
       brief
     });
   } catch (rawError) {

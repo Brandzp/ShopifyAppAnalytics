@@ -46,26 +46,101 @@ export interface InstagramInsights {
 
 const OPENAI_MODEL = "gpt-4o-mini";
 
+// Deterministic fallback — same shape / same intent as the Meta version.
+// Derives observations and actions from the affiliate roster + posts we
+// already have. Runs only when both the BI agent and OpenAI failed.
 function fallback(isHe: boolean, summary: InstagramInsightsInput): InstagramInsights {
   const total = summary.affiliates.length;
   const active = summary.affiliates.filter((a) => a.status === "stored").length;
-  if (isHe) {
-    return {
-      hookLine: `${active} מתוך ${total} משפיענים פעילים השבוע. ${summary.recentPosts.length} פוסטים סה״כ ב־30 הימים האחרונים.`,
-      observations: [
-        "תובנות Instagram אוטומטיות לא זמינות. סוכן ה-BI ו-OpenAI שניהם נכשלו.",
-        "הנתונים המלאים מופיעים בטבלאות שלמטה."
-      ],
-      actions: ["בדקו את לוגי השרת לפרטי השגיאה."]
-    };
+  const money = (n: number) => `₪${Math.round(n).toLocaleString(isHe ? "he-IL" : "en-US")}`;
+
+  const hookLine = isHe
+    ? `${active} מתוך ${total} משפיענים פעילים השבוע · ${summary.recentPosts.length} פוסטים ב־30 הימים האחרונים.`
+    : `${active} of ${total} affiliates active this week · ${summary.recentPosts.length} posts in the last 30 days.`;
+
+  const observations: string[] = [];
+  const actions: string[] = [];
+
+  // Top affiliate by attributed sales.
+  const topByCash = [...summary.affiliates]
+    .filter((a) => (a.attributedSales ?? 0) > 0)
+    .sort((a, b) => (b.attributedSales ?? 0) - (a.attributedSales ?? 0))[0];
+  if (topByCash) {
+    observations.push(
+      isHe
+        ? `@${topByCash.username} הובילה עם ${money(topByCash.attributedSales ?? 0)} ב־${topByCash.attributedOrders ?? 0} הזמנות.`
+        : `@${topByCash.username} led with ${money(topByCash.attributedSales ?? 0)} across ${topByCash.attributedOrders ?? 0} orders.`
+    );
   }
+
+  // Silent affiliates — configured but no posts or no store scan match.
+  const silent = summary.affiliates.filter(
+    (a) => a.postsStored === 0 || a.status === "handle_saved" || a.status === "missing"
+  );
+  if (silent.length >= 2) {
+    const names = silent.slice(0, 3).map((a) => `@${a.username}`).join(", ");
+    observations.push(
+      isHe
+        ? `${silent.length} משפיענים ללא פוסט ב־30 יום: ${names}${silent.length > 3 ? " ועוד" : ""}.`
+        : `${silent.length} affiliates with no posts in 30 days: ${names}${silent.length > 3 ? " and more" : ""}.`
+    );
+  }
+
+  // Top post by engagement.
+  const topPost = [...summary.recentPosts].sort(
+    (a, b) => b.likes + b.comments - (a.likes + a.comments)
+  )[0];
+  if (topPost && topPost.likes + topPost.comments > 20) {
+    observations.push(
+      isHe
+        ? `הפוסט הכי חזק ב־30 יום: @${topPost.username} מ־${topPost.postedAt} — ${topPost.likes} לייקים, ${topPost.comments} תגובות.`
+        : `Top post in 30 days: @${topPost.username} on ${topPost.postedAt} — ${topPost.likes} likes, ${topPost.comments} comments.`
+    );
+  }
+
+  // Actions.
+  if (topByCash) {
+    actions.push(
+      isHe
+        ? `הציעו ל־@${topByCash.username} קוד בלעדי או עמלה גבוהה יותר — היא מובילה את החודש.`
+        : `Offer @${topByCash.username} an exclusive code or bumped commission — she's leading the month.`
+    );
+  }
+  if (silent.length >= 2) {
+    const names = silent.slice(0, 2).map((a) => `@${a.username}`).join(", ");
+    actions.push(
+      isHe
+        ? `פנו ל־${names} — לא פרסמו ב־30 יום, שווה לחדש את הקשר או להסיר מהרשימה הפעילה.`
+        : `Reach out to ${names} — no posts in 30 days; renew the relationship or drop from the active roster.`
+    );
+  }
+  if (topPost && actions.length < 3) {
+    actions.push(
+      isHe
+        ? `בקשו מ־@${topPost.username} להשקיע יותר בפורמט הזה — האנגייג'מנט מוכיח שהוא עובד.`
+        : `Ask @${topPost.username} to lean into this format — the engagement shows it works.`
+    );
+  }
+
+  if (observations.length === 0) {
+    observations.push(
+      isHe
+        ? "אין מספיק פעילות ב־30 הימים האחרונים כדי לזהות דפוס — הטבלאות למטה מציגות את הרוסטר המלא."
+        : "Not enough activity in the last 30 days to spot a pattern — the tables below have the full roster."
+    );
+  }
+  if (actions.length === 0) {
+    actions.push(
+      isHe
+        ? "הפעילו את המשפיענים הרשומים — לחצו על השם כדי לפתוח שרשור הודעה דרך פורטל השותפים."
+        : "Activate configured affiliates — click a name to open a message thread from the partner portal."
+    );
+  }
+
   return {
-    hookLine: `${active} of ${total} affiliates active this week. ${summary.recentPosts.length} posts in the last 30 days.`,
-    observations: [
-      "Automatic Instagram insights unavailable. Both BI agent and OpenAI failed.",
-      "Full numbers are in the tables below."
-    ],
-    actions: ["Check server logs for the underlying error."]
+    hookLine,
+    observations: observations.slice(0, 4),
+    actions: actions.slice(0, 3)
   };
 }
 

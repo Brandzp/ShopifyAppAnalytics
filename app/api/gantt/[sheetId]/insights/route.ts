@@ -38,6 +38,141 @@ interface GanttInsightsPayload {
   }>;
 }
 
+// Deterministic Hebrew insights derived purely from the sheet's rows.
+// Used when the BI agent is unavailable, times out, or returns malformed
+// JSON — so the planner never renders a raw error string. The checks
+// mirror the highest-value patterns we ask the agent to look for (channel
+// overload, coverage gaps, launches without creative prep) so the
+// operator gets real signal even in the fallback path.
+//
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function buildDeterministicInsights(sheet: any): GanttInsightsPayload {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const rows: any[] = sheet.rows ?? [];
+  const rangeStart = sheet.rangeStart ? new Date(sheet.rangeStart) : null;
+  const rangeEnd = sheet.rangeEnd ? new Date(sheet.rangeEnd) : null;
+
+  const insights: GanttInsightsPayload["insights"] = [];
+  const actions: GanttInsightsPayload["actions"] = [];
+
+  // 1. Tasks per day — spot overloaded days (channel dump) and empty days.
+  const byDate = new Map<string, number>();
+  for (const r of rows) {
+    if (!r.startDate) continue;
+    const key = new Date(r.startDate).toISOString().slice(0, 10);
+    byDate.set(key, (byDate.get(key) ?? 0) + 1);
+  }
+  const overloaded = [...byDate.entries()]
+    .filter(([, count]) => count >= 5)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3);
+  if (overloaded.length > 0) {
+    insights.push({
+      title: "ימים עם עומס משימות",
+      severity: "warning",
+      body: `${overloaded.length} ימים מרוכזים במיוחד (${overloaded.map(([d, c]) => `${d}: ${c} משימות`).join(", ")}). שקלו לפזר על פני שאר החודש.`,
+      relatedDates: overloaded.map(([d]) => d)
+    });
+  }
+
+  // 2. Launches without accompanying creative prep on/before the same day.
+  const launches = rows.filter((r) => /השקה|LAUNCH|לאנץ|launch/i.test(r.task ?? ""));
+  const creativeDates = new Set(
+    rows
+      .filter(
+        (r) =>
+          r.actionType === "creative_image" ||
+          r.actionType === "creative_banner" ||
+          r.actionType === "creative_video" ||
+          /גרפיקה|בנר|קריאייטיב|creative|banner/i.test(r.task ?? "")
+      )
+      .filter((r) => r.startDate)
+      .map((r) => new Date(r.startDate).toISOString().slice(0, 10))
+  );
+  const orphanLaunches = launches.filter((r) => {
+    if (!r.startDate) return false;
+    const launchKey = new Date(r.startDate).toISOString().slice(0, 10);
+    return !creativeDates.has(launchKey);
+  });
+  if (orphanLaunches.length > 0) {
+    insights.push({
+      title: "השקות בלי הכנת קריאייטיב",
+      severity: "critical",
+      body: `${orphanLaunches.length} השקות מתוכננות בלי משימת קריאייטיב באותו יום — סימן שאין בנרים / גרפיקה מוכנים לפרסום.`,
+      relatedDates: orphanLaunches
+        .map((r) => (r.startDate ? new Date(r.startDate).toISOString().slice(0, 10) : null))
+        .filter((d): d is string => d !== null)
+    });
+    actions.push({
+      title: "קבעו יום הכנת קריאייטיב לכל השקה",
+      body: "לכל השקה בגאנט הוסיפו משימה של גרפיקה או וידאו לפחות 2 ימים לפני, כדי שיהיה חומר לפרסום."
+    });
+  }
+
+  // 3. Coupons/codes mentioned in tasks — quick roll-up so the operator can
+  // cross-check what's actually created in Shopify.
+  const couponRe = /(?:קוד(?:\s+קופון)?(?:\s+להטבה)?|קופון)\s*[:\-]\s*([A-Z0-9][A-Z0-9_\-]{1,32})/i;
+  const coupons = new Set<string>();
+  for (const r of rows) {
+    const m = (r.task ?? "").match(couponRe);
+    if (m && m[1]) coupons.add(m[1].toUpperCase());
+  }
+  if (coupons.size > 0) {
+    insights.push({
+      title: "קודי קופון שהוזכרו בגאנט",
+      severity: "info",
+      body: `זוהו ${coupons.size} קודים בטקסט: ${[...coupons].slice(0, 6).join(", ")}. וודאו שכולם קיימים ב־Shopify Admin לפני הפרסום.`
+    });
+  }
+
+  // 4. Coverage gap — # days in range that have zero activity.
+  if (rangeStart && rangeEnd) {
+    const totalDays = Math.max(
+      1,
+      Math.round((rangeEnd.getTime() - rangeStart.getTime()) / (1000 * 60 * 60 * 24)) + 1
+    );
+    const emptyDays = totalDays - byDate.size;
+    if (emptyDays >= Math.max(3, Math.floor(totalDays * 0.2))) {
+      insights.push({
+        title: "ימים ריקים בגאנט",
+        severity: "info",
+        body: `${emptyDays} מתוך ${totalDays} ימי החודש בלי אף משימה. אם זה בכוונה — סבבה; אם לא — יש חורים בכיסוי.`
+      });
+    }
+  }
+
+  // 5. Duplicate coupon codes across different tasks — usually a copy-paste bug.
+  const codeToTasks = new Map<string, number>();
+  for (const r of rows) {
+    const m = (r.task ?? "").match(couponRe);
+    if (m && m[1]) {
+      const k = m[1].toUpperCase();
+      codeToTasks.set(k, (codeToTasks.get(k) ?? 0) + 1);
+    }
+  }
+  const duplicates = [...codeToTasks.entries()].filter(([, n]) => n >= 3);
+  if (duplicates.length > 0) {
+    insights.push({
+      title: "קוד קופון חוזר בהרבה משימות",
+      severity: "warning",
+      body: `${duplicates.map(([k, n]) => `"${k}" (${n} פעמים)`).join(", ")} — אולי כפילות שלא במקום, או שיוצרת פערים בין מבצעים.`
+    });
+  }
+
+  // Universal action — always useful.
+  actions.push({
+    title: "עברו על ימי העומס",
+    body: "לימים המרוכזים ביותר בגאנט (מסומנים באזהרה), בדקו אם אפשר להזיז חלק מהמשימות ליום שכן."
+  });
+
+  const totalRows = rows.length;
+  const summary = totalRows
+    ? `הגאנט כולל ${totalRows} משימות ב־${byDate.size} ימי פעילות. ${insights.length} תובנות מבוססות מבנה זוהו (הסוכן BI לא היה זמין — התובנות שלמעלה חושבו לוקאלית).`
+    : "הגאנט ריק. העלו קובץ עם משימות כדי לקבל תובנות.";
+
+  return { summary, insights: insights.slice(0, 6), actions: actions.slice(0, 6) };
+}
+
 export async function POST(
   request: Request,
   context: { params: Promise<{ sheetId: string }> }
@@ -68,11 +203,18 @@ export async function POST(
       });
     }
 
+    // When the BI agent isn't configured we still return a usable set of
+    // deterministic insights so the marketing planner panel isn't empty.
+    // Same shape as the agent output — the UI can't tell the difference.
     if (!isBiAgentConfigured()) {
-      throw new AppError(
-        "BI agent is not configured (BI_AGENT_URL / BI_AGENT_TOKEN missing).",
-        503
-      );
+      const fallback = buildDeterministicInsights(sheet);
+      return NextResponse.json({
+        ok: true,
+        cached: false,
+        fallback: true,
+        generatedAt: null,
+        insights: fallback
+      });
     }
 
     // Compact the row data into a digest the agent can reason about
@@ -155,22 +297,28 @@ export async function POST(
     ].join("\n");
 
     let agentJson: GanttInsightsPayload | null = null;
+    let agentError: string | null = null;
     try {
       agentJson = await askBiAgentJson<GanttInsightsPayload>({
         question,
         jsonHint: "object with summary:string, insights:array, actions:array",
-        timeoutMs: 60_000
+        // 90s to match the BI-client default. The Cloudflare edge times out
+        // around 100s so this is the ceiling before we lose the JSON path
+        // and get an HTML error page in return.
+        timeoutMs: 90_000
       });
     } catch (err) {
-      throw new AppError(
-        `BI agent failed: ${err instanceof Error ? err.message : String(err)}`,
-        502
-      );
+      agentError = err instanceof Error ? err.message : String(err);
+      console.warn("[gantt-insights] BI agent failed, using deterministic fallback:", agentError);
     }
 
-    // Validate the shape just enough to refuse junk.
+    // If the agent failed or returned junk, fall back to deterministic
+    // insights so the marketing planner never surfaces a raw error. The
+    // fallback is derived from the same sheet.rows the agent would have
+    // seen — same structural quality checks, just no natural language
+    // polish. Cache it so repeat visits don't re-hit a failing agent.
     if (!agentJson || typeof agentJson.summary !== "string") {
-      throw new AppError("BI agent returned malformed insights.", 502);
+      agentJson = buildDeterministicInsights(sheet);
     }
     if (!Array.isArray(agentJson.insights)) agentJson.insights = [];
     if (!Array.isArray(agentJson.actions)) agentJson.actions = [];

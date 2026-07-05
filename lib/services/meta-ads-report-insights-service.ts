@@ -45,27 +45,130 @@ export interface PriorWeekSnapshot {
 const OPENAI_MODEL = "gpt-4o-mini";
 const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
 
+// Deterministic fallback — no LLM, no fabrication. Reads the brand
+// bucket the report already has and turns its top-line numbers into
+// founder-readable observations and actions. Wired in when both the BI
+// agent and OpenAI are unreachable so the report never surfaces "check
+// server logs" copy to the operator.
 function fallbackInsights(brand: MetaAdsReportBrand, isHe: boolean): BrandInsights {
-  // No-fabrication fallback. The message is intentionally neutral — both
-  // the BI agent and OpenAI failed, so we can't say which fix is needed.
-  // Check server logs for the underlying error.
-  if (isHe) {
-    return {
-      hookLine: `${brand.name} — סה״כ הוצאה ₪${Math.round(brand.kpis.spend).toLocaleString("he-IL")} ו־${brand.kpis.purchases} רכישות השבוע.`,
-      observations: [
-        "תובנות אוטומטיות לא זמינות כרגע. סוכן ה-BI ו-OpenAI שניהם נכשלו.",
-        "ניתן לצפות בנתונים המלאים בטבלאות שלמטה."
-      ],
-      actions: ["בדקו את לוגי השרת לפרטי השגיאה."]
-    };
+  const spend = Math.round(brand.kpis.spend);
+  const purchases = brand.kpis.purchases;
+  const roas = brand.kpis.purchaseRoas;
+  const money = (n: number) => `₪${Math.round(n).toLocaleString(isHe ? "he-IL" : "en-US")}`;
+  const roasStr = (r: number | null | undefined) => (r != null ? `${r.toFixed(2)}x` : "—");
+
+  const hookLine = isHe
+    ? `${brand.name} — הוצאה של ${money(spend)} על ${purchases} רכישות${roas != null ? `, ROAS ${roas.toFixed(2)}x` : ""}.`
+    : `${brand.name} — spent ${money(spend)} on ${purchases} purchases${roas != null ? `, ROAS ${roas.toFixed(2)}x` : ""}.`;
+
+  const observations: string[] = [];
+  const actions: string[] = [];
+
+  // Top campaign by spend — always exists when there's any activity.
+  const topCampaign = [...brand.campaigns].sort((a, b) => b.spend - a.spend)[0];
+  if (topCampaign) {
+    observations.push(
+      isHe
+        ? `הקמפיין הכי גדול השבוע הוא "${topCampaign.campaignName}" — הוצאה ${money(topCampaign.spend)}, ROAS ${roasStr(topCampaign.purchaseRoas)}.`
+        : `Largest spend was "${topCampaign.campaignName}" — ${money(topCampaign.spend)} at ROAS ${roasStr(topCampaign.purchaseRoas)}.`
+    );
   }
+
+  // Best ad by ROAS with meaningful spend (avoid noise from ads that got ₪2 and one lucky purchase).
+  const MIN_MEANINGFUL_SPEND = 100;
+  const bestAd = [...brand.ads]
+    .filter((a) => a.spend >= MIN_MEANINGFUL_SPEND && a.purchaseRoas != null)
+    .sort((a, b) => (b.purchaseRoas ?? 0) - (a.purchaseRoas ?? 0))[0];
+  if (bestAd) {
+    observations.push(
+      isHe
+        ? `המודעה הכי רווחית עם תקציב אמיתי: "${bestAd.adName ?? "?"}" — ROAS ${roasStr(bestAd.purchaseRoas)} על ${money(bestAd.spend)}.`
+        : `Best ROAS with real spend: "${bestAd.adName ?? "?"}" — ${roasStr(bestAd.purchaseRoas)} on ${money(bestAd.spend)}.`
+    );
+  }
+
+  // Funnel bottleneck — the step with the biggest %-wise drop. High signal
+  // because it points to WHERE money is being wasted.
+  const f = brand.funnel;
+  const stages: Array<{ from: number; to: number; label: { he: string; en: string } }> = [
+    { from: f.impressions, to: f.clicks, label: { he: "חשיפות → קליקים", en: "impressions → clicks" } },
+    { from: f.clicks, to: f.landingPageViews, label: { he: "קליקים → צפייה בדף", en: "clicks → landing views" } },
+    { from: f.landingPageViews, to: f.addToCart, label: { he: "צפייה → הוספה לסל", en: "landing → add-to-cart" } },
+    { from: f.addToCart, to: f.initiateCheckout, label: { he: "סל → תשלום", en: "cart → checkout" } },
+    { from: f.initiateCheckout, to: f.purchases, label: { he: "תשלום → רכישה", en: "checkout → purchase" } }
+  ];
+  const worstStage = stages
+    .filter((s) => s.from > 0)
+    .map((s) => ({ ...s, dropPct: ((s.from - s.to) / s.from) * 100 }))
+    .sort((a, b) => b.dropPct - a.dropPct)[0];
+  if (worstStage && worstStage.dropPct > 30) {
+    observations.push(
+      isHe
+        ? `נקודת הכי הרבה נשירה במשפך: ${worstStage.label.he} — ${worstStage.dropPct.toFixed(0)}% נופלים בשלב הזה.`
+        : `Biggest funnel drop: ${worstStage.label.en} — ${worstStage.dropPct.toFixed(0)}% fall off here.`
+    );
+  }
+
+  // Wasteful ad — spend ≥ threshold and zero purchases. Highest-leverage cut.
+  const wastefulAd = [...brand.ads]
+    .filter((a) => a.spend >= MIN_MEANINGFUL_SPEND && a.purchases === 0)
+    .sort((a, b) => b.spend - a.spend)[0];
+  if (wastefulAd) {
+    actions.push(
+      isHe
+        ? `השהו את "${wastefulAd.adName ?? "?"}" — ${money(wastefulAd.spend)} ללא רכישות.`
+        : `Pause "${wastefulAd.adName ?? "?"}" — ${money(wastefulAd.spend)} spent, 0 purchases.`
+    );
+  }
+
+  // Scale a proven winner — campaign with ROAS ≥ 3x and spend ≥ ₪500.
+  const scaleCandidate = [...brand.campaigns]
+    .filter((c) => (c.purchaseRoas ?? 0) >= 3 && c.spend >= 500)
+    .sort((a, b) => (b.purchaseRoas ?? 0) - (a.purchaseRoas ?? 0))[0];
+  if (scaleCandidate) {
+    actions.push(
+      isHe
+        ? `הגדילו את התקציב של "${scaleCandidate.campaignName}" ב־20% — ROAS ${roasStr(scaleCandidate.purchaseRoas)} על ${money(scaleCandidate.spend)}.`
+        : `Scale "${scaleCandidate.campaignName}" by 20% — ROAS ${roasStr(scaleCandidate.purchaseRoas)} on ${money(scaleCandidate.spend)}.`
+    );
+  } else if (bestAd) {
+    // No clear scale winner? Point at the best-ROAS ad as a creative angle to explore.
+    actions.push(
+      isHe
+        ? `בנו וריאציה של "${bestAd.adName ?? "?"}" — המודעה עם ה־ROAS הכי גבוה השבוע.`
+        : `Test a variant of "${bestAd.adName ?? "?"}" — this week's top-ROAS ad.`
+    );
+  }
+
+  // Funnel-fix action when there's a big drop.
+  if (worstStage && worstStage.dropPct > 50 && actions.length < 3) {
+    actions.push(
+      isHe
+        ? `בדקו את השלב ${worstStage.label.he} — נשירה של ${worstStage.dropPct.toFixed(0)}% משאירה כסף על השולחן.`
+        : `Investigate the ${worstStage.label.en} step — a ${worstStage.dropPct.toFixed(0)}% drop is where money leaks.`
+    );
+  }
+
+  // Empty-set guards — if literally nothing to say, at least surface the top-line.
+  if (observations.length === 0) {
+    observations.push(
+      isHe
+        ? `לא נצברו מספיק נתונים לזיהוי דפוס — הטבלאות למטה מציגות את הפירוט המלא.`
+        : `Not enough data to spot a pattern — the tables below have the full breakdown.`
+    );
+  }
+  if (actions.length === 0) {
+    actions.push(
+      isHe
+        ? `המשיכו לצבור נתונים — צריך לפחות שבוע של תקציב מלא לפני החלטת אופטימיזציה.`
+        : `Keep collecting data — you need at least a full week of spend before making optimization calls.`
+    );
+  }
+
   return {
-    hookLine: `${brand.name} — total spend ₪${Math.round(brand.kpis.spend)} and ${brand.kpis.purchases} purchases this week.`,
-    observations: [
-      "Automatic insights unavailable. Both BI agent and OpenAI failed.",
-      "Full numbers are in the tables below."
-    ],
-    actions: ["Check server logs for the underlying error."]
+    hookLine,
+    observations: observations.slice(0, 4),
+    actions: actions.slice(0, 3)
   };
 }
 

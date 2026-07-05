@@ -58,7 +58,16 @@ export interface ReconciliationReport {
   };
   validation: {
     ok: boolean;
-    warnings: Array<{ severity: "info" | "warning" | "error"; messageHe: string; messageEn: string }>;
+    warnings: Array<{
+      severity: "info" | "warning" | "error";
+      // "data" — pipeline / sync / gap warnings. Belong to the reconciliation
+      //          section, NOT the executive top-risk card.
+      // "business" — ROAS drops, attribution gaps, purchase-count mismatches.
+      //              These deserve founder attention on page 1.
+      kind: "data" | "business";
+      messageHe: string;
+      messageEn: string;
+    }>;
     purchaseDelta: {
       metaPurchases: number;
       shopifyOrders: number;
@@ -235,12 +244,14 @@ export async function buildReconciliationReport(
   if (!connection) {
     warnings.push({
       severity: "error",
+      kind: "data",
       messageHe: "לא קיים חיבור Meta Ads לחנות הפעילה — נתוני המדיה חסרים בדוח.",
       messageEn: "No Meta Ads connection for the active store — media data is missing from the report."
     });
   } else if (metaDaysWithData < daysInRange) {
     warnings.push({
       severity: "warning",
+      kind: "data",
       messageHe: `אזהרת נתונים: טווח הדוח הוא ${daysInRange} ימים, אך ל־Meta יש נתונים מסונכרנים רק ל־${metaDaysWithData} מתוכם.`,
       messageEn: `Data warning: report range is ${daysInRange} days but Meta has synced data for only ${metaDaysWithData} of them.`
     });
@@ -250,6 +261,7 @@ export async function buildReconciliationReport(
     // Not always an error — a small store might have orderless days. Info only.
     warnings.push({
       severity: "info",
+      kind: "data",
       messageHe: `קיימות הזמנות ב־${orderDays.size} מתוך ${daysInRange} ימי הדוח. הימים ללא הזמנות עשויים להיות תקינים בחנות קטנה.`,
       messageEn: `Orders exist on ${orderDays.size} of the ${daysInRange} report days. Zero-order days may be normal for a small store.`
     });
@@ -258,6 +270,7 @@ export async function buildReconciliationReport(
   if (purchaseDeltaPct != null && Math.abs(purchaseDeltaPct) > 25) {
     warnings.push({
       severity: "warning",
+      kind: "business",
       messageHe: `פער משמעותי בין רכישות Meta (${metaPurchases}) לבין הזמנות Shopify (${shopifyOrders}). הסיבות האפשריות: חלון ייחוס שונה, הזמנות שלא הגיעו מ־Meta, או רכישות שלא שויכו לקמפיין.`,
       messageEn: `Significant gap: Meta purchases (${metaPurchases}) vs Shopify orders (${shopifyOrders}). Likely causes: different attribution window, non-Meta orders, or unattributed purchases.`
     });
