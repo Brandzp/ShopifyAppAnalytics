@@ -74,7 +74,7 @@ const Hero1 = () => {
               <input
                 type="text"
                 placeholder="How HextaAI can help you today?"
-                className="bg-transparent flex-1 outline-none text-gray-300 pl-4"
+                className="bg-transparent flex-1 outline-none text-gray-300 ps-4"
               />
             </div>
           </div>

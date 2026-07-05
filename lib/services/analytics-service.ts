@@ -20,6 +20,45 @@ function average(values: number[]) {
   return values.length ? sum(values) / values.length : 0;
 }
 
+// Weighted-by-denominator average of daily rates.
+//
+// Bug audit Pattern B (docs/ANALYTICS-AUDIT-2026-06-16.md) — averaging
+// pre-computed daily rates across a window is mathematically wrong:
+//
+//   Day 1: 100 orders, 50 returning (50% rate)
+//   Day 2:  10 orders,  0 returning ( 0% rate)
+//   avg([50,0]) = 25%      WRONG
+//   correct:    50/110 = 45.5%
+//
+// We can recover the correct sum-of-numerators / sum-of-denominators
+// value without a schema change because each day's numerator is
+// `denominator × rate`. So:
+//
+//   sum(rate_i * denominator_i) / sum(denominator_i)
+//   = sum(numerator_i)          / sum(denominator_i)
+//   = the correct window rate
+//
+// Use this any time the buggy `average(daily.map(m => m.rate))` pattern
+// shows up in a fallback path where parity data isn't available.
+function windowRateWeighted(rates: number[], denominators: number[]): number {
+  if (rates.length !== denominators.length) {
+    // Defensive: shouldn't happen — but fall back to plain average
+    // rather than throw. The rate is only approximate at the boundary
+    // where parity data is missing anyway.
+    return average(rates);
+  }
+  let numeratorTotal = 0;
+  let denominatorTotal = 0;
+  for (let i = 0; i < rates.length; i++) {
+    const rate = rates[i];
+    const denom = denominators[i];
+    if (!Number.isFinite(rate) || !Number.isFinite(denom) || denom <= 0) continue;
+    numeratorTotal += rate * denom;
+    denominatorTotal += denom;
+  }
+  return denominatorTotal > 0 ? numeratorTotal / denominatorTotal : 0;
+}
+
 // Legacy comparison builder — used ONLY when the Shopify-parity layer is
 // unavailable (no DB / disconnected store). The rate metrics it produces
 // here are mathematically wrong (averages of daily rates rather than
@@ -41,10 +80,25 @@ function buildComparisonMetrics(
   const revenuePrevious = sum(previousMetrics.map((metric) => metric.revenue));
   const profitCurrent = sum(currentMetrics.map((metric) => metric.estimatedProfit));
   const profitPrevious = sum(previousMetrics.map((metric) => metric.estimatedProfit));
-  const retentionCurrent = average(currentMetrics.map((metric) => metric.returningCustomerRate));
-  const retentionPrevious = average(previousMetrics.map((metric) => metric.returningCustomerRate));
-  const discountCurrent = average(currentMetrics.map((metric) => metric.discountRate));
-  const discountPrevious = average(previousMetrics.map((metric) => metric.discountRate));
+  // Bug audit Pattern B — weight rates by their true denominator.
+  // Retention rate = returning / total_orders, so weight by orders.
+  const retentionCurrent = windowRateWeighted(
+    currentMetrics.map((m) => m.returningCustomerRate),
+    currentMetrics.map((m) => m.orders)
+  );
+  const retentionPrevious = windowRateWeighted(
+    previousMetrics.map((m) => m.returningCustomerRate),
+    previousMetrics.map((m) => m.orders)
+  );
+  // Discount rate = discount_amount / revenue, so weight by revenue.
+  const discountCurrent = windowRateWeighted(
+    currentMetrics.map((m) => m.discountRate),
+    currentMetrics.map((m) => m.revenue)
+  );
+  const discountPrevious = windowRateWeighted(
+    previousMetrics.map((m) => m.discountRate),
+    previousMetrics.map((m) => m.revenue)
+  );
   const calcChange = (current: number, previous: number) => (previous === 0 ? 0 : ((current - previous) / previous) * 100);
 
   return [
@@ -202,14 +256,33 @@ export async function getOverviewPayload(): Promise<OverviewPayload> {
     : [];
   const revenue = cur ? cur.totalSales : sum(dailyMetrics.map((metric) => metric.revenue));
   const estimatedProfit = cur ? cur.estimatedProfit : sum(dailyMetrics.map((metric) => metric.estimatedProfit));
+  // Fallback path — no parity data. Rate metrics use windowRateWeighted
+  // (Pattern B fix) so we don't ship "average of daily rates" nonsense.
   const returningCustomerRate = cur
     ? cur.returningCustomerRate
-    : average(dailyMetrics.map((metric) => metric.returningCustomerRate));
+    : windowRateWeighted(
+        dailyMetrics.map((m) => m.returningCustomerRate),
+        dailyMetrics.map((m) => m.orders)
+      );
+  // Bug #20 — AOV must be sum(revenue) / sum(orders), not avg of daily AOVs.
+  const totalOrders = sum(dailyMetrics.map((m) => m.orders));
   const averageOrderValue = cur
     ? cur.averageOrderValue
-    : average(dailyMetrics.map((metric) => metric.averageOrderValue));
-  const discountRate = cur ? cur.discountRate : average(dailyMetrics.map((metric) => metric.discountRate));
-  const refundRate = cur ? cur.refundRate : average(dailyMetrics.map((metric) => metric.refundRate));
+    : totalOrders > 0
+      ? sum(dailyMetrics.map((m) => m.revenue)) / totalOrders
+      : 0;
+  const discountRate = cur
+    ? cur.discountRate
+    : windowRateWeighted(
+        dailyMetrics.map((m) => m.discountRate),
+        dailyMetrics.map((m) => m.revenue)
+      );
+  const refundRate = cur
+    ? cur.refundRate
+    : windowRateWeighted(
+        dailyMetrics.map((m) => m.refundRate),
+        dailyMetrics.map((m) => m.revenue)
+      );
   const topProduct = productPerformance[0];
   const mostProfitableCollection = [...collectionPerformance].sort((a, b) => b.estimatedProfit - a.estimatedProfit)[0];
   const topDiscount = discounts[0];

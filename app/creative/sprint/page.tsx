@@ -5,6 +5,7 @@ import Link from "next/link";
 import { AppShell } from "@/components/layout/app-shell";
 import { PageHead } from "@/components/dashboard-v2/section-head";
 import { Button } from "@/components/ui/button";
+import { CreativeTabs } from "@/components/creative/creative-tabs";
 import { getAppChromeData } from "@/lib/services/analytics-service";
 import { getAppLocale } from "@/lib/i18n";
 import { resolveActiveStoreId } from "@/lib/services/offline-sales-service";
@@ -61,6 +62,7 @@ export default async function CreativeSprintsPage() {
             <Button>{locale === "he" ? "ספרינט חדש" : "New sprint"}</Button>
           </Link>
         </div>
+        <CreativeTabs locale={locale} />
 
         {sprints.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-border bg-card/40 p-12 text-center">

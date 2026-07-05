@@ -200,12 +200,12 @@ export function VideoEditor({
         <Button onClick={save} disabled={saving || duration === 0}>
           {saving ? (
             <>
-              <Loader2 className={cn("h-4 w-4 animate-spin", isHe ? "ml-2" : "mr-2")} />
+              <Loader2 className={cn("h-4 w-4 animate-spin", isHe ? "ms-2" : "me-2")} />
               {isHe ? "מרנדר…" : "Rendering…"}
             </>
           ) : (
             <>
-              <Save className={cn("h-4 w-4", isHe ? "ml-2" : "mr-2")} />
+              <Save className={cn("h-4 w-4", isHe ? "ms-2" : "me-2")} />
               {isHe ? "שמור" : "Save"}
             </>
           )}
@@ -303,7 +303,7 @@ export function VideoEditor({
                     void v.play();
                   }}
                 >
-                  <Play className="h-3 w-3 mr-1" /> {isHe ? "נגן חיתוך" : "Preview trim"}
+                  <Play className="h-3 w-3 me-1" /> {isHe ? "נגן חיתוך" : "Preview trim"}
                 </Button>
               </div>
             </div>
@@ -356,12 +356,12 @@ export function VideoEditor({
           <CardContent className="space-y-4">
             <div className="flex items-center gap-2">
               <Button variant="secondary" size="sm" onClick={addOverlay}>
-                <Plus className={cn("h-3.5 w-3.5", isHe ? "ml-1.5" : "mr-1.5")} />
+                <Plus className={cn("h-3.5 w-3.5", isHe ? "ms-1.5" : "me-1.5")} />
                 {isHe ? "הוסף שכבה" : "Add text"}
               </Button>
               {selectedOverlay ? (
                 <Button variant="ghost" size="sm" onClick={deleteSelected}>
-                  <Trash2 className={cn("h-3.5 w-3.5", isHe ? "ml-1.5" : "mr-1.5")} />
+                  <Trash2 className={cn("h-3.5 w-3.5", isHe ? "ms-1.5" : "me-1.5")} />
                   {isHe ? "מחק" : "Delete"}
                 </Button>
               ) : null}

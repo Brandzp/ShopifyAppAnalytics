@@ -6,7 +6,7 @@ import type {
 } from "@/lib/domain/marketing-planner-types";
 
 function getDirectionClasses(direction: MarketingPlannerDirection) {
-  return direction === "rtl" ? "text-right" : "text-left";
+  return direction === "rtl" ? "text-end" : "text-start";
 }
 
 function formatMoney(value: number, currency = "ILS") {
@@ -253,7 +253,7 @@ export function MetaAdsIntelligencePanel({
                             {day.purchases} purchases - {day.clicks.toLocaleString("en-US")} clicks
                           </p>
                         </div>
-                        <div className="text-left">
+                        <div className="text-start">
                           <p className="font-semibold">{formatMoney(day.spend, metaAds.currency ?? "ILS")}</p>
                           <p className="mt-1 text-muted-foreground">
                             {formatCostPerPurchase(day.spend, day.purchases, metaAds.currency ?? "ILS")}

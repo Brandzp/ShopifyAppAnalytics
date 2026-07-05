@@ -157,7 +157,7 @@ export function AffiliateDirectoryActions() {
         </Button>
       </div>
 
-      <p className="text-sm text-muted-foreground lg:text-right">
+      <p className="text-sm text-muted-foreground lg:text-end">
         Import supports Excel (.xlsx, .xls), CSV, and JSON files.
       </p>
 

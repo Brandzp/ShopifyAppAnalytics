@@ -285,6 +285,12 @@ async function computeSalesSummary(
   const taxes = num(orderAgg._sum?.totalTax);
   const netSales = grossSales - discounts - returns;
   const totalSales = netSales + shipping + taxes;
+  // Bug audit #7 (docs/ANALYTICS-AUDIT-2026-06-16.md) — profit must subtract
+  // ONLY the line-item portion of refunds against ONLY the line-item COGS.
+  // Using `netSales` (which subtracts the FULL refund, incl. shipping+tax)
+  // over-deducts on any partial-refund order and makes refund days look
+  // worse than they are. Matches contribution-margin-service.
+  const netLineItemSales = grossSales - discounts - returnsLineItems;
   const returningOrders = num(returningRows?.[0]?.count);
 
   return {
@@ -298,7 +304,9 @@ async function computeSalesSummary(
     taxes,
     totalSales,
     cogs,
-    estimatedProfit: netSales - cogs,
+    // Line-item refunds subtracted against line-item COGS — see comment
+    // above at netLineItemSales for Pattern A / bug #7 rationale.
+    estimatedProfit: netLineItemSales - cogs,
     unitsSold,
     returningOrders,
     returningCustomerRate: orders ? (returningOrders / orders) * 100 : 0,
@@ -375,8 +383,13 @@ async function computeDailySeries(
       // The window filter uses o."createdAt" too — that's the bucketing key,
       // so the result set must align with it. (A refund created today for an
       // order from 2 months ago is correctly excluded from this window.)
+      // Pull BOTH the full refund (for revenue reporting — matches Shopify
+      // Sales report) and the line-item-only refund (for profit math —
+      // Pattern A / bug #8). Consumer subtracts full from revenue, line-item
+      // from COGS.
       `SELECT (o."createdAt" AT TIME ZONE 'UTC' AT TIME ZONE $4)::date AS d,
-              SUM(r."refundedAmount") AS returns
+              SUM(r."refundedAmount") AS returns,
+              SUM(r."refundedLineItemsAmount") AS returns_line_items
        FROM "Refund" r
        JOIN "Order" o ON o."id" = r."orderId"
        WHERE r."storeId" = $1 AND o."createdAt" >= $2 AND o."createdAt" <= $3
@@ -391,24 +404,29 @@ async function computeDailySeries(
 
   type Bucket = {
     gross: number; disc: number; cogs: number; units: number;
-    ship: number; tax: number; orders: number; returningOrders: number; returns: number;
+    ship: number; tax: number; orders: number; returningOrders: number;
+    returns: number; returnsLineItems: number;
   };
   const byDay = new Map<string, Bucket>();
   const keyOf = (d: any) => new Date(d).toISOString().slice(0, 10);
   const get = (k: string) => {
     let b = byDay.get(k);
-    if (!b) { b = { gross: 0, disc: 0, cogs: 0, units: 0, ship: 0, tax: 0, orders: 0, returningOrders: 0, returns: 0 }; byDay.set(k, b); }
+    if (!b) { b = { gross: 0, disc: 0, cogs: 0, units: 0, ship: 0, tax: 0, orders: 0, returningOrders: 0, returns: 0, returnsLineItems: 0 }; byDay.set(k, b); }
     return b;
   };
   for (const r of sales) { const b = get(keyOf(r.d)); b.gross += num(r.gross); b.disc += num(r.disc); b.cogs += num(r.cogs); b.units += num(r.units); }
   for (const r of ship) { const b = get(keyOf(r.d)); b.ship += num(r.ship); b.tax += num(r.tax); b.orders += num(r.orders); b.returningOrders += num(r.returning_orders); }
-  for (const r of refunds) { const b = get(keyOf(r.d)); b.returns += num(r.returns); }
+  for (const r of refunds) { const b = get(keyOf(r.d)); b.returns += num(r.returns); b.returnsLineItems += num(r.returns_line_items); }
 
   return Array.from(byDay.entries())
     .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
     .map(([key, b]) => {
       const net = b.gross - b.disc - b.returns;
       const total = net + b.ship + b.tax;
+      // Bug audit #8 — profit uses line-item refunds against line-item
+      // COGS. Full refunds (returns) still drive the revenue line to
+      // match Shopify's Sales report.
+      const netLineItems = b.gross - b.disc - b.returnsLineItems;
       return {
         date: new Date(`${key}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
         // ISO date key — required for the EnrichedRevenueChart to overlay
@@ -417,7 +435,7 @@ async function computeDailySeries(
         // when sync data exists. `key` is already YYYY-MM-DD from keyOf().
         isoDate: key,
         revenue: total,
-        estimatedProfit: net - b.cogs,
+        estimatedProfit: netLineItems - b.cogs,
         returningCustomerRate: b.orders ? (b.returningOrders / b.orders) * 100 : 0,
         averageOrderValue: b.orders ? total / b.orders : 0,
         discountRate: b.gross ? (b.disc / b.gross) * 100 : 0,

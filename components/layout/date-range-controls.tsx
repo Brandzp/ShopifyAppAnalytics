@@ -8,13 +8,25 @@ export function DateRangeControls({
   initialStart,
   initialEnd,
   comparisonLabel,
-  exportLabel
+  exportLabel,
+  locale = "en"
 }: {
   initialStart: string;
   initialEnd: string;
   comparisonLabel: string;
   exportLabel: string;
+  // Locale for the small labels ("From", "To", "Apply", "Reset").
+  // Defaults to English so existing callers stay valid.
+  locale?: "he" | "en";
 }) {
+  const isHe = locale === "he";
+  const t = {
+    from: isHe ? "מתאריך" : "From",
+    to: isHe ? "עד תאריך" : "To",
+    apply: isHe ? "החל" : "Apply",
+    applying: isHe ? "מחיל..." : "Applying...",
+    reset: isHe ? "אפס" : "Reset"
+  };
   const router = useRouter();
   const [startDate, setStartDate] = useState(initialStart);
   const [endDate, setEndDate] = useState(initialEnd);
@@ -43,18 +55,18 @@ export function DateRangeControls({
     <div className="grid gap-2 sm:grid-cols-2 lg:flex lg:flex-wrap lg:items-center">
       <div className="flex flex-col gap-2 rounded-2xl border border-border/70 bg-card px-3 py-2 sm:flex-row sm:items-center">
         <label className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
-          From
+          {t.from}
           <input type="date" className="mt-1 block rounded-lg border border-border bg-background px-3 py-2 text-sm font-medium text-foreground" value={startDate} onChange={(event) => setStartDate(event.target.value)} />
         </label>
         <label className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
-          To
+          {t.to}
           <input type="date" className="mt-1 block rounded-lg border border-border bg-background px-3 py-2 text-sm font-medium text-foreground" value={endDate} onChange={(event) => setEndDate(event.target.value)} />
         </label>
         <Button type="button" variant="secondary" size="sm" disabled={isPending || !startDate || !endDate || startDate > endDate} onClick={() => saveRange(startDate, endDate)}>
-          {isPending ? "Applying..." : "Apply"}
+          {isPending ? t.applying : t.apply}
         </Button>
         <Button type="button" variant="secondary" size="sm" disabled={isPending} onClick={resetRange}>
-          Reset
+          {t.reset}
         </Button>
       </div>
       <Button variant="secondary" className="justify-center">

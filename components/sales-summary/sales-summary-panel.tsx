@@ -603,7 +603,7 @@ export function SalesSummaryPanel({
                           active ? "border-indigo-500 bg-indigo-500/5" : "border-border hover:bg-accent/40"
                         }`}
                       >
-                        <button type="button" className="flex flex-1 items-center gap-2 text-left" onClick={() => setSelectedId(imp.id)}>
+                        <button type="button" className="flex flex-1 items-center gap-2 text-start" onClick={() => setSelectedId(imp.id)}>
                           <FileSpreadsheet className="h-4 w-4 text-muted-foreground" />
                           <div>
                             <p className="font-medium">{periodLabel(imp.periodYear, imp.periodMonth, locale)}</p>
@@ -792,18 +792,18 @@ function SummaryView({
           <table className="w-full text-sm">
             <thead className="border-y border-border bg-muted/30 text-xs tracking-wide text-muted-foreground">
               <tr>
-                <th className="px-4 py-2 text-left align-bottom uppercase">{t.breakdown.product}</th>
-                <th className="px-4 py-2 text-left align-bottom uppercase">{t.breakdown.barcode}</th>
-                <th className="px-4 py-2 text-right align-bottom uppercase">{t.breakdown.offline}</th>
-                <th className="px-4 py-2 text-right align-bottom uppercase">{t.breakdown.online}</th>
-                <th className="px-4 py-2 text-left align-bottom">
+                <th className="px-4 py-2 text-start align-bottom uppercase">{t.breakdown.product}</th>
+                <th className="px-4 py-2 text-start align-bottom uppercase">{t.breakdown.barcode}</th>
+                <th className="px-4 py-2 text-end align-bottom uppercase">{t.breakdown.offline}</th>
+                <th className="px-4 py-2 text-end align-bottom uppercase">{t.breakdown.online}</th>
+                <th className="px-4 py-2 text-start align-bottom">
                   <div className="uppercase">{t.breakdown.channelMix}</div>
                   <div className="mt-1 max-w-[14rem] text-[10px] font-normal normal-case tracking-normal leading-4 text-muted-foreground/80">
                     {t.breakdown.channelMixHelp}
                   </div>
                 </th>
-                <th className="px-4 py-2 text-right align-bottom uppercase">{t.breakdown.total}</th>
-                <th className="px-4 py-2 text-right align-bottom">
+                <th className="px-4 py-2 text-end align-bottom uppercase">{t.breakdown.total}</th>
+                <th className="px-4 py-2 text-end align-bottom">
                   <div className="uppercase">{t.breakdown.daysOfStock}</div>
                   <div className="mt-1 max-w-[15rem] text-[10px] font-normal normal-case tracking-normal leading-4 text-muted-foreground/80">
                     {t.breakdown.stockRiskHelp}
@@ -829,19 +829,19 @@ function SummaryView({
                   <td className="px-4 py-2 font-mono text-xs">
                     {row.barcode ?? <span className="text-muted-foreground">—</span>}
                   </td>
-                  <td className="px-4 py-2 text-right">
+                  <td className="px-4 py-2 text-end">
                     <div>{formatCurrency(row.offlineSales, currency)}</div>
                     <div className="text-xs text-muted-foreground">{formatNumber(row.offlineQuantity)} {t.breakdown.unitsSuffix}</div>
                   </td>
-                  <td className="px-4 py-2 text-right">
+                  <td className="px-4 py-2 text-end">
                     <div>{formatCurrency(row.onlineSales, currency)}</div>
                     <div className="text-xs text-muted-foreground">{formatNumber(row.onlineQuantity)} {t.breakdown.unitsSuffix}</div>
                   </td>
                   <td className="px-4 py-2">
                     <ChannelMixBar online={row.onlinePct} offline={row.offlinePct} totalSales={row.totalSales} t={t} />
                   </td>
-                  <td className="px-4 py-2 text-right font-semibold">{formatCurrency(row.totalSales, currency)}</td>
-                  <td className="px-4 py-2 text-right">
+                  <td className="px-4 py-2 text-end font-semibold">{formatCurrency(row.totalSales, currency)}</td>
+                  <td className="px-4 py-2 text-end">
                     <DaysOfStockCell row={row} threshold={stockRisk.threshold} t={t} />
                   </td>
                 </tr>
@@ -875,10 +875,10 @@ function SummaryView({
               <table className="w-full text-sm">
                 <thead className="border-y border-border bg-muted/30 text-xs uppercase tracking-wide text-muted-foreground">
                   <tr>
-                    <th className="px-4 py-2 text-left">{t.unmatched.product}</th>
-                    <th className="px-4 py-2 text-left">{t.unmatched.barcodeInFile}</th>
-                    <th className="px-4 py-2 text-right">{t.unmatched.quantity}</th>
-                    <th className="px-4 py-2 text-right">{t.unmatched.sales}</th>
+                    <th className="px-4 py-2 text-start">{t.unmatched.product}</th>
+                    <th className="px-4 py-2 text-start">{t.unmatched.barcodeInFile}</th>
+                    <th className="px-4 py-2 text-end">{t.unmatched.quantity}</th>
+                    <th className="px-4 py-2 text-end">{t.unmatched.sales}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -888,8 +888,8 @@ function SummaryView({
                       <td className="px-4 py-2 font-mono text-xs">
                         {row.barcode ?? <span className="text-muted-foreground italic">{t.unmatched.noBarcode}</span>}
                       </td>
-                      <td className="px-4 py-2 text-right">{formatNumber(row.quantity)}</td>
-                      <td className="px-4 py-2 text-right">{formatCurrency(row.sales, currency)}</td>
+                      <td className="px-4 py-2 text-end">{formatNumber(row.quantity)}</td>
+                      <td className="px-4 py-2 text-end">{formatCurrency(row.sales, currency)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -955,7 +955,7 @@ function HeroesCard({
                     <p className="truncate font-medium">{row.itemName}</p>
                     {row.barcode ? <p className="font-mono text-[11px] text-muted-foreground">{row.barcode}</p> : null}
                   </div>
-                  <div className="text-right">
+                  <div className="text-end">
                     <p className="font-semibold">{formatCurrency(channelSales, currency)}</p>
                     <p className="text-xs text-muted-foreground">{t.heroes.shareLabel(sharePct.toFixed(0), channel)}</p>
                   </div>
@@ -1120,11 +1120,11 @@ function AffiliateHaloCard({ halo, currency, t }: { halo: AffiliateHaloSummary; 
                   <table className="w-full text-xs">
                     <thead className="text-[10px] uppercase tracking-wide text-muted-foreground">
                       <tr>
-                        <th className="px-2 py-1 text-left">{t.halo.productsHeader}</th>
-                        <th className="px-2 py-1 text-left">{t.halo.barcodeCol}</th>
-                        <th className="px-2 py-1 text-right">{t.halo.onlineCol}</th>
-                        <th className="px-2 py-1 text-right">{t.halo.offlineSameCol}</th>
-                        <th className="px-2 py-1 text-right">{t.halo.ratioCol}</th>
+                        <th className="px-2 py-1 text-start">{t.halo.productsHeader}</th>
+                        <th className="px-2 py-1 text-start">{t.halo.barcodeCol}</th>
+                        <th className="px-2 py-1 text-end">{t.halo.onlineCol}</th>
+                        <th className="px-2 py-1 text-end">{t.halo.offlineSameCol}</th>
+                        <th className="px-2 py-1 text-end">{t.halo.ratioCol}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1132,15 +1132,15 @@ function AffiliateHaloCard({ halo, currency, t }: { halo: AffiliateHaloSummary; 
                         <tr key={`${p.barcode ?? "no"}-${idx}`} className="border-t border-border/40">
                           <td className="px-2 py-1">{p.productTitle}</td>
                           <td className="px-2 py-1 font-mono">{p.barcode ?? "—"}</td>
-                          <td className="px-2 py-1 text-right">
+                          <td className="px-2 py-1 text-end">
                             <div>{formatCurrency(p.onlineSales, currency)}</div>
                             <div className="text-[10px] text-muted-foreground">{formatNumber(p.onlineQuantity)} u</div>
                           </td>
-                          <td className="px-2 py-1 text-right">
+                          <td className="px-2 py-1 text-end">
                             <div>{formatCurrency(p.offlineSales, currency)}</div>
                             <div className="text-[10px] text-muted-foreground">{formatNumber(p.offlineQuantity)} u</div>
                           </td>
-                          <td className="px-2 py-1 text-right">
+                          <td className="px-2 py-1 text-end">
                             {p.onlineSales > 0 ? p.haloRatio.toFixed(2) : "—"}
                           </td>
                         </tr>
@@ -1164,7 +1164,7 @@ function AffiliateHaloCard({ halo, currency, t }: { halo: AffiliateHaloSummary; 
 
 function Stat({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
-    <div className="text-right">
+    <div className="text-end">
       <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</div>
       <div className="font-semibold">{value}</div>
       {sub ? <div className="text-[10px] text-muted-foreground">{sub}</div> : null}

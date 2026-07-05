@@ -73,7 +73,7 @@ export function ExportMetaAdsPdfButton({
         {busy ? labelGenerating : labelDownload}
       </Button>
       {error ? (
-        <p className="max-w-[220px] text-right text-[11px] text-rose-600">{error}</p>
+        <p className="max-w-[220px] text-end text-[11px] text-rose-600">{error}</p>
       ) : null}
     </div>
   );

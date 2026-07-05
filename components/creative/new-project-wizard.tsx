@@ -430,7 +430,7 @@ export function NewProjectWizard({
                   key={choice.id}
                   onClick={() => handleTypeChange(choice.id)}
                   className={cn(
-                    "flex h-full flex-col items-start gap-2 rounded-2xl border p-4 text-left transition-colors",
+                    "flex h-full flex-col items-start gap-2 rounded-2xl border p-4 text-start transition-colors",
                     selected
                       ? "border-indigo-500 bg-indigo-50/50 ring-2 ring-indigo-200"
                       : "border-border hover:border-indigo-300 hover:bg-muted/30"
@@ -879,7 +879,7 @@ export function NewProjectWizard({
                     disabled={disabled}
                     onClick={() => !disabled && setProvider(status.provider)}
                     className={cn(
-                      "flex h-full flex-col gap-2 rounded-2xl border p-3 text-left transition-colors",
+                      "flex h-full flex-col gap-2 rounded-2xl border p-3 text-start transition-colors",
                       isSelected && !disabled
                         ? "border-indigo-500 bg-indigo-50/50 ring-2 ring-indigo-200"
                         : "border-border hover:border-indigo-300 hover:bg-muted/30",
@@ -926,7 +926,7 @@ export function NewProjectWizard({
                         </span>
                       ) : null}
                       {!status.configured ? (
-                        <span className="ml-auto font-mono">{status.envVar}</span>
+                        <span className="ms-auto font-mono">{status.envVar}</span>
                       ) : null}
                     </div>
                   </button>
@@ -1048,12 +1048,12 @@ export function NewProjectWizard({
         <Button type="submit" disabled={submitting || files.length === 0}>
           {submitting ? (
             <>
-              <Loader2 className={cn("h-4 w-4 animate-spin", isHe ? "ml-2" : "mr-2")} />
+              <Loader2 className={cn("h-4 w-4 animate-spin", isHe ? "ms-2" : "me-2")} />
               {isHe ? "מתחיל…" : "Starting…"}
             </>
           ) : (
             <>
-              <Sparkles className={cn("h-4 w-4", isHe ? "ml-2" : "mr-2")} />
+              <Sparkles className={cn("h-4 w-4", isHe ? "ms-2" : "me-2")} />
               {targetCount === 1
                 ? isHe
                   ? "צור עכשיו"

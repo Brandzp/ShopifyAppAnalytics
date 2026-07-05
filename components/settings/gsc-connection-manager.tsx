@@ -107,12 +107,12 @@ export function GscConnectionManager({
           </span>
           <CardTitle className="text-base">Google Search Console</CardTitle>
           {isConnected ? (
-            <span className="ml-auto inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-200">
+            <span className="ms-auto inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-200">
               <CheckCircle2 className="h-3 w-3" aria-hidden />
               Connected
             </span>
           ) : (
-            <span className="ml-auto inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-500 ring-1 ring-slate-200">
+            <span className="ms-auto inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-500 ring-1 ring-slate-200">
               <XCircle className="h-3 w-3" aria-hidden />
               Not connected
             </span>
@@ -178,7 +178,7 @@ export function GscConnectionManager({
           {isConnected ? (
             <>
               <Button variant="secondary" size="sm" onClick={refreshStatus} disabled={refreshing}>
-                {refreshing ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" aria-hidden /> : null}
+                {refreshing ? <Loader2 className="me-1.5 h-3.5 w-3.5 animate-spin" aria-hidden /> : null}
                 Refresh status
               </Button>
               <Button variant="secondary" size="sm" onClick={startOAuth}>

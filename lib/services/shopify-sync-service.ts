@@ -422,7 +422,11 @@ async function upsertOrderFromMapped(
   db: any,
   storeId: string,
   store: any,
-  orderNode: any
+  orderNode: any,
+  preload?: {
+    productsByShopifyId: Map<string, any>;
+    variantsByShopifyId: Map<string, any>;
+  }
 ): Promise<void> {
   const mapped = mapOrderNode(orderNode, storeId, Number(store.defaultCostRatio ?? 0.35));
 
@@ -499,26 +503,40 @@ async function upsertOrderFromMapped(
   await db.refund.deleteMany({ where: { orderId: orderRecord.id } });
 
   for (const lineItem of mapped.lineItems) {
-    const product = lineItem.shopifyProductId
-      ? await db.product.findUnique({
-          where: {
-            storeId_shopifyProductId: {
-              storeId,
-              shopifyProductId: lineItem.shopifyProductId
+    // Preload path avoids the per-line-item N+1: caller batch-loaded products
+    // and variants for the whole 100-order block, so lookups become O(1). Falls
+    // back to per-item findUnique when the block-level orchestrator wasn't used.
+    let product: any = null;
+    let variant: any = null;
+    if (preload) {
+      product = lineItem.shopifyProductId
+        ? preload.productsByShopifyId.get(lineItem.shopifyProductId) ?? null
+        : null;
+      variant = lineItem.shopifyVariantId
+        ? preload.variantsByShopifyId.get(lineItem.shopifyVariantId) ?? null
+        : null;
+    } else {
+      product = lineItem.shopifyProductId
+        ? await db.product.findUnique({
+            where: {
+              storeId_shopifyProductId: {
+                storeId,
+                shopifyProductId: lineItem.shopifyProductId
+              }
             }
-          }
-        })
-      : null;
-    const variant = lineItem.shopifyVariantId
-      ? await db.productVariant.findUnique({
-          where: {
-            storeId_shopifyVariantId: {
-              storeId,
-              shopifyVariantId: lineItem.shopifyVariantId
+          })
+        : null;
+      variant = lineItem.shopifyVariantId
+        ? await db.productVariant.findUnique({
+            where: {
+              storeId_shopifyVariantId: {
+                storeId,
+                shopifyVariantId: lineItem.shopifyVariantId
+              }
             }
-          }
-        })
-      : null;
+          })
+        : null;
+    }
     const overrideCost = product?.costOverrideAmount ? Number(product.costOverrideAmount) * lineItem.quantity : null;
 
     await db.orderLineItem.create({
@@ -567,6 +585,71 @@ async function upsertOrderFromMapped(
   }
 }
 
+// Block size for the product/variant preload. Small enough that the two
+// findMany queries stay well under Postgres's parameter cap and keep memory
+// bounded, large enough that the round-trip savings dominate. On a 30k-order
+// backfill this cuts product/variant lookups from ~180k to ~600 (2 per block).
+const ORDER_PRELOAD_BLOCK_SIZE = 100;
+
+/**
+ * Batch-preloads all product and variant rows referenced by a block of order
+ * nodes, then upserts each order within the block using the preloaded maps.
+ * This replaces the per-line-item findUnique N+1 with 2 findMany queries per
+ * ORDER_PRELOAD_BLOCK_SIZE orders.
+ *
+ * `mapOrderNode` is called twice per order (once to collect ids for the
+ * preload, once inside `upsertOrderFromMapped`) — this is pure in-memory work
+ * and cheap compared to the round-trips we save.
+ */
+async function processOrdersWithPreload(
+  db: any,
+  storeId: string,
+  store: any,
+  orderNodes: any[]
+): Promise<void> {
+  const costRatio = Number(store.defaultCostRatio ?? 0.35);
+  for (let i = 0; i < orderNodes.length; i += ORDER_PRELOAD_BLOCK_SIZE) {
+    const block = orderNodes.slice(i, i + ORDER_PRELOAD_BLOCK_SIZE);
+
+    const productIds = new Set<string>();
+    const variantIds = new Set<string>();
+    for (const orderNode of block) {
+      const mapped = mapOrderNode(orderNode, storeId, costRatio);
+      for (const li of mapped.lineItems) {
+        if (li.shopifyProductId) productIds.add(li.shopifyProductId);
+        if (li.shopifyVariantId) variantIds.add(li.shopifyVariantId);
+      }
+    }
+
+    const [products, variants] = await Promise.all([
+      productIds.size
+        ? db.product.findMany({
+            where: { storeId, shopifyProductId: { in: Array.from(productIds) } }
+          })
+        : Promise.resolve([] as any[]),
+      variantIds.size
+        ? db.productVariant.findMany({
+            where: { storeId, shopifyVariantId: { in: Array.from(variantIds) } }
+          })
+        : Promise.resolve([] as any[])
+    ]);
+
+    const productsByShopifyId = new Map<string, any>(
+      products.map((p: any) => [p.shopifyProductId, p])
+    );
+    const variantsByShopifyId = new Map<string, any>(
+      variants.map((v: any) => [v.shopifyVariantId, v])
+    );
+
+    await processInChunks(block, (orderNode) =>
+      upsertOrderFromMapped(db, storeId, store, orderNode, {
+        productsByShopifyId,
+        variantsByShopifyId
+      })
+    );
+  }
+}
+
 export async function syncOrders(storeId: string, updatedAfter?: Date | null) {
   const db = getDb();
   const store = await db.store.findUnique({ where: { id: storeId } });
@@ -577,7 +660,7 @@ export async function syncOrders(storeId: string, updatedAfter?: Date | null) {
   const query = buildUpdatedAfterQuery(updatedAfter);
   const orders = await client.paginateConnection<any, { orders: any }>("orders", ORDERS_QUERY, { query });
 
-  await processInChunks(orders, (orderNode) => upsertOrderFromMapped(db, storeId, store, orderNode));
+  await processOrdersWithPreload(db, storeId, store, orders);
 
   await db.shopifyConnection.update({
     where: { storeId },
@@ -670,7 +753,7 @@ async function bulkSyncOrders(storeId: string, updatedAfter?: Date | null) {
     { gidMarker: "/LineItem/", field: "lineItems", shape: "connection" }
   ];
   const orderNodes = reassembleByParent(rows, ORDER_CHILD_PLAN);
-  await processInChunks(orderNodes, (orderNode) => upsertOrderFromMapped(db, storeId, store, orderNode));
+  await processOrdersWithPreload(db, storeId, store, orderNodes);
   await db.shopifyConnection.update({
     where: { storeId },
     data: { lastOrdersSyncAt: new Date() }

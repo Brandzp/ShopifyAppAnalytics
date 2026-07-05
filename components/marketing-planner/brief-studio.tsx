@@ -37,7 +37,7 @@ function getReadinessBadge(status: MarketingPlannerDataReadinessStatus) {
 }
 
 function getDirectionClasses(direction: MarketingPlannerDirection) {
-  return direction === "rtl" ? "text-right" : "text-left";
+  return direction === "rtl" ? "text-end" : "text-start";
 }
 
 function getFocusLabel(focusMode: MarketingPlannerFocus) {
@@ -174,7 +174,7 @@ function DataReadinessCard({
   onRefresh: () => void;
 }) {
   return (
-    <Card dir="rtl" className="text-right">
+    <Card dir="rtl" className="text-end">
       <CardHeader className="pb-3">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
@@ -1049,7 +1049,7 @@ function MetaAdsIntelligenceCard({
                             {day.purchases} purchases - {day.clicks.toLocaleString("en-US")} clicks
                           </p>
                         </div>
-                        <div className="text-left">
+                        <div className="text-start">
                           <p className="font-semibold">{formatMoney(day.spend)}</p>
                           <p className="mt-1 text-muted-foreground">ROAS {day.purchaseRoas != null ? day.purchaseRoas.toFixed(2) : "-"}</p>
                         </div>
@@ -1286,7 +1286,7 @@ export function MarketingBriefStudio({ storeId }: { storeId: string }) {
   }
 
   return (
-    <div className="space-y-6 text-right" dir="rtl">
+    <div className="space-y-6 text-end" dir="rtl">
       <DataReadinessCard
         readiness={dataReadiness}
         error={readinessError}
@@ -1294,7 +1294,7 @@ export function MarketingBriefStudio({ storeId }: { storeId: string }) {
         onRefresh={handleRefreshDataReadiness}
       />
 
-      <Card dir="rtl" className="text-right">
+      <Card dir="rtl" className="text-end">
         <CardHeader>
           <CardTitle>העלאת בריף</CardTitle>
           <CardDescription>

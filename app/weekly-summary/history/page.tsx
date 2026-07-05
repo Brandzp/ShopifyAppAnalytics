@@ -61,7 +61,7 @@ export default async function WeeklyReportsHistoryPage() {
   const renderTable = (rows: typeof weekly) => (
     <table className="w-full text-sm">
       <thead>
-        <tr className="border-b border-border text-left text-xs uppercase tracking-wider text-muted-foreground">
+        <tr className="border-b border-border text-start text-xs uppercase tracking-wider text-muted-foreground">
           <th className="py-2">{t.period}</th>
           <th className="py-2">{t.generated}</th>
           <th className="py-2">{t.sent}</th>
@@ -86,7 +86,7 @@ export default async function WeeklyReportsHistoryPage() {
                 </span>
               )}
             </td>
-            <td className="py-2 text-right">
+            <td className="py-2 text-end">
               <a
                 href={`/api/weekly-summary/history/${r.id}/pdf`}
                 className="text-xs font-semibold text-indigo-700 hover:text-indigo-900"

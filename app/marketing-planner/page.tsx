@@ -62,7 +62,7 @@ export default async function MarketingPlannerPage() {
 
   return (
     <AppShell store={chrome.store} controls={chrome.controls}>
-      <div className="space-y-6 text-right" dir="rtl">
+      <div className="space-y-6 text-end" dir="rtl">
         <SectionHeading
           eyebrow="Marketing Planner"
           title="גאנט שיווקי אינטראקטיבי"

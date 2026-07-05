@@ -383,8 +383,24 @@ export default async function CommandCenterPage() {
           </Card>
         </section>
 
-        {/* ── SECTION 5 — Products carrying the store ─────────────────── */}
-        <section className="space-y-3">
+        {/* ── SECTION 5 — Products carrying the store (below-fold detail) ─
+            Memo initiative 3.1 — the Command Center's primary scan is
+            Signals · Money · Trend. Everything else, including the top
+            products table, moves behind progressive disclosure so it
+            doesn't compete for the founder's first 10 seconds. Native
+            <details> works without JS and remembers its own open state
+            per session. */}
+        <details className="group rounded-2xl border border-border bg-card/40 open:bg-card">
+          <summary className="cursor-pointer list-none rounded-2xl px-5 py-4 text-sm font-semibold text-foreground hover:bg-muted/40">
+            <span className="inline-flex items-center gap-2">
+              <span className="text-muted-foreground transition-transform group-open:rotate-90">▸</span>
+              {lang("מוצרים מובילים ופרטים נוספים", "Top products & more detail")}
+              <span className="ms-auto text-xs font-normal text-muted-foreground">
+                {lang("לחצי כדי לפתוח", "click to expand")}
+              </span>
+            </span>
+          </summary>
+          <div className="space-y-3 border-t border-border px-5 py-4">
           <SectionHead
             eyebrow={lang("מוצרים", "Products")}
             title={lang("מוצרים שמחזיקים את החנות", "Products carrying the store")}
@@ -433,7 +449,8 @@ export default async function CommandCenterPage() {
               }
             ]}
           />
-        </section>
+          </div>
+        </details>
       </div>
     </AppShell>
   );

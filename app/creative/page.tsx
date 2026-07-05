@@ -1,6 +1,7 @@
 import { AppShell } from "@/components/layout/app-shell";
 import { PageHead } from "@/components/dashboard-v2/section-head";
 import { CreativeProjectsList } from "@/components/creative/creative-projects-list";
+import { CreativeTabs } from "@/components/creative/creative-tabs";
 import { TopCreativeBenchmarks } from "@/components/creative/top-creative-benchmarks";
 import { getAppChromeData } from "@/lib/services/analytics-service";
 import { getAppLocale } from "@/lib/i18n";
@@ -40,6 +41,7 @@ export default async function CreativePage() {
     <AppShell store={chrome.store} controls={chrome.controls}>
       <div className="space-y-6 sm:space-y-8">
         <PageHead eyebrow={heading.eyebrow} title={heading.title} description={heading.description} />
+        <CreativeTabs locale={locale} />
         {/* Show top-performing creatives as benchmarks before the generation UI */}
         {topCreatives.length > 0 && (
           <TopCreativeBenchmarks topCreatives={topCreatives} locale={locale} />

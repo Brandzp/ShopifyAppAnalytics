@@ -183,7 +183,7 @@ export function Sidebar({
           <p className="font-semibold">{storeName}</p>
         </div>
         <Button variant="secondary" size="sm" onClick={() => setOpen((value) => !value)}>
-          <Menu className={cn("h-4 w-4", locale === "he" ? "ml-2" : "mr-2")} />
+          <Menu className={cn("h-4 w-4", locale === "he" ? "ms-2" : "me-2")} />
           {labels.common.menu}
         </Button>
       </div>

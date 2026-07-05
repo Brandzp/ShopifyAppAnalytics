@@ -325,7 +325,7 @@ export default function CompareHePage() {
           <table className="w-full min-w-[700px] border-collapse text-sm">
             <thead>
               <tr className="border-b border-border bg-muted/40">
-                <th className="py-3 px-4 text-right font-semibold text-slate-700 w-56">
+                <th className="py-3 px-4 text-end font-semibold text-slate-700 w-56">
                   מאפיין
                 </th>
                 {columns.map((col) => (
