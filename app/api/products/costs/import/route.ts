@@ -3,6 +3,7 @@ import { AppError, toErrorMessage } from "@/lib/server/errors";
 import { readUploadAsCsv } from "@/lib/server/file-upload";
 import { resolveActiveStoreId } from "@/lib/services/offline-sales-service";
 import { importProductCostsCsv } from "@/lib/services/product-cost-service";
+import { getAuthContext } from "@/lib/auth/session";
 
 // Product cost (COGS) CSV import endpoint — SA-HIGH-03.
 //
@@ -20,6 +21,9 @@ export const maxDuration = 120;
 
 export async function POST(request: Request) {
   try {
+    const auth = await getAuthContext();
+    if (!auth.userId) return NextResponse.json({ ok: false, error: "Unauthorized." }, { status: 401 });
+
     const storeId = await resolveActiveStoreId();
     if (!storeId) throw new AppError("No active store.", 400);
 

@@ -3,6 +3,7 @@ import { AppError, toErrorMessage } from "@/lib/server/errors";
 import { readUploadAsCsv } from "@/lib/server/file-upload";
 import { resolveActiveStoreId } from "@/lib/services/offline-sales-service";
 import { importAffiliateConversionsCsv } from "@/lib/services/affiliate-conversion-import-service";
+import { getAuthContext } from "@/lib/auth/session";
 
 // CSV upload endpoint for the affiliate portal.
 // Accepts multipart form-data with a single `file` field (.csv).
@@ -13,6 +14,9 @@ export const maxDuration = 120;
 
 export async function POST(request: Request) {
   try {
+    const auth = await getAuthContext();
+    if (!auth.userId) return NextResponse.json({ ok: false, error: "Unauthorized." }, { status: 401 });
+
     const storeId = await resolveActiveStoreId();
     if (!storeId) throw new AppError("No active store.", 400);
 
