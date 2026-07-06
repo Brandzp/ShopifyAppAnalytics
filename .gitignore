@@ -19,6 +19,8 @@ bun.lockb
 # Stray scripts from other projects that occasionally land here
 bi14append.js
 _bi_*.js
+bi_query_*.js
+tmp_*.js
 
 # TypeScript incremental build cache — never useful in source control
 tsconfig.tsbuildinfo

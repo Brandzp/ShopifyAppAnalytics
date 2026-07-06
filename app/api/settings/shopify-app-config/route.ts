@@ -3,6 +3,7 @@ import { getDb } from "@/lib/server/db";
 import { AppError, toErrorMessage } from "@/lib/server/errors";
 import { encryptSecret } from "@/lib/security/encryption";
 import { invalidateShopifyOauthConfigCache } from "@/lib/services/shopify-oauth-service";
+import { getAuthContext } from "@/lib/auth/session";
 
 // Manage the global Shopify Partner app credentials (Client ID +
 // Client Secret) from the Settings UI. Values are persisted in the
@@ -20,6 +21,8 @@ const CLIENT_SECRET_KEY = "shopify_partner_client_secret";
 
 export async function GET() {
   try {
+    const auth = await getAuthContext();
+    if (!auth.userId) return NextResponse.json({ ok: false, error: "Unauthorized." }, { status: 401 });
     const db = getDb();
     const rows = (await db.systemConfig.findMany({
       where: { key: { in: [CLIENT_ID_KEY, CLIENT_SECRET_KEY] } },
@@ -53,6 +56,8 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const auth = await getAuthContext();
+    if (!auth.userId) return NextResponse.json({ ok: false, error: "Unauthorized." }, { status: 401 });
     const body = (await request.json().catch(() => ({}))) as {
       clientId?: string;
       clientSecret?: string;

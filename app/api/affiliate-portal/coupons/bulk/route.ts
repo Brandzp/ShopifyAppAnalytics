@@ -1,9 +1,12 @@
 import { NextResponse } from "next/server";
 import { createAffiliateCouponsInBulk } from "@/lib/services/affiliate-portal-admin-service";
 import { toErrorMessage } from "@/lib/server/errors";
+import { getAuthContext } from "@/lib/auth/session";
 
 export async function POST(request: Request) {
   try {
+    const auth = await getAuthContext();
+    if (!auth.userId) return NextResponse.json({ ok: false, error: "Unauthorized." }, { status: 401 });
     const body = await request.json();
     const result = await createAffiliateCouponsInBulk({
       storeId: body.storeId,

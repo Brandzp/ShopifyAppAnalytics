@@ -1,9 +1,12 @@
 import { NextResponse } from "next/server";
 import { importAffiliatesFromFile } from "@/lib/services/affiliate-portal-directory-service";
 import { AppError, toErrorMessage } from "@/lib/server/errors";
+import { getAuthContext } from "@/lib/auth/session";
 
 export async function POST(request: Request) {
   try {
+    const auth = await getAuthContext();
+    if (!auth.userId) return NextResponse.json({ ok: false, error: "Unauthorized." }, { status: 401 });
     const formData = await request.formData();
     const file = formData.get("file");
     const storeId = formData.get("storeId");

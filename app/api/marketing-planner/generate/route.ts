@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { AppError, toErrorMessage } from "@/lib/server/errors";
 import type { MarketingBrand, MarketingPlannerExecutionMode, MarketingPlannerFocus } from "@/lib/domain/marketing-planner-types";
 import { generateMarketingPlannerWorkbook } from "@/lib/services/marketing-planner-service";
+import { getAuthContext } from "@/lib/auth/session";
 
 function isBrand(value: FormDataEntryValue | null): value is MarketingBrand {
   return value === "Incense" || value === "After";
@@ -17,6 +18,8 @@ function isExecutionMode(value: FormDataEntryValue | null): value is MarketingPl
 
 export async function POST(request: Request) {
   try {
+    const auth = await getAuthContext();
+    if (!auth.userId) return NextResponse.json({ ok: false, error: "Unauthorized." }, { status: 401 });
     const formData = await request.formData();
     const brand = formData.get("brand");
     const planningMonth = formData.get("planningMonth");

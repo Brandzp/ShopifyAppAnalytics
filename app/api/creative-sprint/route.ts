@@ -4,11 +4,14 @@ import { AppError, toErrorMessage } from "@/lib/server/errors";
 import { resolveActiveStoreId } from "@/lib/services/offline-sales-service";
 import { createSprint, listSprints, type SprintApprovalMode } from "@/lib/services/creative-sprint/sprint-service";
 import type { CascadeStage } from "@/lib/services/creative-sprint/sprint-cascade";
+import { getAuthContext } from "@/lib/auth/session";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
+    const auth = await getAuthContext();
+    if (!auth.userId) return NextResponse.json({ ok: false, error: "Unauthorized." }, { status: 401 });
     const storeId = await resolveActiveStoreId();
     if (!storeId) return NextResponse.json({ ok: true, sprints: [] });
     const sprints = await listSprints(storeId);
@@ -21,6 +24,8 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const auth = await getAuthContext();
+    if (!auth.userId) return NextResponse.json({ ok: false, error: "Unauthorized." }, { status: 401 });
     const storeId = await resolveActiveStoreId();
     if (!storeId) throw new AppError("Connect a store before creating sprints.", 400);
     const body = (await request.json()) as {

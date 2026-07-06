@@ -2,9 +2,12 @@
 import { AppError, toErrorMessage } from "@/lib/server/errors";
 import type { GrowthProductRecommendation } from "@/lib/domain/growth-agent-types";
 import { importGrowthAgentRecommendationToShopify } from "@/lib/services/growth-agent-product-crawler-service";
+import { getAuthContext } from "@/lib/auth/session";
 
 export async function POST(request: Request) {
   try {
+    const auth = await getAuthContext();
+    if (!auth.userId) return NextResponse.json({ ok: false, error: "Unauthorized." }, { status: 401 });
     const body = await request.json();
     const recommendation = body?.recommendation as GrowthProductRecommendation | undefined;
     if (typeof body?.storeId !== "string" || !body.storeId) {

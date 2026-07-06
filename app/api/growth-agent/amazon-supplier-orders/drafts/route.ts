@@ -1,9 +1,12 @@
 ﻿import { NextResponse } from "next/server";
 import { AppError, toErrorMessage } from "@/lib/server/errors";
 import { createAmazonSupplierOrderDraft } from "@/lib/services/amazon-supplier-order-service";
+import { getAuthContext } from "@/lib/auth/session";
 
 export async function POST(request: Request) {
   try {
+    const auth = await getAuthContext();
+    if (!auth.userId) return NextResponse.json({ ok: false, error: "Unauthorized." }, { status: 401 });
     const body = await request.json();
     const result = await createAmazonSupplierOrderDraft(body, body?.storeId);
     return NextResponse.json(result);

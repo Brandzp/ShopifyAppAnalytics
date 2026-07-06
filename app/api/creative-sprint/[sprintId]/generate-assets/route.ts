@@ -7,12 +7,15 @@
 import { NextResponse } from "next/server";
 import { AppError, toErrorMessage } from "@/lib/server/errors";
 import { generateAssetsForSprintInline } from "@/lib/services/creative-sprint/sprint-service";
+import { getAuthContext } from "@/lib/auth/session";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 600; // 10 min hard ceiling; tune if Higgsfield is slow
 
 export async function POST(_req: Request, ctx: { params: Promise<{ sprintId: string }> }) {
   try {
+    const auth = await getAuthContext();
+    if (!auth.userId) return NextResponse.json({ ok: false, error: "Unauthorized." }, { status: 401 });
     const { sprintId } = await ctx.params;
     const result = await generateAssetsForSprintInline(sprintId);
     return NextResponse.json({ ok: true, ...result });

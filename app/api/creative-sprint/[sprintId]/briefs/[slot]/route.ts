@@ -8,11 +8,14 @@ import { NextResponse } from "next/server";
 import { AppError, toErrorMessage } from "@/lib/server/errors";
 import { updateSprintBrief } from "@/lib/services/creative-sprint/sprint-service";
 import type { SprintBrief } from "@/lib/services/creative-sprint/brief-generator";
+import { getAuthContext } from "@/lib/auth/session";
 
 export const dynamic = "force-dynamic";
 
 export async function PATCH(req: Request, ctx: { params: Promise<{ sprintId: string; slot: string }> }) {
   try {
+    const auth = await getAuthContext();
+    if (!auth.userId) return NextResponse.json({ ok: false, error: "Unauthorized." }, { status: 401 });
     const { sprintId, slot } = await ctx.params;
     const slotIndex = Number(slot);
     if (!Number.isInteger(slotIndex) || slotIndex < 1) {
