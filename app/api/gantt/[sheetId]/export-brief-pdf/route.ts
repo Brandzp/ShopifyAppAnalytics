@@ -12,6 +12,7 @@ import { assertStoreInActiveOrg } from "@/lib/auth/guards";
 import { getDb } from "@/lib/server/db";
 import { getInternalBaseUrl } from "@/lib/server/base-url";
 import { renderPdfFromUrl } from "@/lib/server/pdf-renderer";
+import { buildContentDisposition } from "@/lib/server/content-disposition";
 import {
   generateMarketingBrief,
   type MarketingBrief
@@ -141,7 +142,9 @@ export async function POST(
       status: 200,
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename="${filename}"`,
+        // Hebrew sheet titles need RFC 5987 encoding — plain filename=
+        // rejects any codepoint > 255 (Aleph is 1488).
+        "Content-Disposition": buildContentDisposition(filename),
         "Content-Length": String(pdf.byteLength),
         "Cache-Control": "no-store"
       }

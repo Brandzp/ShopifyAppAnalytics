@@ -146,8 +146,23 @@ export async function POST(
       brief
     });
   } catch (rawError) {
+    // Log the raw error server-side BEFORE friendlyDbError rewrites it —
+    // we lost context in prod once because friendlyDbError swallowed a
+    // Prisma stack trace and produced an empty message, which the UI
+    // then rendered as a bare "HTTP 500".
+    console.error(
+      "[gantt-brief] request failed:",
+      rawError instanceof Error ? rawError.stack ?? rawError.message : String(rawError)
+    );
     const error = friendlyDbError(rawError);
     const status = error instanceof AppError ? error.statusCode : 500;
-    return NextResponse.json({ ok: false, error: toErrorMessage(error) }, { status });
+    // Never send an empty error string — the client falls back to
+    // "HTTP 500" when body.error is empty, which is what we've been
+    // seeing on the marketing planner. Always produce SOMETHING actionable.
+    const message =
+      toErrorMessage(error) ||
+      (rawError instanceof Error && rawError.message) ||
+      "Brief generation failed with an unspecified error. Check server logs.";
+    return NextResponse.json({ ok: false, error: message }, { status });
   }
 }

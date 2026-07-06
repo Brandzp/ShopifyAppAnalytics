@@ -12,6 +12,7 @@ import { assertStoreInActiveOrg } from "@/lib/auth/guards";
 import { getDb } from "@/lib/server/db";
 import { getInternalBaseUrl } from "@/lib/server/base-url";
 import { renderPdfFromUrl } from "@/lib/server/pdf-renderer";
+import { buildContentDisposition } from "@/lib/server/content-disposition";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -77,7 +78,11 @@ export async function POST(
       status: 200,
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename="${filename}"`,
+        // Hebrew titles (`sheet.title` often is) blow up plain
+        // Content-Disposition because HTTP headers are ByteString-only.
+        // buildContentDisposition uses RFC 5987 to send both a UTF-8
+        // filename and an ASCII fallback.
+        "Content-Disposition": buildContentDisposition(filename),
         "Content-Length": String(pdf.byteLength),
         "Cache-Control": "no-store"
       }
