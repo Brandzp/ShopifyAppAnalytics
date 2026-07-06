@@ -12,6 +12,31 @@ import { assertStoreInActiveOrg } from "@/lib/auth/guards";
 import { getDb } from "@/lib/server/db";
 import { getInternalBaseUrl } from "@/lib/server/base-url";
 import { renderPdfFromUrl } from "@/lib/server/pdf-renderer";
+import {
+  generateMarketingBrief,
+  type MarketingBrief
+} from "@/lib/services/gantt-brief-generator-service";
+
+function monthLabelFromRange(start: Date | null, end: Date | null): string {
+  if (!start) return "";
+  const monthsHe = [
+    "ינואר",
+    "פברואר",
+    "מרץ",
+    "אפריל",
+    "מאי",
+    "יוני",
+    "יולי",
+    "אוגוסט",
+    "ספטמבר",
+    "אוקטובר",
+    "נובמבר",
+    "דצמבר"
+  ];
+  const startLabel = `${monthsHe[start.getUTCMonth()]} ${start.getUTCFullYear()}`;
+  if (!end || end.getUTCMonth() === start.getUTCMonth()) return startLabel;
+  return `${startLabel} → ${monthsHe[end.getUTCMonth()]} ${end.getUTCFullYear()}`;
+}
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -42,14 +67,56 @@ export async function POST(
     const db = getDb();
     const sheet = await db.ganttSheet.findFirst({
       where: { id: sheetId, storeId },
-      select: { id: true, title: true, briefJson: true }
+      include: {
+        rows: { orderBy: [{ startDate: "asc" }, { rowIndex: "asc" }] },
+        store: { select: { name: true } }
+      }
     });
     if (!sheet) throw new AppError("Sheet not found.", 404);
+
+    // Ensure the brief exists before rendering the print page. Previously
+    // this route required the client to have called POST /brief first and
+    // errored 409 if not — but the /brief endpoint's DB cache write is
+    // best-effort (a Prisma failure there won't throw to the client), so
+    // on Render we sometimes ended up with a "200 OK from /brief" but
+    // NULL briefJson on the row. The print page then 404's, chromium
+    // captures the 404, and the operator sees "HTTP 500" here. Fix by
+    // generating on the fly if missing.
     if (!sheet.briefJson) {
-      throw new AppError(
-        "No brief generated yet. Call POST /api/gantt/[id]/brief first.",
-        409
-      );
+      const monthLabel = monthLabelFromRange(sheet.rangeStart, sheet.rangeEnd);
+      const brief: MarketingBrief = await generateMarketingBrief({
+        storeBrandName: sheet.store?.name ?? "",
+        monthLabel,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        rows: sheet.rows.map((r: any) => ({
+          id: r.id,
+          task: r.task ?? "",
+          category: r.category,
+          role: r.role,
+          startDate: r.startDate,
+          endDate: r.endDate,
+          actionType: r.actionType
+        }))
+      });
+      try {
+        await db.ganttSheet.update({
+          where: { id: sheet.id },
+          data: { briefJson: brief as unknown as object, briefGeneratedAt: new Date() }
+        });
+      } catch (err) {
+        // Not fatal — even if we can't cache, the print page fetches
+        // briefJson via the same query it does today. When cache write
+        // fails we fall back to writing at least the in-memory brief
+        // into a fresh column value via a second update attempt.
+        console.warn(
+          "[export-brief-pdf] briefJson cache write failed, print page may 404:",
+          err instanceof Error ? err.message : String(err)
+        );
+        throw new AppError(
+          "Could not persist the generated brief. Try regenerating from the marketing planner.",
+          500
+        );
+      }
     }
 
     const baseUrl = getInternalBaseUrl(request);

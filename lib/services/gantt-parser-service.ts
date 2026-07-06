@@ -94,8 +94,26 @@ const CHANNEL_RULES: Array<{
   // Discounts / promos / coupons. High priority — operators sometimes
   // mention a coupon code (NAME15) inside an Instagram post row, which
   // should still surface the discount action.
+  //
+  // "קידום ממומן" (paid promotion / paid ads) is the operator's own label
+  // for the Meta/Google budget row and belongs here — the tasks inside
+  // it are always offers/discounts announced through paid channels.
   {
-    patterns: [/קופון/i, /מבצע/i, /הנחה/i, /promo/i, /discount/i, /coupon/i, /code/i, /קוד/i],
+    patterns: [
+      /קופון/i,
+      /מבצע/i,
+      /הנחה/i,
+      /promo/i,
+      /discount/i,
+      /coupon/i,
+      /code/i,
+      /קוד/i,
+      /קידום ממומן/i,
+      /קידום/i,
+      /ממומן/i,
+      /paid/i,
+      /budget/i
+    ],
     action: "discount_code",
     role: "marketing"
   },
@@ -290,10 +308,37 @@ function parseMatrix(rows: unknown[][]): {
   let rangeEnd: Date | null = null;
 
   let nextRowIndex = 1;
+  // Israeli operators heavily use VERTICAL MERGES on col A to label a whole
+  // section (e.g. "קידום ממומן" merged over 6 sub-rows of ad concepts). In
+  // xlsx's sheet_to_json output the merged label only appears in the TOP
+  // row of the merge; the other rows return null for col A. Without
+  // carrying the label forward we silently drop every sub-row — which is
+  // exactly the "the parser missed my paid-promotion rows" bug on Incense
+  // Parfums's July calendar.
+  //
+  // Rule: an empty col A means "same section as the previous non-empty
+  // row" — UNLESS the whole row is empty (spacer). We reset the carried
+  // label when we encounter a fully-empty row so a downstream section
+  // separator can still cleanly break the group.
+  let currentChannel: string | null = null;
   for (let r = dataStartRow; r < rows.length; r++) {
     const row = rows[r] ?? [];
-    const channelText = cellToString(row[0]);
-    if (!channelText) continue; // skip blank divider rows
+    const explicitChannel = cellToString(row[0]);
+    const hasAnyContent = row.some((cell, idx) => idx > 0 && cellToString(cell).length > 0);
+
+    if (explicitChannel) {
+      currentChannel = explicitChannel;
+    } else if (!hasAnyContent) {
+      // Fully empty row — treat as a section break so the next labelled
+      // row doesn't inherit stale state.
+      currentChannel = null;
+      continue;
+    }
+    // If we still have no channel by this point the row is orphaned
+    // content above any label — nothing sensible to do with it.
+    if (!currentChannel) continue;
+
+    const channelText = currentChannel;
     const classification = classifyChannel(channelText);
     for (let c = 1; c < row.length; c++) {
       const cellText = cellToString(row[c]);

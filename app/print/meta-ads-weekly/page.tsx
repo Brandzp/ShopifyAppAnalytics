@@ -1062,6 +1062,12 @@ export default async function MetaAdsWeeklyPrintPage({
             <CampaignPerformancePage attribution={campaignAttribution} report={report} isHe={isHe} />
           ) : null}
 
+          {/* PAGE 6b — Product-level rollup grouped from ad-name prefix.
+              This is the view the founder writes by hand ("Second Skin
+              5.34x on ₪367"). Without it they have to reconstruct it from
+              the raw ad table on every campaign page. */}
+          {report ? <ProductPerformancePage report={report} isHe={isHe} /> : null}
+
           {report && totals ? (
             <section className="pwr-section">
               <h2 className="pwr-section-title">{t.totalsTitle}</h2>
@@ -1357,10 +1363,30 @@ function ExecutiveSummaryPage(props: ExecPageProps) {
   const mainAction = pickMainAction(metaInsights, report.brands);
   const conf = confidenceFromSpend(recon.meta.spend, recon.shopify.orders);
 
+  // Meta-attributed ROAS + revenue — this is the number the founder writes
+  // in their manual weekly summary ("ROAS כולל 4.8"). Blended ROAS mixes
+  // Meta spend against ALL Shopify revenue (including affiliates who often
+  // drive 40-60% of orders) and reads as inflated when quoted alone. We
+  // now surface Meta ROAS as the primary tile and keep Blended as a
+  // supporting metric with an explicit label so founders can compare.
+  const metaRoas = report.totals.spend > 0
+    ? report.brands.reduce((sum, b) => {
+        const roas = b.kpis.purchaseRoas ?? 0;
+        return sum + roas * b.kpis.spend;
+      }, 0) / report.totals.spend
+    : null;
+  const metaAttributedRevenue = report.brands.reduce((sum, b) => {
+    const roas = b.kpis.purchaseRoas ?? 0;
+    return sum + roas * b.kpis.spend;
+  }, 0);
+
   // Hebrew narrative summary — concrete, references the real numbers.
+  // Leads with Meta ROAS (the honest attribution number) rather than the
+  // blended ratio, which is mathematically fine but conversationally
+  // misleading when affiliates drive a big chunk of revenue.
   const summarySentence = lang(
-    `השבוע הושקעו ₪${Math.round(recon.meta.spend).toLocaleString("he-IL")} ב־Meta והניבו ₪${Math.round(recon.shopify.netRevenue).toLocaleString("he-IL")} הכנסות Shopify ו־${recon.shopify.orders} הזמנות. ROAS משוקלל ${blendedRoas != null ? blendedRoas.toFixed(2) + "x" : "n/a"}. ${bestCampaign ? `הקמפיין החזק היה "${bestCampaign.name}".` : ""}${mainAction ? " פעולה מומלצת: " + mainAction : ""}`,
-    `This week we spent ₪${Math.round(recon.meta.spend).toLocaleString()} on Meta and generated ₪${Math.round(recon.shopify.netRevenue).toLocaleString()} in Shopify revenue across ${recon.shopify.orders} orders. Blended ROAS ${blendedRoas != null ? blendedRoas.toFixed(2) + "x" : "n/a"}. ${bestCampaign ? `Top campaign: "${bestCampaign.name}".` : ""}${mainAction ? " Recommended: " + mainAction : ""}`
+    `השבוע הושקעו ₪${Math.round(recon.meta.spend).toLocaleString("he-IL")} ב־Meta עם ${report.totals.purchases} רכישות מיוחסות ל־Meta ו־ROAS ${metaRoas != null ? metaRoas.toFixed(2) + "x" : "n/a"}. סה״כ Shopify: ₪${Math.round(recon.shopify.netRevenue).toLocaleString("he-IL")} ב־${recon.shopify.orders} הזמנות (כולל אורגני ואפיליאייטס). ${bestCampaign ? `הקמפיין החזק היה "${bestCampaign.name}".` : ""}${mainAction ? " פעולה מומלצת: " + mainAction : ""}`,
+    `This week we spent ₪${Math.round(recon.meta.spend).toLocaleString()} on Meta with ${report.totals.purchases} Meta-attributed purchases and ROAS ${metaRoas != null ? metaRoas.toFixed(2) + "x" : "n/a"}. Total Shopify: ₪${Math.round(recon.shopify.netRevenue).toLocaleString()} across ${recon.shopify.orders} orders (including organic + affiliates). ${bestCampaign ? `Top campaign: "${bestCampaign.name}".` : ""}${mainAction ? " Recommended: " + mainAction : ""}`
   );
 
   return (
@@ -1369,40 +1395,46 @@ function ExecutiveSummaryPage(props: ExecPageProps) {
       <h2 className="pwr-exec-page-title">{lang("השורה התחתונה", "Executive summary")}</h2>
       <p className="pwr-exec-page-sub">{lang("התמונה הכוללת של השבוע — Shopify כמקור אמת להכנסות, Meta כמקור אמת להוצאות.", "The big picture — Shopify as source of truth for revenue, Meta for spend.")}</p>
 
+      {/* Primary row — the four Meta numbers a founder writes in their own
+          summary: what they spent, what Meta says they earned, the ROAS on
+          that, and how many purchases Meta attributed. */}
       <div className="pwr-bottom-line">
         <div className="pwr-kpi">
           <p className="pwr-kpi-label">{lang("הוצאה Meta", "Meta spend")}<SourceTag source="M" /></p>
           <p className="pwr-kpi-value">₪{Math.round(recon.meta.spend).toLocaleString("en-US")}</p>
         </div>
         <div className="pwr-kpi">
-          <p className="pwr-kpi-label">{lang("הכנסות Shopify", "Shopify revenue")}<SourceTag source="S" /></p>
+          <p className="pwr-kpi-label">{lang("הכנסות Meta", "Meta revenue")}<SourceTag source="M" /></p>
+          <p className="pwr-kpi-value">₪{Math.round(metaAttributedRevenue).toLocaleString("en-US")}</p>
+        </div>
+        <div className="pwr-kpi">
+          <p className="pwr-kpi-label">{lang("ROAS לפי Meta", "Meta ROAS")}<SourceTag source="M" /></p>
+          <p className="pwr-kpi-value">{metaRoas != null ? `${metaRoas.toFixed(2)}x` : "—"}</p>
+        </div>
+        <div className="pwr-kpi">
+          <p className="pwr-kpi-label">{lang("רכישות Meta", "Meta purchases")}<SourceTag source="M" /></p>
+          <p className="pwr-kpi-value">{report.totals.purchases}</p>
+        </div>
+      </div>
+      {/* Supporting row — total Shopify picture (includes organic +
+          affiliates), plus the blended ratio labelled honestly so the
+          founder sees WHY it's larger than Meta ROAS. */}
+      <div className="pwr-bottom-line" style={{ marginTop: 6 }}>
+        <div className="pwr-kpi">
+          <p className="pwr-kpi-label">{lang("סה״כ Shopify", "Total Shopify")}<SourceTag source="S" /></p>
           <p className="pwr-kpi-value">₪{Math.round(recon.shopify.netRevenue).toLocaleString("en-US")}</p>
         </div>
         <div className="pwr-kpi">
-          <p className="pwr-kpi-label">{lang("ROAS משוקלל", "Blended ROAS")}<SourceTag source="Blended" /></p>
-          <p className="pwr-kpi-value">{blendedRoas != null ? `${blendedRoas.toFixed(2)}x` : "—"}</p>
-        </div>
-        <div className="pwr-kpi">
-          <p className="pwr-kpi-label">{lang("הזמנות", "Orders")}<SourceTag source="S" /></p>
+          <p className="pwr-kpi-label">{lang("סה״כ הזמנות", "Total orders")}<SourceTag source="S" /></p>
           <p className="pwr-kpi-value">{recon.shopify.orders}</p>
         </div>
-      </div>
-      <div className="pwr-bottom-line" style={{ marginTop: 6 }}>
         <div className="pwr-kpi">
-          <p className="pwr-kpi-label">{lang("CPA משוקלל", "Blended CPA")}<SourceTag source="Calc" /></p>
-          <p className="pwr-kpi-value">{cpa != null ? `₪${cpa.toFixed(2)}` : "—"}</p>
+          <p className="pwr-kpi-label">{lang("ROAS משוקלל (כל המקורות)", "Blended ROAS (all sources)")}<SourceTag source="Blended" /></p>
+          <p className="pwr-kpi-value">{blendedRoas != null ? `${blendedRoas.toFixed(2)}x` : "—"}</p>
         </div>
         <div className="pwr-kpi">
           <p className="pwr-kpi-label">{lang("AOV", "AOV")}<SourceTag source="Calc" /></p>
           <p className="pwr-kpi-value">{aov > 0 ? `₪${aov.toFixed(0)}` : "—"}</p>
-        </div>
-        <div className="pwr-kpi">
-          <p className="pwr-kpi-label">{lang("לקוחות חדשים", "New customers")}<SourceTag source="S" /></p>
-          <p className="pwr-kpi-value">{recon.shopify.newCustomers}</p>
-        </div>
-        <div className="pwr-kpi">
-          <p className="pwr-kpi-label">{lang("לקוחות חוזרים", "Returning")}<SourceTag source="S" /></p>
-          <p className="pwr-kpi-value">{recon.shopify.returningCustomers}</p>
         </div>
       </div>
       {(() => {
@@ -1936,6 +1968,167 @@ function CampaignPerformancePage({
           })}
         </tbody>
       </table>
+    </section>
+  );
+}
+
+// Group ads by product using their name prefix. The account uses a
+// consistent `<Product>_<Type>_<...>_<date>` convention:
+//   Intense50_Perfume_Vid3_070526     → Intense 50
+//   SecondSkin_PazsPics_VID1_160626   → Second Skin
+//   SECONDSKIN_Perfume_Vid5_110626    → Second Skin (case-insensitive)
+//   Emerge_Men_Perfume_Pic1_100626    → Emerge Men
+//   150FF_Evergreen_7_5_26            → 15% Off promo
+//   Influencer_PazsPics_VID1_230426   → Influencer collab
+//   static_omer / Static_Omer_2       → Signups
+//
+// Founders think in products ("Intense 50 did 5x on ₪10k"), not in
+// individual creatives. Grouping matches how the operator writes their
+// weekly summary by hand — so the report finally reads like theirs.
+function groupAdByProduct(adName: string | null | undefined): { key: string; label: string } {
+  const name = (adName ?? "").trim();
+  const upper = name.toUpperCase();
+  if (!name) return { key: "unknown", label: "אחר" };
+  if (/^INTENSE\s*50/.test(upper)) return { key: "intense50", label: "Intense 50" };
+  if (/^(SECOND[_\s]?SKIN|SECONDSKIN)/.test(upper)) return { key: "secondskin", label: "Second Skin" };
+  if (/^EMERGE/.test(upper)) return { key: "emerge", label: "Emerge Men" };
+  if (/^(150?FF|15OFF)/.test(upper)) return { key: "150ff", label: "15% Off Promo" };
+  if (/^INFLUENCER/.test(upper)) return { key: "influencer", label: "Influencer collab" };
+  if (/(STATIC_OMER|SIGNUP)/.test(upper)) return { key: "signups", label: "Signups" };
+  // Fallback — use the first token before _ or -.
+  const first = name.split(/[_\-\s]/)[0];
+  return { key: first.toLowerCase(), label: first };
+}
+
+interface ProductRow {
+  key: string;
+  label: string;
+  spend: number;
+  purchases: number;
+  attributedRevenue: number;
+  roas: number | null;
+  clicks: number;
+  adCount: number;
+}
+
+function aggregateAdsByProduct(
+  report: NonNullable<Awaited<ReturnType<typeof buildMetaAdsWeeklyReport>>>
+): ProductRow[] {
+  const buckets = new Map<string, ProductRow>();
+  for (const brand of report.brands) {
+    for (const ad of brand.ads) {
+      const { key, label } = groupAdByProduct(ad.adName);
+      const attributedRevenue = (ad.purchaseRoas ?? 0) * ad.spend;
+      const existing = buckets.get(key) ?? {
+        key,
+        label,
+        spend: 0,
+        purchases: 0,
+        attributedRevenue: 0,
+        roas: null,
+        clicks: 0,
+        adCount: 0
+      };
+      existing.spend += ad.spend;
+      existing.purchases += ad.purchases;
+      existing.attributedRevenue += attributedRevenue;
+      existing.clicks += ad.clicks;
+      existing.adCount += 1;
+      buckets.set(key, existing);
+    }
+  }
+  const rows = [...buckets.values()];
+  for (const r of rows) {
+    r.roas = r.spend > 0 ? r.attributedRevenue / r.spend : null;
+  }
+  return rows.sort((a, b) => b.spend - a.spend);
+}
+
+function ProductPerformancePage({
+  report,
+  isHe
+}: {
+  report: NonNullable<Awaited<ReturnType<typeof buildMetaAdsWeeklyReport>>>;
+  isHe: boolean;
+}) {
+  const lang = (he: string, en: string) => (isHe ? he : en);
+  const rows = aggregateAdsByProduct(report);
+  if (rows.length === 0) return null;
+
+  const fmt = (v: number) => `₪${Math.round(v).toLocaleString("en-US")}`;
+  const totalSpend = rows.reduce((s, r) => s + r.spend, 0);
+
+  // A verdict tag on each row so the founder sees at a glance what to
+  // do — kept short, no LLM. Mirrors the manual summary language they
+  // already use ("להגדיל", "לבחון", "לצמצם").
+  const verdict = (r: ProductRow) => {
+    if (r.spend < 200) return { label: lang("מעט נתונים", "Low data"), tone: "neutral" as const };
+    if (r.roas != null && r.roas >= 5) return { label: lang("להגדיל", "Scale"), tone: "good" as const };
+    if (r.roas != null && r.roas >= 3) return { label: lang("להמשיך", "Hold"), tone: "neutral" as const };
+    if (r.roas != null && r.roas < 2) return { label: lang("לבחון / לצמצם", "Review / cut"), tone: "bad" as const };
+    if (r.purchases === 0) return { label: lang("ללא רכישות", "No purchases"), tone: "bad" as const };
+    return { label: lang("לבחון", "Review"), tone: "neutral" as const };
+  };
+
+  const toneColor = (tone: "good" | "neutral" | "bad") =>
+    tone === "good" ? "#059669" : tone === "bad" ? "#dc2626" : "#64748b";
+
+  return (
+    <section className="pwr-exec-page">
+      <p className="pwr-exec-page-tag">{lang("עמוד 6ב", "PAGE 6b")}</p>
+      <h2 className="pwr-exec-page-title">
+        {lang("ביצועי מוצרים ב־Meta", "Product performance on Meta")}
+      </h2>
+      <p className="pwr-exec-page-sub">
+        {lang(
+          "המודעות מקובצות לפי המוצר — תמונת המחיר-לרכישה שבעלת החנות רושמת בסיכום הידני שלה.",
+          "Ads grouped by product — the price-per-purchase view a founder writes in their own weekly summary."
+        )}
+      </p>
+
+      <table className="pwr-table">
+        <thead>
+          <tr>
+            <th>{lang("מוצר / קבוצה", "Product / group")}</th>
+            <th style={{ textAlign: "end" }}>{lang("הוצאה", "Spend")}<SourceTag source="M" /></th>
+            <th style={{ textAlign: "end" }}>{lang("רכישות", "Purchases")}<SourceTag source="M" /></th>
+            <th style={{ textAlign: "end" }}>{lang("הכנסות (Meta)", "Revenue (Meta)")}<SourceTag source="M" /></th>
+            <th style={{ textAlign: "end" }}>ROAS</th>
+            <th style={{ textAlign: "end" }}>{lang("% תקציב", "% budget")}</th>
+            <th style={{ textAlign: "end" }}>{lang("מודעות", "Ads")}</th>
+            <th>{lang("המלצה", "Verdict")}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => {
+            const v = verdict(r);
+            const share = totalSpend > 0 ? (r.spend / totalSpend) * 100 : 0;
+            return (
+              <tr key={r.key}>
+                <td style={{ fontWeight: 600 }}>{r.label}</td>
+                <td style={{ textAlign: "end", fontVariantNumeric: "tabular-nums" }}>{fmt(r.spend)}</td>
+                <td style={{ textAlign: "end", fontVariantNumeric: "tabular-nums" }}>{r.purchases}</td>
+                <td style={{ textAlign: "end", fontVariantNumeric: "tabular-nums" }}>{fmt(r.attributedRevenue)}</td>
+                <td style={{ textAlign: "end", fontVariantNumeric: "tabular-nums" }}>
+                  {r.roas != null ? `${r.roas.toFixed(2)}x` : "—"}
+                </td>
+                <td style={{ textAlign: "end", fontVariantNumeric: "tabular-nums", color: "#64748b" }}>
+                  {share.toFixed(0)}%
+                </td>
+                <td style={{ textAlign: "end", color: "#64748b" }}>{r.adCount}</td>
+                <td style={{ color: toneColor(v.tone), fontWeight: 600 }}>{v.label}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+
+      <p style={{ fontSize: 10, color: "#64748b", marginTop: 8 }}>
+        {lang(
+          "הכנסות Meta מחושבות כהוצאה × ROAS ברמת מודעה — לא כוללות מכירות אורגניות ואפיליאייטס.",
+          "Meta revenue = spend × ad-level ROAS — organic and affiliate sales are NOT included in this view."
+        )}
+      </p>
     </section>
   );
 }

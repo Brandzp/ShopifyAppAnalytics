@@ -177,6 +177,61 @@ function fmtDayLabel(date: Date): string {
 
 const DOW_HE = ["א", "ב", "ג", "ד", "ה", "ו", "ש"];
 
+// ─── Category color palette ─────────────────────────────────────────────
+// Every distinct category (col A in the operator's calendar) gets a
+// stable color from this palette so the calendar becomes scannable —
+// green blocks = paid promo, red = website banners, purple = main story,
+// etc., matching how the source Excel already colors its rows.
+//
+// Rules:
+//   • Well-known Hebrew categories are pinned to specific colors so
+//     they always look the same across sheets (paid promo = green,
+//     website = red, etc.).
+//   • Unknown categories fall back to a stable hash so the same category
+//     always renders the same color within one calendar.
+const CATEGORY_PALETTE: Array<{ bg: string; border: string; text: string; dot: string }> = [
+  { bg: "bg-emerald-50", border: "border-emerald-300", text: "text-emerald-800", dot: "bg-emerald-500" },
+  { bg: "bg-rose-50", border: "border-rose-300", text: "text-rose-800", dot: "bg-rose-500" },
+  { bg: "bg-purple-50", border: "border-purple-300", text: "text-purple-800", dot: "bg-purple-500" },
+  { bg: "bg-amber-50", border: "border-amber-300", text: "text-amber-800", dot: "bg-amber-500" },
+  { bg: "bg-sky-50", border: "border-sky-300", text: "text-sky-800", dot: "bg-sky-500" },
+  { bg: "bg-fuchsia-50", border: "border-fuchsia-300", text: "text-fuchsia-800", dot: "bg-fuchsia-500" },
+  { bg: "bg-teal-50", border: "border-teal-300", text: "text-teal-800", dot: "bg-teal-500" },
+  { bg: "bg-orange-50", border: "border-orange-300", text: "text-orange-800", dot: "bg-orange-500" }
+];
+
+const CATEGORY_PINS: Array<{ patterns: RegExp[]; index: number }> = [
+  // Paid promo — bright green, matches the source Excel
+  { patterns: [/קידום ממומן/i, /קידום/i, /ממומן/i, /paid/i, /budget/i], index: 0 },
+  // Website / banners — red, matches the operator's Excel red rows
+  { patterns: [/^אתר$/i, /website/i, /landing/i, /דף נחיתה/i, /באנר/i, /banner/i], index: 1 },
+  // Main story / hero — purple
+  { patterns: [/סיפור/i, /story/i, /hero/i, /הירו/i, /ראשי/i], index: 2 },
+  // Special days / events — amber
+  { patterns: [/ימים מיוחדים/i, /special/i, /אירוע/i, /event/i], index: 3 },
+  // Samples / distribution — sky
+  { patterns: [/דוגמ/i, /sample/i, /גלוי/i, /חלוקת/i], index: 4 },
+  // Influencers — fuchsia
+  { patterns: [/משפיע/i, /affiliate/i, /influenc/i, /יוצר/i, /creator/i], index: 5 },
+  // Email / SMS — teal
+  { patterns: [/אימייל/i, /email/i, /ניוזלטר/i, /newsletter/i, /סמס/i, /sms/i], index: 6 },
+  // Social — orange
+  { patterns: [/פוסט/i, /post/i, /סטור/i, /story/i, /אינסט/i, /instagram/i, /סושיאל/i], index: 7 }
+];
+
+function categoryColor(category: string | null | undefined): (typeof CATEGORY_PALETTE)[number] {
+  if (!category) return CATEGORY_PALETTE[CATEGORY_PALETTE.length - 1];
+  for (const pin of CATEGORY_PINS) {
+    if (pin.patterns.some((re) => re.test(category))) return CATEGORY_PALETTE[pin.index];
+  }
+  // Stable hash fallback so identical labels always get the same color.
+  let hash = 0;
+  for (let i = 0; i < category.length; i++) {
+    hash = (hash * 31 + category.charCodeAt(i)) | 0;
+  }
+  return CATEGORY_PALETTE[Math.abs(hash) % CATEGORY_PALETTE.length];
+}
+
 export function GanttStudio({ initialSheets }: { initialSheets: GanttSheetSummary[] }) {
   const router = useRouter();
   const [sheets, setSheets] = useState<GanttSheetSummary[]>(initialSheets);
@@ -838,6 +893,11 @@ export function GanttStudio({ initialSheets }: { initialSheets: GanttSheetSummar
                 const key = dayKey(d)!;
                 const tasks = tasksByDay.get(key) ?? [];
                 const selected = key === selectedDay;
+                // Distinct-category color dots for the day. Cap at 4 so
+                // the tile stays compact.
+                const uniqueCategories = Array.from(
+                  new Set(tasks.map((t) => t.category).filter(Boolean) as string[])
+                );
                 return (
                   <button
                     key={key}
@@ -855,9 +915,22 @@ export function GanttStudio({ initialSheets }: { initialSheets: GanttSheetSummar
                           : "border-dashed border-border bg-muted/20 hover:border-indigo-300"
                     )}
                   >
-                    <span className={cn("text-[11px] font-bold", selected ? "text-indigo-700" : "text-foreground")}>
-                      {fmtDayLabel(d)}
-                    </span>
+                    <div className="flex items-center justify-between gap-1">
+                      <span className={cn("text-[11px] font-bold", selected ? "text-indigo-700" : "text-foreground")}>
+                        {fmtDayLabel(d)}
+                      </span>
+                      {uniqueCategories.length > 0 ? (
+                        <div className="flex items-center gap-0.5">
+                          {uniqueCategories.slice(0, 4).map((cat) => (
+                            <span
+                              key={cat}
+                              className={cn("h-2 w-2 rounded-full", categoryColor(cat).dot)}
+                              title={cat}
+                            />
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
                     {tasks.length > 0 ? (
                       <span className="mt-1 inline-flex w-fit items-center gap-1 rounded-full bg-indigo-600 px-1.5 py-0.5 text-[9px] font-bold text-white">
                         {tasks.length}
@@ -943,21 +1016,25 @@ export function GanttStudio({ initialSheets }: { initialSheets: GanttSheetSummar
                         const meta = row.actionType ? ACTION_META[row.actionType] : null;
                         const Icon = meta?.icon ?? FileText;
                         const executed = Boolean(row.executionJson?.executedAt);
+                        // Per-category color — makes the day's task list
+                        // scannable at a glance (green stripe = paid promo,
+                        // red = website, etc., matching the source Excel).
+                        const catColor = categoryColor(row.category);
                         return (
                           <li
                             key={row.id}
                             className={cn(
-                              "rounded-xl border p-4",
+                              "rounded-xl border p-4 border-s-4",
                               executed
                                 ? "border-emerald-200 bg-emerald-50/40"
-                                : "border-border bg-background"
+                                : `${catColor.border} ${catColor.bg}`
                             )}
                           >
                             <div className="flex flex-wrap items-start justify-between gap-3">
                               <div className="flex-1 space-y-1">
                                 <div className="flex items-center gap-2 text-[11px]">
-                                  <Icon className="h-3.5 w-3.5 text-indigo-600" aria-hidden />
-                                  <span className="font-semibold text-indigo-700">
+                                  <Icon className={cn("h-3.5 w-3.5", catColor.text)} aria-hidden />
+                                  <span className={cn("font-semibold", catColor.text)}>
                                     {row.category ?? "—"}
                                   </span>
                                   {row.role ? (
@@ -966,7 +1043,7 @@ export function GanttStudio({ initialSheets }: { initialSheets: GanttSheetSummar
                                     </span>
                                   ) : null}
                                   {meta ? (
-                                    <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-semibold text-indigo-700">
+                                    <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-semibold", catColor.bg, catColor.text)}>
                                       {meta.label}
                                     </span>
                                   ) : null}

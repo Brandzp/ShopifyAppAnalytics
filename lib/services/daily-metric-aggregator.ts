@@ -186,10 +186,18 @@ export async function aggregateDailyMetrics(
   let upserted = 0;
   for (const [isoDate, b] of byDay) {
     const net = b.gross - b.disc - b.returns;
-    const revenue = net + b.ship + b.tax;
+    // Match Shopify's dashboard revenue: net sales + shipping, NO tax
+    // addback. For tax-included stores (Israel/EU) the tax is already
+    // inside the price the customer paid — adding it back on top of
+    // the tax-stripped line subtotal double-counts VAT. Same rationale
+    // as computeSalesSummary in prisma-analytics-repository.
+    const revenue = net + b.ship;
     const estimatedProfit = net - b.cogs;
     const returningCustomerRate = b.orders > 0 ? b.returningOrders / b.orders : 0;
-    const averageOrderValue = b.orders > 0 ? revenue / b.orders : 0;
+    // Match Shopify's dashboard AOV: net line-item sales / orders. No
+    // shipping, no tax — otherwise a store with expensive shipping shows
+    // a higher AOV than what the founder writes in their manual summary.
+    const averageOrderValue = b.orders > 0 ? net / b.orders : 0;
     const discountRate = b.gross > 0 ? b.disc / b.gross : 0;
     const refundRate = b.gross > 0 ? b.returns / b.gross : 0;
 

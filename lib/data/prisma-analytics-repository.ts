@@ -284,7 +284,21 @@ async function computeSalesSummary(
   const shipping = num(orderAgg._sum?.totalShipping);
   const taxes = num(orderAgg._sum?.totalTax);
   const netSales = grossSales - discounts - returns;
-  const totalSales = netSales + shipping + taxes;
+  // Shopify's dashboard "Total sales" tile shows net sales + shipping
+  // WITHOUT adding taxes back for tax-included stores (the default for
+  // Israel/EU). Adding `taxes` back double-counts VAT when the customer
+  // paid a tax-inclusive price — the tax is already embedded in the
+  // amount they were charged, and stripping it from grossSales + adding
+  // it back to totalSales inflates the number by the entire VAT amount.
+  //
+  // On a 984-order store this manifested as our "הכנסות" tile showing
+  // ~₪449k while Shopify's manual report showed ~₪434k — the ₪15k gap
+  // was the reclaimed VAT.
+  //
+  // For tax-EXCLUDED stores this deducts nothing (their `taxes` field is
+  // near zero anyway because the customer paid tax on top of the line
+  // subtotal, and that tax shows up as `totalPrice - subtotalPrice`).
+  const totalSales = netSales + shipping;
   // Bug audit #7 (docs/ANALYTICS-AUDIT-2026-06-16.md) — profit must subtract
   // ONLY the line-item portion of refunds against ONLY the line-item COGS.
   // Using `netSales` (which subtracts the FULL refund, incl. shipping+tax)
@@ -312,7 +326,12 @@ async function computeSalesSummary(
     returningCustomerRate: orders ? (returningOrders / orders) * 100 : 0,
     discountRate: grossSales ? (discounts / grossSales) * 100 : 0,
     refundRate: grossSales ? (returns / grossSales) * 100 : 0,
-    averageOrderValue: orders ? totalSales / orders : 0
+    // Shopify's dashboard AOV = net line-item sales / orders (no
+    // shipping, no tax). Previously we used totalSales/orders which
+    // inflated AOV by ~20% on stores where customers pay for shipping.
+    // The founder writes AOV in their manual summary using Shopify's
+    // definition, so we should match it exactly.
+    averageOrderValue: orders ? netSales / orders : 0
   };
 }
 
