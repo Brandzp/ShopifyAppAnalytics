@@ -23,6 +23,7 @@ bi_query_*.js
 tmp_*.js
 tmp_bi_*.mjs
 tmp_bi_*.js
+*_check*.js
 
 # TypeScript incremental build cache — never useful in source control
 tsconfig.tsbuildinfo
