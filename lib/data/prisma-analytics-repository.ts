@@ -190,7 +190,8 @@ async function getActiveRange() {
  *    key difference from the old logic, which subtracted refunds on the order
  *    date and never reconciled with Shopify).
  *  - netSales = gross − discounts − returns
- *  - totalSales = netSales + shipping + taxes  (Shopify "Total sales")
+ *  - totalSales = netSales + shipping  (no tax addback — tax-included stores
+ *    already embed VAT in the price; see comment at the totalSales calc)
  */
 export interface ShopifySalesSummary {
   orders: number;
@@ -241,9 +242,13 @@ async function computeSalesSummary(
       _sum: { lineSubtotal: true, lineDiscountAmount: true, estimatedCostAmount: true, quantity: true }
     }),
     db.refund.aggregate({
-      // Match Shopify Admin "Sales report" attribution: filter refunds by
-      // their ORIGINAL order's createdAt (not the refund createdAt). A
-      // refund of a Jan order processed in Feb reduces January sales.
+      // Attribute refunds to the REFUND date, not the original order's
+      // date. Shopify Analytics records a return as negative sales on the
+      // day the refund was created — a February refund of a January order
+      // reduces FEBRUARY totals in Shopify's dashboard. The previous
+      // order-date attribution here (a) mismatched Shopify's numbers on
+      // any window containing cross-window refunds and (b) disagreed with
+      // our own daily series, which already buckets returns by refund day.
       //
       // Sum BOTH the full refund (refundedAmount, includes shipping + tax
       // portions) for the Total Sales formula and the line-items-only sum
@@ -251,7 +256,8 @@ async function computeSalesSummary(
       // ShopifySalesSummary.returnsLineItems for why these can't share.
       where: {
         storeId,
-        order: { createdAt: { gte: start, lte: end }, cancelledAt: null, test: false }
+        createdAt: { gte: start, lte: end },
+        order: { cancelledAt: null, test: false }
       },
       _sum: { refundedAmount: true, refundedLineItemsAmount: true }
     }),

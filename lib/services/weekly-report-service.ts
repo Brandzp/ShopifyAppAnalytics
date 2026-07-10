@@ -47,6 +47,7 @@ import {
   type RoasCollapseReport
 } from "@/lib/services/roas-collapse-service";
 import { getDb } from "@/lib/server/db";
+import { formatDateInTimeZone } from "@/lib/server/reporting-date-range";
 import {
   generateWeeklyBiCommentary,
   type BiWeeklyCommentary
@@ -105,6 +106,13 @@ export interface BuildWeeklyReportInput {
   start: Date;
   end: Date;
   locale?: "he" | "en";
+  // Store timezone the window boundaries were computed in. Drives the
+  // periodStart/periodEnd label serialization — a store-TZ instant
+  // (July 1 00:00 Israel = June 30 21:00Z) serialized via toISOString
+  // labels the PREVIOUS calendar day, and the print page (which
+  // re-parses those labels in store TZ) would then render a window one
+  // day earlier than the bundle's. Defaults to the store's own timezone.
+  timeZone?: string;
 }
 
 export async function buildWeeklyReportBundle(
@@ -115,8 +123,12 @@ export async function buildWeeklyReportBundle(
 
   const store = await db.store.findUnique({
     where: { id: input.storeId },
-    select: { name: true, domain: true }
+    select: { name: true, domain: true, timezone: true }
   });
+
+  const timeZone = input.timeZone || store?.timezone || "UTC";
+  const periodStart = formatDateInTimeZone(input.start, timeZone);
+  const periodEnd = formatDateInTimeZone(input.end, timeZone);
 
   // Meta Ads — main payload.
   const metaAds = await buildMetaAdsWeeklyReport({
@@ -275,8 +287,8 @@ export async function buildWeeklyReportBundle(
   // hides the section. Runs last so prior failures don't block it.
   const biAgentCommentary = await generateWeeklyBiCommentary({
     storeName: store?.name ?? null,
-    periodStart: input.start.toISOString().slice(0, 10),
-    periodEnd: input.end.toISOString().slice(0, 10),
+    periodStart,
+    periodEnd,
     locale,
     metaAds,
     affiliateDeepDive,
@@ -287,8 +299,8 @@ export async function buildWeeklyReportBundle(
   return {
     storeId: input.storeId,
     storeName: store?.name ?? null,
-    periodStart: input.start.toISOString().slice(0, 10),
-    periodEnd: input.end.toISOString().slice(0, 10),
+    periodStart,
+    periodEnd,
     generatedAt: new Date().toISOString(),
     locale,
     metaAds,

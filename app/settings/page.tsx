@@ -1,4 +1,5 @@
-import { Globe, Settings2, Wrench } from "lucide-react";
+import Link from "next/link";
+import { Building2, Globe, Settings2, Wrench } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { HelpTip } from "@/components/ui/help-tip";
@@ -20,6 +21,7 @@ import { CheckCircle2, AlertTriangle, XCircle } from "lucide-react";
 import { BixGrowWebhookCard } from "@/components/settings/bixgrow-webhook-card";
 import { getDb } from "@/lib/server/db";
 import { GSC_PLATFORM } from "@/lib/services/gsc-service";
+import { getAuthContext } from "@/lib/auth/session";
 
 export default async function SettingsPage({
   searchParams
@@ -62,6 +64,39 @@ export default async function SettingsPage({
         })
         .catch(() => null)
     ]);
+
+  // Organization context — powers the "Organization & team" card that
+  // links to /settings/organization (team invites, roles, plan) and
+  // /portfolio (the multi-store rollup). Best-effort: a dev environment
+  // without auth simply hides the card.
+  const orgSummary = await (async () => {
+    try {
+      const auth = await getAuthContext();
+      if (!auth.orgId) return null;
+      const org = (await getDb().organization.findUnique({
+        where: { id: auth.orgId },
+        select: {
+          name: true,
+          plan: true,
+          _count: { select: { memberships: true, stores: true } }
+        }
+      })) as {
+        name: string;
+        plan: string;
+        _count: { memberships: number; stores: number };
+      } | null;
+      if (!org) return null;
+      return {
+        name: org.name,
+        plan: org.plan,
+        members: org._count.memberships,
+        stores: org._count.stores,
+        role: auth.role ?? "member"
+      };
+    } catch {
+      return null;
+    }
+  })();
 
   // Public URL the BixGrow webhook URL is built from. APP_URL is set in
   // production; locally we fall back to the dev origin so the card shows
@@ -155,6 +190,63 @@ export default async function SettingsPage({
             </div>
 
             <div className="space-y-4">
+              {orgSummary ? (
+                <Card>
+                  <CardHeader className="pb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-violet-500/10 text-violet-600">
+                        <Building2 className="h-3.5 w-3.5" aria-hidden />
+                      </span>
+                      <CardTitle className="text-base">
+                        {locale === "he" ? "ארגון וצוות" : "Organization & team"}
+                      </CardTitle>
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      {locale === "he"
+                        ? "ניהול חברי צוות, הזמנות, מותגים מחוברים ומסלול."
+                        : "Manage teammates, invitations, connected brands, and your plan."}
+                    </p>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="flex items-center justify-between rounded-xl border border-border bg-background/70 px-4 py-3">
+                      <div>
+                        <p className="text-sm font-semibold">{orgSummary.name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {locale === "he"
+                            ? `${orgSummary.stores} מותגים · ${orgSummary.members} חברי צוות · מסלול ${orgSummary.plan}`
+                            : `${orgSummary.stores} brands · ${orgSummary.members} members · ${orgSummary.plan} plan`}
+                        </p>
+                      </div>
+                      <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-semibold capitalize text-violet-700">
+                        {orgSummary.role}
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Link
+                        href={"/settings/organization" as never}
+                        className="inline-flex items-center rounded-lg border border-violet-300 bg-white px-3 py-1.5 text-xs font-semibold text-violet-700 transition-colors hover:border-violet-500"
+                      >
+                        {locale === "he" ? "ניהול צוות והזמנות" : "Manage team & invites"}
+                      </Link>
+                      {orgSummary.stores >= 2 ? (
+                        <Link
+                          href={"/portfolio" as never}
+                          className="inline-flex items-center rounded-lg border border-border bg-white px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:border-violet-300 hover:text-foreground"
+                        >
+                          {locale === "he" ? "דשבורד כל המותגים" : "All-brands dashboard"}
+                        </Link>
+                      ) : null}
+                      <Link
+                        href={"/connect-brand" as never}
+                        className="inline-flex items-center rounded-lg border border-border bg-white px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:border-violet-300 hover:text-foreground"
+                      >
+                        {locale === "he" ? "+ חיבור מותג נוסף" : "+ Connect another brand"}
+                      </Link>
+                    </div>
+                  </CardContent>
+                </Card>
+              ) : null}
+
               <Card>
                 <CardHeader className="pb-2">
                   <div className="flex items-center gap-2">

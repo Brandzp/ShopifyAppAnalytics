@@ -48,6 +48,7 @@ import {
   type Recommendation
 } from "@/lib/services/recommendation-engine-service";
 import { getDb } from "@/lib/server/db";
+import { dayBoundsUtc, lastCompleteDaysRange } from "@/lib/server/reporting-date-range";
 import { getAppLocale } from "@/lib/i18n";
 import {
   generateWeeklyBiCommentary,
@@ -85,20 +86,19 @@ interface SearchParams {
   locale?: string;
 }
 
-function parseDate(value: string | undefined): Date | null {
-  if (!value) return null;
-  const d = new Date(`${value}T00:00:00.000Z`);
-  return Number.isNaN(d.getTime()) ? null : d;
-}
-
-function defaultLastSevenDays(): { start: Date; end: Date } {
-  const end = new Date();
-  end.setUTCHours(23, 59, 59, 999);
-  const start = new Date(end);
-  start.setUTCDate(start.getUTCDate() - 6);
-  start.setUTCHours(0, 0, 0, 0);
-  return { start, end };
-}
+// Date-window resolution moved to store-timezone-aware helpers in
+// lib/server/reporting-date-range (dayBoundsUtc / lastCompleteDaysRange).
+// The old local versions had three parity bugs vs Shopify Analytics and
+// the founder's manual Meta report:
+//   1. Defaulted to a window ENDING NOW — a partial day where Meta hasn't
+//      synced yet, so spend/ROAS never matched a hand-checked Ads Manager
+//      window of complete days.
+//   2. Computed midnight boundaries in UTC — Israel is UTC+3, so orders
+//      placed 00:00–03:00 local time fell into the previous day vs
+//      Shopify's own reports.
+//   3. Parsed ?to= as bare UTC midnight — excluding ~the entire final day
+//      of Shopify orders while Meta's date-keyed rows still included it,
+//      making the report disagree WITH ITSELF.
 
 function formatCurrencyILS(value: number): string {
   return `₪${Math.round(value).toLocaleString("en-US")}`;
@@ -150,14 +150,24 @@ export default async function MetaAdsWeeklyPrintPage({
   const isHe = locale === "he";
   const direction: "rtl" | "ltr" = isHe ? "rtl" : "ltr";
 
-  const explicitStart = parseDate(params.from);
-  const explicitEnd = parseDate(params.to);
+  const storeId = params.storeId?.trim() || (await resolveActiveStoreId());
+
+  // Resolve the store's timezone BEFORE computing day boundaries — the
+  // window must line up with Shopify Analytics, which reports in store
+  // time (Asia/Jerusalem for the current tenants), not UTC.
+  const storeTimeZone = storeId
+    ? await getDb()
+        .store.findUnique({ where: { id: storeId }, select: { timezone: true } })
+        .then((s: { timezone: string } | null) => s?.timezone || "UTC")
+        .catch(() => "UTC")
+    : "UTC";
+
+  const explicitStart = params.from ? dayBoundsUtc(params.from, storeTimeZone) : null;
+  const explicitEnd = params.to ? dayBoundsUtc(params.to, storeTimeZone) : null;
   const { start, end } =
     explicitStart && explicitEnd
-      ? { start: explicitStart, end: explicitEnd }
-      : defaultLastSevenDays();
-
-  const storeId = params.storeId?.trim() || (await resolveActiveStoreId());
+      ? { start: explicitStart.start, end: explicitEnd.end }
+      : lastCompleteDaysRange(7, storeTimeZone);
   let report = null as Awaited<ReturnType<typeof buildMetaAdsWeeklyReport>> | null;
   let diagnostic: string | null = null;
   let reconciliation: ReconciliationReport | null = null;
@@ -1068,7 +1078,12 @@ export default async function MetaAdsWeeklyPrintPage({
               the raw ad table on every campaign page. */}
           {report ? <ProductPerformancePage report={report} isHe={isHe} /> : null}
 
-          {report && totals ? (
+          {/* Account-wide totals — only meaningful with 2+ brands. For a
+              single-brand account these tiles are an exact re-render of
+              the brand block's own KPI row (one brand == the whole
+              account), so we skip them and save a duplicated page. The
+              no-rules warning moves to the brand block area via footer. */}
+          {report && totals && report.brands.length > 1 ? (
             <section className="pwr-section">
               <h2 className="pwr-section-title">{t.totalsTitle}</h2>
               <div className="pwr-kpi-row">
@@ -1083,8 +1098,14 @@ export default async function MetaAdsWeeklyPrintPage({
                 <Tile label={t.campaignsTotal} value={String(totals.campaigns)} />
                 <Tile label={t.adsTotal} value={String(totals.ads)} />
               </div>
-              {!report.rulesActive ? <div className="pwr-warning">{t.noRules}</div> : null}
             </section>
+          ) : null}
+
+          {/* No-brand-rules note — OUTSIDE the multi-brand totals gate, because
+              single-brand accounts (which skip the totals section entirely)
+              are exactly the ones running without brand rules configured. */}
+          {report && !report.rulesActive ? (
+            <div className="pwr-warning">{t.noRules}</div>
           ) : null}
 
           {report && report.brands.length === 0 ? (
@@ -1094,23 +1115,32 @@ export default async function MetaAdsWeeklyPrintPage({
             </div>
           ) : null}
 
+          {/* Brand deep-dive blocks — pure data (KPIs / funnel / daily /
+              campaigns / ads). The AI insight bullets render on the
+              Executive Growth page (page 2); repeating them verbatim here
+              was the biggest source of "the PDF is full of duplicates".
+              They're passed only when the exec pages did NOT render (no
+              reconciliation data) so the insights still appear SOMEWHERE. */}
           {report
             ? report.brands.map((brand) => (
                 <BrandBlock
                   key={brand.name}
                   brand={brand}
-                  insights={insightsByBrand.get(brand.name) ?? null}
+                  insights={reconciliation ? null : insightsByBrand.get(brand.name) ?? null}
                   t={t}
                   locale={locale}
                 />
               ))
             : null}
 
+          {/* Same de-dup rule for Instagram: insights live on page 2's
+              "מצד המשפיענים" block; this section keeps the roster + posts
+              tables only. */}
           {influencer ? (
             <InstagramSection
               influencer={influencer}
               widePosts={widePosts}
-              igInsights={igInsights}
+              igInsights={reconciliation && report ? null : igInsights}
               t={t}
             />
           ) : null}
@@ -2742,32 +2772,58 @@ function BrandBlock({
       {brand.ads.length === 0 ? (
         <p style={{ fontSize: 11, color: "#64748b", margin: "4px 0" }}>{t.noAds}</p>
       ) : (
-        <table className="pwr-table">
-          <thead>
-            <tr>
-              <th>{t.adLabel}</th>
-              <th>{t.adsetLabel}</th>
-              <th>{t.spend}</th>
-              <th>{t.clicks}</th>
-              <th>{t.cpc}</th>
-              <th>{t.purchases}</th>
-              <th>{t.roas}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {brand.ads.map((ad, i) => (
-              <tr key={`${ad.adName}-${ad.adsetName}-${i}`}>
-                <td>{ad.adName ?? "—"}</td>
-                <td>{ad.adsetName ?? "—"}</td>
-                <td>{formatCurrencyILS(ad.spend)}</td>
-                <td>{formatNumberShort(ad.clicks)}</td>
-                <td>{ad.cpc > 0 ? `₪${ad.cpc.toFixed(2)}` : "—"}</td>
-                <td>{formatNumberShort(ad.purchases)}</td>
-                <td>{ad.purchaseRoas != null ? `${formatRatio(ad.purchaseRoas)}x` : "—"}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        (() => {
+          // Collapse zero-signal rows: an ad with under ₪50 spend and no
+          // purchases tells the founder nothing — but a dozen of them
+          // (every paused/new creative) used to bury the rows that matter.
+          // They roll up into one summary line at the bottom instead.
+          const LOW_SIGNAL_SPEND = 50;
+          const visible = brand.ads.filter(
+            (ad) => ad.spend >= LOW_SIGNAL_SPEND || ad.purchases > 0
+          );
+          const hidden = brand.ads.filter(
+            (ad) => ad.spend < LOW_SIGNAL_SPEND && ad.purchases === 0
+          );
+          const hiddenSpend = hidden.reduce((s, ad) => s + ad.spend, 0);
+          const isHeLocale = locale === "he";
+          return (
+            <table className="pwr-table">
+              <thead>
+                <tr>
+                  <th>{t.adLabel}</th>
+                  <th>{t.adsetLabel}</th>
+                  <th>{t.spend}</th>
+                  <th>{t.clicks}</th>
+                  <th>{t.cpc}</th>
+                  <th>{t.purchases}</th>
+                  <th>{t.roas}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {visible.map((ad, i) => (
+                  <tr key={`${ad.adName}-${ad.adsetName}-${i}`}>
+                    <td>{ad.adName ?? "—"}</td>
+                    <td>{ad.adsetName ?? "—"}</td>
+                    <td>{formatCurrencyILS(ad.spend)}</td>
+                    <td>{formatNumberShort(ad.clicks)}</td>
+                    <td>{ad.cpc > 0 ? `₪${ad.cpc.toFixed(2)}` : "—"}</td>
+                    <td>{formatNumberShort(ad.purchases)}</td>
+                    <td>{ad.purchaseRoas != null ? `${formatRatio(ad.purchaseRoas)}x` : "—"}</td>
+                  </tr>
+                ))}
+                {hidden.length > 0 ? (
+                  <tr>
+                    <td colSpan={7} style={{ fontSize: 10, color: "#64748b", fontStyle: "italic" }}>
+                      {isHeLocale
+                        ? `+ עוד ${hidden.length} מודעות בהוצאה נמוכה (מתחת ל־₪${LOW_SIGNAL_SPEND}, ללא רכישות) — סה״כ ${formatCurrencyILS(hiddenSpend)}.`
+                        : `+ ${hidden.length} more low-spend ads (under ₪${LOW_SIGNAL_SPEND}, no purchases) — ${formatCurrencyILS(hiddenSpend)} total.`}
+                    </td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+          );
+        })()
       )}
     </section>
   );

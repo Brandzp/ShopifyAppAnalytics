@@ -104,24 +104,41 @@ export default async function GanttBriefPrintPage({
 
   // Group by category, then by date (matches the source spreadsheet
   // layout — operator scans by channel first).
-  const byCategory = new Map<
-    string,
-    Array<{
-      date: Date | null;
-      task: string;
-      action: string | null;
-      status: string | null;
-    }>
-  >();
+  //
+  // DE-DUP: the matrix parser emits one row per calendar CELL, so a task
+  // the operator typed across 10 day-columns arrives as 10 identical
+  // rows — and used to print as 10 identical cards. Collapse identical
+  // task texts (within a category) into ONE card whose date shows the
+  // full run: "01/07/2026 → 08/07/2026 · 8 ימים".
+  interface PrintTask {
+    date: Date | null;
+    dateEnd: Date | null;
+    task: string;
+    action: string | null;
+    status: string | null;
+  }
+  const byCategory = new Map<string, Map<string, PrintTask>>();
   for (const r of sheet.rows) {
     const cat = r.category ?? (isHe ? "ללא קטגוריה" : "Uncategorized");
-    if (!byCategory.has(cat)) byCategory.set(cat, []);
-    byCategory.get(cat)!.push({
-      date: r.startDate,
-      task: r.task,
-      action: r.actionType,
-      status: r.status
-    });
+    if (!byCategory.has(cat)) byCategory.set(cat, new Map());
+    const catMap = byCategory.get(cat)!;
+    const key = r.task.replace(/\s+/g, " ").trim().toLowerCase();
+    const existing = catMap.get(key);
+    if (!existing) {
+      catMap.set(key, {
+        date: r.startDate,
+        dateEnd: r.endDate ?? r.startDate,
+        task: r.task,
+        action: r.actionType,
+        status: r.status
+      });
+      continue;
+    }
+    if (r.startDate && (!existing.date || r.startDate < existing.date)) existing.date = r.startDate;
+    const rEnd = r.endDate ?? r.startDate;
+    if (rEnd && (!existing.dateEnd || rEnd > existing.dateEnd)) existing.dateEnd = rEnd;
+    existing.action = existing.action ?? r.actionType;
+    existing.status = existing.status ?? r.status;
   }
 
   const ROLE_LABEL_HE: Record<string, string> = {
@@ -239,31 +256,64 @@ export default async function GanttBriefPrintPage({
               : null}
           </p>
           <p className="sub">
-            {isHe
-              ? `סה״כ ${sheet.rows.length} משימות${role ? ` עבור תפקיד ${role}` : ""}.`
-              : `${sheet.rows.length} task${sheet.rows.length === 1 ? "" : "s"}${role ? ` for role ${role}` : ""}.`}
+            {(() => {
+              // Count DEDUPED tasks (what's actually printed), noting the
+              // raw calendar-cell count when the two differ.
+              const dedupedCount = Array.from(byCategory.values()).reduce(
+                (sum, m) => sum + m.size,
+                0
+              );
+              const cellNote =
+                sheet.rows.length !== dedupedCount
+                  ? isHe
+                    ? ` (${sheet.rows.length} תאי לוח שנה)`
+                    : ` (${sheet.rows.length} calendar cells)`
+                  : "";
+              return isHe
+                ? `סה״כ ${dedupedCount} משימות${cellNote}${role ? ` עבור תפקיד ${role}` : ""}.`
+                : `${dedupedCount} task${dedupedCount === 1 ? "" : "s"}${cellNote}${role ? ` for role ${role}` : ""}.`;
+            })()}
           </p>
 
-          {Array.from(byCategory.entries()).map(([cat, tasks]) => (
+          {Array.from(byCategory.entries()).map(([cat, taskMap]) => (
             <section key={cat} className="category">
               <h2>{cat}</h2>
-              {tasks.map((t, i) => (
-                <div key={i} className="task">
-                  <div>
-                    <div className="date">{fmtDate(t.date)}</div>
-                    <div className="dow">{fmtDow(t.date, locale)}</div>
-                    {t.status ? <span className="chip chip-status">{t.status}</span> : null}
+              {Array.from(taskMap.values()).map((t, i) => {
+                const isRange =
+                  t.date && t.dateEnd && t.dateEnd.getTime() !== t.date.getTime();
+                // Day count from the CALENDAR SPAN, not the merged-row
+                // counter — a single tabular row spanning 01/07→08/07
+                // arrives as one row (dayCount=1) but covers 8 days.
+                const spanDays = isRange
+                  ? Math.round((t.dateEnd!.getTime() - t.date!.getTime()) / 86400000) + 1
+                  : 1;
+                return (
+                  <div key={i} className="task">
+                    <div>
+                      <div className="date">
+                        {fmtDate(t.date)}
+                        {isRange ? <> → {fmtDate(t.dateEnd)}</> : null}
+                      </div>
+                      <div className="dow">
+                        {isRange
+                          ? isHe
+                            ? `${spanDays} ימים`
+                            : `${spanDays} days`
+                          : fmtDow(t.date, locale)}
+                      </div>
+                      {t.status ? <span className="chip chip-status">{t.status}</span> : null}
+                    </div>
+                    <div className="body">{t.task}</div>
+                    <div>
+                      {t.action ? (
+                        <span className="chip">
+                          {(ACTION_LABELS[t.action] ?? { en: t.action, he: t.action })[locale]}
+                        </span>
+                      ) : null}
+                    </div>
                   </div>
-                  <div className="body">{t.task}</div>
-                  <div>
-                    {t.action ? (
-                      <span className="chip">
-                        {(ACTION_LABELS[t.action] ?? { en: t.action, he: t.action })[locale]}
-                      </span>
-                    ) : null}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </section>
           ))}
 

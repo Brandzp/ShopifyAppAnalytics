@@ -85,6 +85,89 @@ function calWeekday(cal: CalendarDate) {
   return calNoon(cal).getUTCDay(); // 0 = Sunday
 }
 
+/**
+ * Start/end-of-day UTC instants for a YYYY-MM-DD string in `timeZone`.
+ * Use for interpreting user-supplied date params (?from=&to=) so the
+ * whole final day is included — parsing "2026-07-04" as a bare UTC
+ * midnight silently dropped 21 hours of Israeli orders from `to`.
+ */
+export function dayBoundsUtc(
+  dateInput: string,
+  timeZone: string
+): { start: Date; end: Date } | null {
+  const start = parseInputDate(dateInput, "start", timeZone);
+  const end = parseInputDate(dateInput, "end", timeZone);
+  if (!start || !end) return null;
+  return { start, end };
+}
+
+/**
+ * The last N COMPLETE days in `timeZone` — ends yesterday 23:59:59.999,
+ * never today. Reports that default to "last 7 days ending now" include
+ * a partial final day where Meta hasn't synced and Shopify has hours of
+ * orders missing; every manual comparison then looks "off by one day".
+ */
+export function lastCompleteDaysRange(
+  days: number,
+  timeZone: string,
+  now = new Date()
+): { start: Date; end: Date } {
+  const today = zonedToday(timeZone, now);
+  const yesterday = addCalendarDays(today, -1);
+  const startCal = addCalendarDays(today, -days);
+  return {
+    start: zonedBoundaryUtc(startCal, "start", timeZone),
+    end: zonedBoundaryUtc(yesterday, "end", timeZone)
+  };
+}
+
+/**
+ * Format a UTC instant as the YYYY-MM-DD calendar date it falls on in
+ * `timeZone`. Use this instead of `date.toISOString().slice(0, 10)` for
+ * any user-facing period label or URL param that a TZ-aware consumer
+ * will re-parse: for a store-TZ window start (July 1 00:00 Israel =
+ * June 30 21:00Z), toISOString gives "06-30" — the wrong calendar day.
+ */
+export function formatDateInTimeZone(value: Date, timeZone: string): string {
+  return toInputDate(value, timeZone);
+}
+
+/**
+ * The most recently COMPLETED Sunday→Saturday week in `timeZone`
+ * (Israeli week convention). On a Saturday, returns the week that ended
+ * the PREVIOUS Saturday — the current week isn't complete until
+ * midnight, and a partial final day is exactly the window bug that made
+ * report numbers disagree with hand-checked Ads Manager totals.
+ */
+export function lastCompletedWeekRange(
+  timeZone: string,
+  now = new Date()
+): { start: Date; end: Date } {
+  const today = zonedToday(timeZone, now);
+  const weekday = calWeekday(today); // 0 = Sunday … 6 = Saturday
+  const daysSinceCompletedSaturday = weekday === 6 ? 7 : weekday + 1;
+  const lastSaturday = addCalendarDays(today, -daysSinceCompletedSaturday);
+  const sunday = addCalendarDays(lastSaturday, -6);
+  return {
+    start: zonedBoundaryUtc(sunday, "start", timeZone),
+    end: zonedBoundaryUtc(lastSaturday, "end", timeZone)
+  };
+}
+
+/** The full calendar month before the current one in `timeZone`. */
+export function previousMonthRange(
+  timeZone: string,
+  now = new Date()
+): { start: Date; end: Date } {
+  const today = zonedToday(timeZone, now);
+  const lastOfPrevMonth = addCalendarDays({ year: today.year, month: today.month, day: 1 }, -1);
+  const firstOfPrevMonth = { year: lastOfPrevMonth.year, month: lastOfPrevMonth.month, day: 1 };
+  return {
+    start: zonedBoundaryUtc(firstOfPrevMonth, "start", timeZone),
+    end: zonedBoundaryUtc(lastOfPrevMonth, "end", timeZone)
+  };
+}
+
 export type RangePreset =
   | "today"
   | "yesterday"

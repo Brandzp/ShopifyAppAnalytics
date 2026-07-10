@@ -30,6 +30,17 @@ export function ShopifyOauthSection({ locale = "he" }: { locale?: UiLocale }) {
   const [saving, setSaving] = useState(false);
   const [savedMsg, setSavedMsg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Result of the OAuth round-trip. The install/callback routes redirect
+  // back to /settings with ?shopify=connected&shop=… on success or
+  // ?shopify_error=… on failure. Nothing used to READ those params, so a
+  // failed install (bad domain, HMAC, plan limit, missing org) landed the
+  // operator back on Settings with zero feedback — the flow looked broken
+  // even when it was correctly reporting why it stopped.
+  const [oauthResult, setOauthResult] = useState<
+    | { kind: "success"; shop: string }
+    | { kind: "error"; message: string }
+    | null
+  >(null);
 
   const loadConfig = async () => {
     try {
@@ -46,6 +57,32 @@ export function ShopifyOauthSection({ locale = "he" }: { locale?: UiLocale }) {
 
   useEffect(() => {
     void loadConfig();
+
+    // Surface the OAuth redirect result, then strip the params from the
+    // URL so a refresh doesn't re-show a stale banner.
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const connectedShop = params.get("shopify") === "connected" ? params.get("shop") : null;
+      const oauthError = params.get("shopify_error");
+      if (connectedShop) {
+        setOauthResult({ kind: "success", shop: connectedShop });
+      } else if (oauthError) {
+        setOauthResult({ kind: "error", message: oauthError });
+      }
+      if (connectedShop || oauthError) {
+        params.delete("shopify");
+        params.delete("shop");
+        params.delete("shopify_error");
+        const rest = params.toString();
+        window.history.replaceState(
+          null,
+          "",
+          `${window.location.pathname}${rest ? `?${rest}` : ""}`
+        );
+      }
+    } catch {
+      // window unavailable (SSR) — effect only runs client-side anyway.
+    }
   }, []);
 
   const handleInstall = () => {
@@ -105,6 +142,26 @@ export function ShopifyOauthSection({ locale = "he" }: { locale?: UiLocale }) {
           <p className="mt-0.5 text-xs text-muted-foreground">{t.subline}</p>
         </div>
       </div>
+
+      {oauthResult?.kind === "success" ? (
+        <div className="rounded-md border border-emerald-300 bg-emerald-50 p-3 text-sm">
+          <p className="flex items-center gap-1.5 font-semibold text-emerald-900">
+            <CheckCircle2 className="h-4 w-4" aria-hidden />
+            {locale === "he"
+              ? `${oauthResult.shop} חוברה בהצלחה! הסנכרון הראשון יתחיל תוך רגע.`
+              : `${oauthResult.shop} connected! The first sync starts momentarily.`}
+          </p>
+        </div>
+      ) : null}
+      {oauthResult?.kind === "error" ? (
+        <div className="rounded-md border border-rose-300 bg-rose-50 p-3 text-sm">
+          <p className="flex items-center gap-1.5 font-semibold text-rose-900">
+            <AlertTriangle className="h-4 w-4" aria-hidden />
+            {locale === "he" ? "החיבור ל־Shopify נכשל" : "Shopify install failed"}
+          </p>
+          <p className="mt-1 text-xs text-rose-800">{oauthResult.message}</p>
+        </div>
+      ) : null}
 
       {credentialsReady ? (
         <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-xs">

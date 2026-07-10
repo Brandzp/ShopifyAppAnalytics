@@ -28,10 +28,22 @@ import { mapShopMetadata } from "@/lib/shopify/mappers/shopify-mappers";
  */
 
 // Default scopes for the analytics app. Override via SHOPIFY_OAUTH_SCOPES (comma-separated).
+//
+// read_all_orders is CRITICAL: plain read_orders only returns the last 60
+// days of orders, so a freshly OAuth-installed store silently loses all
+// older history — 90-day restock windows, retention analysis, and the
+// "prior revenue" ranking all under-report vs Shopify Analytics. It is
+// available without review for custom-distribution Partner apps (this
+// app's model). If a future PUBLIC listing can't request it pre-approval,
+// strip it via the SHOPIFY_OAUTH_SCOPES env override.
+//
+// read_inventory backs the restock-hero alerts (variant inventory levels).
 const DEFAULT_SCOPES = [
   "read_products",
   "read_orders",
-  "read_customers"
+  "read_all_orders",
+  "read_customers",
+  "read_inventory"
 ];
 
 // Strict shop-domain guard for OAuth: only `<store>.myshopify.com`. Prevents the

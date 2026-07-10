@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { toErrorMessage } from "@/lib/server/errors";
 import { getDb } from "@/lib/server/db";
+import { lastCompletedWeekRange, previousMonthRange } from "@/lib/server/reporting-date-range";
 import { buildWeeklyReportBundle, persistWeeklyReport } from "@/lib/services/weekly-report-service";
 import { listActiveRecipientEmails } from "@/lib/services/weekly-report-recipient-service";
 import { buildMonthlyMetaSynthesis } from "@/lib/services/monthly-report-synthesis-service";
@@ -21,44 +22,23 @@ interface RunBody {
   monthly?: boolean;
 }
 
-// Compute Sunday→Saturday of the most recently completed week, anchored on
-// Asia/Jerusalem so it lines up with the founder's calendar.
-function computeWeeklyPeriod(now = new Date()): { start: Date; end: Date } {
-  const weekday = Number(
-    new Intl.DateTimeFormat("en-US", {
-      timeZone: "Asia/Jerusalem",
-      weekday: "long"
-    }).format(now)
-      .replace("Sunday", "0")
-      .replace("Monday", "1")
-      .replace("Tuesday", "2")
-      .replace("Wednesday", "3")
-      .replace("Thursday", "4")
-      .replace("Friday", "5")
-      .replace("Saturday", "6")
-  );
-  // Sunday is the start of the week in IL. "Most recently completed" = the
-  // Sunday-Saturday block that ended yesterday (Saturday) or earlier.
-  // Days since the most recent Saturday: weekday + 1 for any non-Sunday,
-  // 1 for Sunday itself.
-  const daysSinceSaturday = weekday === 6 ? 0 : weekday + 1;
-  const end = new Date(now);
-  end.setUTCHours(0, 0, 0, 0);
-  end.setUTCDate(end.getUTCDate() - daysSinceSaturday);
-  end.setUTCHours(23, 59, 59, 999);
-  const start = new Date(end);
-  start.setUTCDate(start.getUTCDate() - 6);
-  start.setUTCHours(0, 0, 0, 0);
-  return { start, end };
-}
-
-// Calendar month that just ended (e.g. if today is June 1, returns May).
-function computePreviousMonthPeriod(now = new Date()): { start: Date; end: Date } {
-  const year = now.getUTCFullYear();
-  const month = now.getUTCMonth(); // current month (0-based)
-  const start = new Date(Date.UTC(year, month - 1, 1, 0, 0, 0, 0));
-  const end = new Date(Date.UTC(year, month, 0, 23, 59, 59, 999));
-  return { start, end };
+// Week/month windows are computed PER STORE in the store's own timezone
+// via lastCompletedWeekRange / previousMonthRange. The old local helpers
+// picked the weekday in Asia/Jerusalem but set the day boundaries with
+// setUTCHours — a 3-hour skew vs the store's actual calendar days, which
+// then disagreed with the print page (store-TZ boundaries) rendering the
+// attached PDF. One convention now: store timezone everywhere.
+async function getStoreTimeZoneById(storeId: string): Promise<string> {
+  try {
+    const db = getDb() as any;
+    const store = await db.store.findUnique({
+      where: { id: storeId },
+      select: { timezone: true }
+    });
+    return store?.timezone || "UTC";
+  } catch {
+    return "UTC";
+  }
 }
 
 async function findReportForPeriod(
@@ -154,8 +134,9 @@ export async function POST(request: Request) {
     const errors: string[] = [];
 
     for (const { storeId } of stores) {
+      const timeZone = await getStoreTimeZoneById(storeId);
       if (body.weekly) {
-        const period = computeWeeklyPeriod();
+        const period = lastCompletedWeekRange(timeZone);
         const result = await runForStore(storeId, "weekly", period.start, period.end, baseUrl).catch(
           (e) => ({ ok: false, reason: e instanceof Error ? e.message : "error" })
         );
@@ -164,7 +145,7 @@ export async function POST(request: Request) {
         else errors.push(`weekly:${storeId}:${result.reason}`);
       }
       if (body.monthly) {
-        const period = computePreviousMonthPeriod();
+        const period = previousMonthRange(timeZone);
         const result = await runForStore(storeId, "monthly", period.start, period.end, baseUrl).catch(
           (e) => ({ ok: false, reason: e instanceof Error ? e.message : "error" })
         );

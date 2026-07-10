@@ -4,6 +4,7 @@ import Link, { useLinkStatus } from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Bell,
+  Building2,
   CalendarRange,
   FileText,
   LayoutDashboard,
@@ -36,7 +37,10 @@ type NavItem = {
   icon: LucideIcon;
 };
 
-function getNavigation(locale: AppLocale): {
+function getNavigation(
+  locale: AppLocale,
+  showPortfolio: boolean
+): {
   primary: readonly NavItem[];
   dashboards: readonly NavItem[];
   dashboardsHeading: string;
@@ -44,6 +48,20 @@ function getNavigation(locale: AppLocale): {
   const isHe = locale === "he";
   return {
     primary: [
+      // Organization dashboard — only rendered for orgs with 2+ connected
+      // stores (app-shell passes showPortfolio). A single-brand operator
+      // gets no value from a "portfolio of one", but a 3-store owner needs
+      // this to be the FIRST thing they see: the cross-store rollup with
+      // per-brand comparison and click-to-switch.
+      ...(showPortfolio
+        ? [
+            {
+              href: "/portfolio",
+              label: isHe ? "כל המותגים" : "All brands",
+              icon: Building2
+            }
+          ]
+        : []),
       {
         href: "/",
         label: isHe ? "מרכז פיקוד" : "Command Center",
@@ -123,7 +141,8 @@ function NavContent({
   pathname,
   storeName,
   locale,
-  labels
+  labels,
+  showPortfolio
 }: {
   pathname: string;
   storeName: string;
@@ -132,8 +151,9 @@ function NavContent({
     common: Record<string, string>;
     nav: Record<string, string>;
   };
+  showPortfolio: boolean;
 }) {
-  const navigation = useMemo(() => getNavigation(locale), [locale]);
+  const navigation = useMemo(() => getNavigation(locale, showPortfolio), [locale, showPortfolio]);
 
   const renderNavLink = (item: NavItem) => {
     const Icon = item.icon;
@@ -202,7 +222,6 @@ export function Sidebar({
   storeName,
   locale,
   labels,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   showPortfolio = false
 }: {
   storeName: string;
@@ -211,10 +230,9 @@ export function Sidebar({
     common: Record<string, string>;
     nav: Record<string, string>;
   };
-  // Kept in the API for back-compat with existing callers (app-shell.tsx
-  // still passes it). Ignored today — Portfolio was cut from the sidebar
-  // in the 2026-07 nav collapse. Will re-emerge as a Command Center brand
-  // switcher, not a nav item, in memo initiative 2.1 phase C.
+  // True when the org has 2+ connected stores (app-shell decides).
+  // Surfaces "All brands" (/portfolio) as the first nav item — the
+  // organization-level rollup dashboard for multi-store operators.
   showPortfolio?: boolean;
 }) {
   const pathname = usePathname();
@@ -240,6 +258,7 @@ export function Sidebar({
           storeName={storeName}
           locale={locale}
           labels={labels}
+          showPortfolio={showPortfolio}
         />
       </aside>
       {open ? (
@@ -250,6 +269,7 @@ export function Sidebar({
               storeName={storeName}
               locale={locale}
               labels={labels}
+              showPortfolio={showPortfolio}
             />
           </div>
         </div>

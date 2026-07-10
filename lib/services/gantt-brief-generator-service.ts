@@ -159,6 +159,9 @@ export function extractDiscountPct(text: string): number | null {
 interface RowDigest {
   id: string;
   date: string | null;
+  // Last day the (deduped) task appears on. Same as `date` for one-day
+  // tasks; a longer span means "this offer ran date→dateEnd".
+  dateEnd: string | null;
   category: string | null;
   role: string | null;
   action: string | null;
@@ -188,9 +191,12 @@ export interface BriefGeneratorInput {
 }
 
 function digestRow(row: GanttRowForBrief): RowDigest {
+  const start = row.startDate ? row.startDate.toISOString().slice(0, 10) : null;
+  const end = row.endDate ? row.endDate.toISOString().slice(0, 10) : start;
   return {
     id: row.id,
-    date: row.startDate ? row.startDate.toISOString().slice(0, 10) : null,
+    date: start,
+    dateEnd: end,
     category: row.category,
     role: row.role,
     action: row.actionType,
@@ -205,6 +211,48 @@ function digestRow(row: GanttRowForBrief): RowDigest {
   };
 }
 
+// ─── Row de-duplication ───────────────────────────────────────────────
+//
+// The matrix Gantt parser emits ONE ROW PER CALENDAR CELL. An offer the
+// operator typed into 10 day-columns ("בושם 702 BUY1 GET2" across the
+// whole week) therefore arrives as 10 near-identical rows — and used to
+// print as 10 near-identical offer cards in the brief PDF. Collapse
+// identical task texts into a single row whose validity window spans
+// min(startDate)..max(endDate). This is not lossy: same text on many
+// days IS one offer running across those days.
+
+function normalizeTaskKey(task: string): string {
+  return task.replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+export function dedupeRowsForBrief(rows: GanttRowForBrief[]): GanttRowForBrief[] {
+  const byKey = new Map<string, GanttRowForBrief>();
+  for (const row of rows) {
+    const key = normalizeTaskKey(row.task);
+    if (!key) continue;
+    const existing = byKey.get(key);
+    if (!existing) {
+      byKey.set(key, { ...row });
+      continue;
+    }
+    // Merge the date window and remember every source row id.
+    if (row.startDate && (!existing.startDate || row.startDate < existing.startDate)) {
+      existing.startDate = row.startDate;
+    }
+    const rowEnd = row.endDate ?? row.startDate;
+    const existingEnd = existing.endDate ?? existing.startDate;
+    if (rowEnd && (!existingEnd || rowEnd > existingEnd)) {
+      existing.endDate = rowEnd;
+    }
+    // Keep the most specific classification we saw (a labelled row wins
+    // over an inherited-category one).
+    existing.role = existing.role ?? row.role;
+    existing.category = existing.category ?? row.category;
+    existing.actionType = existing.actionType ?? row.actionType;
+  }
+  return Array.from(byKey.values());
+}
+
 // ─── Fallback brief (LLM off / failing) ───────────────────────────────
 //
 // If the BI agent isn't available, we still emit a usable brief by
@@ -212,10 +260,19 @@ function digestRow(row: GanttRowForBrief): RowDigest {
 // operator can hand-edit.
 
 function fallbackBrief(input: BriefGeneratorInput): MarketingBrief {
-  const influencerRows = input.rows.filter((r) => r.role === "affiliates");
-  const siteRows = input.rows.filter((r) => r.role === "web" || r.actionType === "web_update");
-  const paidRows = input.rows.filter((r) => /קידום|ממומן|ROAS|K\b/i.test(r.task));
-  const ugcRows = input.rows.filter(
+  const rows = dedupeRowsForBrief(input.rows);
+  // Buckets are MUTUALLY EXCLUSIVE, priority order: influencer > paid >
+  // site. Before this, a row matching both the "web" role and the
+  // paid-promo keywords rendered in TWO sections of the PDF.
+  const influencerRows: GanttRowForBrief[] = [];
+  const paidRows: GanttRowForBrief[] = [];
+  const siteRows: GanttRowForBrief[] = [];
+  for (const r of rows) {
+    if (r.role === "affiliates") influencerRows.push(r);
+    else if (/קידום|ממומן|ROAS|K\b/i.test(r.task) || r.category?.includes("ממומן")) paidRows.push(r);
+    else if (r.role === "web" || r.actionType === "web_update") siteRows.push(r);
+  }
+  const ugcRows = rows.filter(
     (r) => r.actionType === "creative_image" || r.actionType === "creative_video"
   );
 
@@ -330,8 +387,10 @@ function buildAgentPrompt(digests: RowDigest[], input: BriefGeneratorInput): str
     `  - If a source task spans days 5–10, set validityStart=day5, validityEnd=day10.`,
     `  - Raise a "critical" callout when: the offer mentions a coupon but no code is present; the date range crosses a month boundary; a launch task has no supporting creative task on the same day.`,
     ``,
-    `Row data (each row is one calendar cell — task text + pre-extracted facts):`,
+    `Row data (rows are DEDUPED: identical tasks that repeated across calendar days were merged — "date" is the first day, "dateEnd" the last; use them as validityStart/validityEnd):`,
     JSON.stringify(digests, null, 2),
+    ``,
+    `IMPORTANT: each row is ONE offer. Never emit two offers with the same headline — if two rows describe the same promotion, merge them into one offer.`,
     ``,
     `Output ONLY a single JSON object with these top-level keys:`,
     `  { "header": {...}, "permanentOffers": {...}, "influencerBlocks": [...], "siteDiscounts": [...], "paidPromotion": {...}, "ugcContent": [...] }`
@@ -344,7 +403,12 @@ export async function generateMarketingBrief(input: BriefGeneratorInput): Promis
   if (!isBiAgentConfigured() || process.env.BI_AGENT_DISABLE === "1") {
     return fallbackBrief(input);
   }
-  const digests = input.rows.map(digestRow);
+  // Dedupe BEFORE building the agent prompt: the same offer repeated over
+  // 10 calendar days used to reach the agent as 10 near-identical rows,
+  // and the agent dutifully echoed 10 near-identical offers into the PDF.
+  // One deduped row with a date RANGE both shrinks the prompt and makes
+  // the "duplicate offers" failure structurally impossible.
+  const digests = dedupeRowsForBrief(input.rows).map(digestRow);
   try {
     // 75s so we finish before Cloudflare's ~100s edge timeout — if we
     // hit Cloudflare's cap we lose the ability to return JSON and the

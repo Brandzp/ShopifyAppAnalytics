@@ -53,19 +53,30 @@ export async function resolveActiveStoreId(): Promise<string | null> {
 // Read-only list of every store the operator has installed, used by the
 // StoreSwitcher to render its dropdown. In SaaS mode this is scoped to
 // the active org of the signed-in user — they only ever see their own
-// brands. When called outside an auth context (legacy callers + crons),
-// falls back to all stores (single-tenant behavior).
+// brands.
+//
+// Fail-closed rule: when auth RESOLVES but the user has no org (they're
+// mid-onboarding, or their membership was revoked), return an EMPTY list —
+// never the unscoped all-stores query. The previous behavior fell through
+// to "all stores in the database" for a null orgId, which in multi-tenant
+// SaaS is Tenant A seeing Tenant B's brand names in the switcher. The
+// unscoped path survives ONLY when the auth module itself is unavailable
+// (dev/CI without Supabase configured — single-tenant legacy mode).
 export async function listAllStoresForSwitcher(): Promise<
   Array<{ id: string; name: string; domain: string; connected: boolean }>
 > {
   let scopeOrgId: string | null = null;
+  let authResolved = false;
   try {
     const { getAuthContext } = await import("@/lib/auth/session");
     const auth = await getAuthContext();
+    authResolved = true;
     scopeOrgId = auth.orgId;
   } catch {
-    // No auth context — fall through to legacy single-tenant behavior.
+    // Auth module unavailable — legacy single-tenant behavior below.
   }
+
+  if (authResolved && !scopeOrgId) return [];
 
   return withOptionalDb(
     async (db) => {
