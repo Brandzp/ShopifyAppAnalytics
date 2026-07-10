@@ -8,6 +8,7 @@ import { buildMonthlyMetaSynthesis } from "@/lib/services/monthly-report-synthes
 import { renderPdfFromUrl } from "@/lib/server/pdf-renderer";
 import { sendWeeklyReportEmail } from "@/lib/server/weekly-report-mailer";
 import { getInternalBaseUrl } from "@/lib/server/base-url";
+import { requireCronSecret } from "@/lib/auth/require-cron-secret";
 
 // Cron-triggered endpoint. Runs the weekly + monthly auto-reports for every
 // store that has at least one active recipient configured. Idempotent —
@@ -116,6 +117,9 @@ async function runForStore(
 }
 
 export async function POST(request: Request) {
+  const cronAuth = requireCronSecret(request);
+  if (cronAuth) return cronAuth;
+
   try {
     const body: RunBody = await request.json().catch(() => ({}));
     const baseUrl = getInternalBaseUrl(request);

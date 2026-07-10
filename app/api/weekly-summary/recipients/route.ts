@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { AppError, toErrorMessage } from "@/lib/server/errors";
+import { getAuthContext } from "@/lib/auth/session";
 import { resolveActiveStoreId } from "@/lib/services/offline-sales-service";
 import {
   addRecipient,
@@ -9,6 +10,9 @@ import {
 export const dynamic = "force-dynamic";
 
 export async function GET() {
+  const auth = await getAuthContext();
+  if (!auth.userId) return NextResponse.json({ ok: false, error: "Unauthorized." }, { status: 401 });
+
   try {
     const storeId = await resolveActiveStoreId();
     if (!storeId) throw new AppError("No active store.", 400);
@@ -20,6 +24,9 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const auth = await getAuthContext();
+  if (!auth.userId) return NextResponse.json({ ok: false, error: "Unauthorized." }, { status: 401 });
+
   try {
     const storeId = await resolveActiveStoreId();
     if (!storeId) throw new AppError("No active store.", 400);

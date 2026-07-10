@@ -6,6 +6,7 @@ import {
 } from "@/lib/services/offline-sales-service";
 import { toErrorMessage } from "@/lib/server/errors";
 import { getAppLocale } from "@/lib/i18n";
+import { getAuthContext } from "@/lib/auth/session";
 
 const MONTH_LABELS_EN = [
   "January", "February", "March", "April", "May", "June",
@@ -41,6 +42,14 @@ export async function GET(
   _request: Request,
   { params }: { params: Promise<{ importId: string }> }
 ) {
+  const auth = await getAuthContext();
+  if (!auth.userId) {
+    return new Response(JSON.stringify({ ok: false, error: "Unauthorized." }), {
+      status: 401,
+      headers: { "Content-Type": "application/json" }
+    });
+  }
+
   try {
     const { importId } = await params;
     const [storeId, locale] = await Promise.all([resolveActiveStoreId(), getAppLocale()]);

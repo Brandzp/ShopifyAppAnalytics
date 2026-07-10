@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { AppError, toErrorMessage } from "@/lib/server/errors";
+import { getAuthContext } from "@/lib/auth/session";
 import { resolveActiveStoreId } from "@/lib/services/offline-sales-service";
 import {
   createProject,
@@ -29,6 +30,9 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 120;
 
 export async function GET() {
+  const auth = await getAuthContext();
+  if (!auth.userId) return NextResponse.json({ ok: false, error: "Unauthorized." }, { status: 401 });
+
   try {
     const storeId = await resolveActiveStoreId();
     if (!storeId) {
@@ -47,6 +51,9 @@ export async function GET() {
  * separate upload / project / job endpoints in M2 when batches enter the mix.
  */
 export async function POST(request: Request) {
+  const auth = await getAuthContext();
+  if (!auth.userId) return NextResponse.json({ ok: false, error: "Unauthorized." }, { status: 401 });
+
   try {
     const formData = await request.formData();
 

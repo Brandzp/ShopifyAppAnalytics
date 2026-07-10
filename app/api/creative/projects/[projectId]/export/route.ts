@@ -15,6 +15,7 @@ async function loadArchiver(): Promise<ArchiveFn> {
   const mod = (await import("archiver")) as unknown as { default?: ArchiveFn } & ArchiveFn;
   return (mod.default ?? mod) as ArchiveFn;
 }
+import { getAuthContext } from "@/lib/auth/session";
 import { resolveActiveStoreId } from "@/lib/services/offline-sales-service";
 import { getDb } from "@/lib/server/db";
 import { readObject } from "@/lib/services/creative-storage-service";
@@ -35,6 +36,9 @@ export async function GET(
   _request: Request,
   context: { params: Promise<{ projectId: string }> }
 ) {
+  const auth = await getAuthContext();
+  if (!auth.userId) return NextResponse.json({ ok: false, error: "Unauthorized." }, { status: 401 });
+
   try {
     const { projectId } = await context.params;
     const storeId = await resolveActiveStoreId();

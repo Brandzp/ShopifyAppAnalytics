@@ -6,8 +6,12 @@ import {
 } from "@/lib/services/offline-sales-service";
 import { toErrorMessage } from "@/lib/server/errors";
 import { getAppLocale } from "@/lib/i18n";
+import { getAuthContext } from "@/lib/auth/session";
 
 export async function GET(_request: Request, { params }: { params: Promise<{ importId: string }> }) {
+  const auth = await getAuthContext();
+  if (!auth.userId) return NextResponse.json({ ok: false, error: "Unauthorized." }, { status: 401 });
+
   try {
     const { importId } = await params;
     const [storeId, locale] = await Promise.all([resolveActiveStoreId(), getAppLocale()]);
@@ -21,6 +25,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
 }
 
 export async function DELETE(_request: Request, { params }: { params: Promise<{ importId: string }> }) {
+  const auth = await getAuthContext();
+  if (!auth.userId) return NextResponse.json({ ok: false, error: "Unauthorized." }, { status: 401 });
+
   try {
     const { importId } = await params;
     const storeId = await resolveActiveStoreId();

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/server/db";
 import { AppError, toErrorMessage } from "@/lib/server/errors";
+import { getAuthContext } from "@/lib/auth/session";
 import { ACTIVE_STORE_COOKIE } from "@/lib/services/offline-sales-service";
 
 // POST /api/settings/active-store
@@ -16,6 +17,9 @@ import { ACTIVE_STORE_COOKIE } from "@/lib/services/offline-sales-service";
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
+  const auth = await getAuthContext();
+  if (!auth.userId) return NextResponse.json({ ok: false, error: "Unauthorized." }, { status: 401 });
+
   try {
     const body = (await request.json().catch(() => ({}))) as { storeId?: string };
     const storeId = body.storeId?.trim();

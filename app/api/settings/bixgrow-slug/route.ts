@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/server/db";
 import { AppError, toErrorMessage } from "@/lib/server/errors";
+import { getAuthContext } from "@/lib/auth/session";
 import { resolveActiveStoreId } from "@/lib/services/offline-sales-service";
 
 // Update the bixgrowSlug for the currently-active store. The Settings
@@ -23,6 +24,9 @@ function sanitizeSlug(input: string): string {
 }
 
 export async function POST(request: Request) {
+  const auth = await getAuthContext();
+  if (!auth.userId) return NextResponse.json({ ok: false, error: "Unauthorized." }, { status: 401 });
+
   try {
     const storeId = await resolveActiveStoreId();
     if (!storeId) throw new AppError("No active store.", 400);

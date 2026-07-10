@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { AppError, toErrorMessage } from "@/lib/server/errors";
+import { getAuthContext } from "@/lib/auth/session";
 import { resolveActiveStoreId } from "@/lib/services/offline-sales-service";
 import {
   GenerationFailedError,
@@ -17,6 +18,9 @@ export async function POST(
   _request: Request,
   context: { params: Promise<{ projectId: string; assetId: string }> }
 ) {
+  const auth = await getAuthContext();
+  if (!auth.userId) return NextResponse.json({ ok: false, error: "Unauthorized." }, { status: 401 });
+
   try {
     const { projectId, assetId } = await context.params;
     const storeId = await resolveActiveStoreId();

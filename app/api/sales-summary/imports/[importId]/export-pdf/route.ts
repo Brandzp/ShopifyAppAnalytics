@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { toErrorMessage, AppError } from "@/lib/server/errors";
+import { getAuthContext } from "@/lib/auth/session";
 import { resolveActiveStoreId } from "@/lib/services/offline-sales-service";
 import { getInternalBaseUrl } from "@/lib/server/base-url";
 import { renderPdfFromUrl } from "@/lib/server/pdf-renderer";
@@ -25,6 +26,9 @@ function parseCookieHeader(header: string | null): Array<{ name: string; value: 
 }
 
 export async function GET(request: Request, { params }: { params: Promise<{ importId: string }> }) {
+  const auth = await getAuthContext();
+  if (!auth.userId) return NextResponse.json({ ok: false, error: "Unauthorized." }, { status: 401 });
+
   try {
     const { importId } = await params;
     const storeId = await resolveActiveStoreId();

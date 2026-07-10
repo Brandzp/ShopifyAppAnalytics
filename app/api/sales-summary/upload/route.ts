@@ -2,8 +2,12 @@ import { NextResponse } from "next/server";
 import { parseOfflineSalesWorkbook } from "@/lib/server/offline-sales-excel-parser";
 import { resolveActiveStoreId, saveOfflineSalesUpload } from "@/lib/services/offline-sales-service";
 import { AppError, toErrorMessage } from "@/lib/server/errors";
+import { getAuthContext } from "@/lib/auth/session";
 
 export async function POST(request: Request) {
+  const auth = await getAuthContext();
+  if (!auth.userId) return NextResponse.json({ ok: false, error: "Unauthorized." }, { status: 401 });
+
   try {
     const formData = await request.formData();
     const file = formData.get("file");

@@ -21,11 +21,15 @@ import { buildDailyReport } from "@/lib/services/daily-report-service";
 import { renderPdfFromUrl } from "@/lib/server/pdf-renderer";
 import { sendTelegramDocument } from "@/lib/server/telegram";
 import { getInternalBaseUrl } from "@/lib/server/base-url";
+import { requireCronSecret } from "@/lib/auth/require-cron-secret";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
 export async function POST(request: Request) {
+  const cronAuth = requireCronSecret(request);
+  if (cronAuth) return cronAuth;
+
   try {
     const baseUrl = getInternalBaseUrl(request);
     const botToken = process.env.TELEGRAM_BOT_TOKEN?.trim() ?? "";

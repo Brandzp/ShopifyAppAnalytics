@@ -16,6 +16,7 @@
 
 import { NextResponse } from "next/server";
 import { AppError, toErrorMessage } from "@/lib/server/errors";
+import { getAuthContext } from "@/lib/auth/session";
 import { resolveActiveStoreId } from "@/lib/services/offline-sales-service";
 import { runCreativeQuickBatch } from "@/lib/services/creative-quick-batch-service";
 import { buildStorageKey, getReadableUrl, putObject, suggestFilename } from "@/lib/services/creative-storage-service";
@@ -51,6 +52,9 @@ async function uploadReferenceFile(file: File, storeId: string, batchId: string)
 }
 
 export async function POST(request: Request) {
+  const auth = await getAuthContext();
+  if (!auth.userId) return NextResponse.json({ ok: false, error: "Unauthorized." }, { status: 401 });
+
   try {
     const storeId = await resolveActiveStoreId();
     if (!storeId) throw new AppError("Connect a store before running a quick batch.", 400);

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getAuthContext } from "@/lib/auth/session";
 import { listJobsForProject } from "@/lib/services/creative-job-service";
 import { resolveActiveStoreId } from "@/lib/services/offline-sales-service";
 import { getDb } from "@/lib/server/db";
@@ -12,6 +13,9 @@ export async function GET(
   _request: Request,
   context: { params: Promise<{ projectId: string }> }
 ) {
+  const auth = await getAuthContext();
+  if (!auth.userId) return NextResponse.json({ ok: false, error: "Unauthorized." }, { status: 401 });
+
   try {
     const { projectId } = await context.params;
     const storeId = await resolveActiveStoreId();
