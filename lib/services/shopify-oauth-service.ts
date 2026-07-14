@@ -29,19 +29,24 @@ import { mapShopMetadata } from "@/lib/shopify/mappers/shopify-mappers";
 
 // Default scopes for the analytics app. Override via SHOPIFY_OAUTH_SCOPES (comma-separated).
 //
-// read_all_orders is CRITICAL: plain read_orders only returns the last 60
-// days of orders, so a freshly OAuth-installed store silently loses all
-// older history — 90-day restock windows, retention analysis, and the
-// "prior revenue" ranking all under-report vs Shopify Analytics. It is
-// available without review for custom-distribution Partner apps (this
-// app's model). If a future PUBLIC listing can't request it pre-approval,
-// strip it via the SHOPIFY_OAUTH_SCOPES env override.
+// read_all_orders is deliberately NOT in the default set. It is a
+// PROTECTED scope: requesting it without Partner-dashboard approval makes
+// Shopify reject the ENTIRE authorize screen with "invalid_request: Your
+// account does not have permission to grant the requested access" — the
+// install dies before the merchant even sees a consent page (observed in
+// production 2026-07-12). Without it, plain read_orders returns only the
+// last 60 days of order history, so once the app IS approved for
+// "Read all orders" (Partner dashboard → App → API access → request
+// access) set:
+//   SHOPIFY_OAUTH_SCOPES=read_products,read_orders,read_all_orders,read_customers,read_inventory
+// and reinstall as the STORE OWNER account (protected scopes cannot be
+// granted by staff members).
 //
-// read_inventory backs the restock-hero alerts (variant inventory levels).
+// read_inventory backs the restock-hero alerts (variant inventory levels)
+// and is not protected.
 const DEFAULT_SCOPES = [
   "read_products",
   "read_orders",
-  "read_all_orders",
   "read_customers",
   "read_inventory"
 ];
@@ -407,6 +412,15 @@ export async function persistOauthConnection(input: {
   const db = getDb();
   if (!db) {
     throw new AppError("Database client is not available. Generate the Prisma client and try again.", 500);
+  }
+
+  // Visibility: without read_all_orders the token only reaches the last 60
+  // days of orders — sync will succeed but silently under-report history.
+  // Log it so "why is older data missing?" has an answer in the logs.
+  if (!input.scope.split(",").map((s) => s.trim()).includes("read_all_orders")) {
+    console.warn(
+      `[shopify-oauth] ${input.shopDomain} connected WITHOUT read_all_orders — order history is limited to the last 60 days. Request "Read all orders" in the Partner dashboard, set SHOPIFY_OAUTH_SCOPES to include it, and reinstall as the store owner for full history.`
+    );
   }
 
   const client = createShopifyClient({ shopDomain: input.shopDomain, adminAccessToken: input.accessToken });
