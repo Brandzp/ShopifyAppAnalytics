@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { AppError, toErrorMessage } from "@/lib/server/errors";
 import { crawlPublicInstagramProfiles } from "@/lib/services/instagram-public-crawler-service";
+import { getAuthContext } from "@/lib/auth/session";
 
 function parseHandles(value: unknown) {
   if (Array.isArray(value)) {
@@ -18,6 +19,9 @@ function parseHandles(value: unknown) {
 }
 
 export async function POST(request: Request) {
+  const auth = await getAuthContext();
+  if (!auth.userId) return NextResponse.json({ ok: false, error: "Unauthorized." }, { status: 401 });
+
   try {
     const body = await request.json().catch(() => ({}));
     const result = await crawlPublicInstagramProfiles({
