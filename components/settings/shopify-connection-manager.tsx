@@ -17,7 +17,7 @@ function humanizeShopifyError(raw: string): string {
     return "The token Shopify received was rejected as invalid. Make sure you pasted the Admin API access token (starts with shpat_), not the API key or secret. Re-check the token under Shopify Admin → Settings → Apps and sales channels → Develop apps → your app → API credentials.";
   }
   if (r.includes("403") || r.includes("forbidden") || r.includes("not authorized")) {
-    return "The token is valid but doesn't have the required permissions. In Shopify Admin → your custom app → Configure Admin API scopes, grant: read_products, read_orders, read_customers, read_inventory.";
+    return "The token is valid but doesn't have the required permissions. In Shopify Admin → your custom app → Configure Admin API scopes, grant: read_products, read_orders, read_customers, read_inventory (plus write_discounts if you use affiliate coupon creation).";
   }
   if (r.includes("404") || r.includes("could not find shop")) {
     return "The shop domain wasn't found. Use the full myshopify domain (e.g. yourstore.myshopify.com), not your storefront URL.";
@@ -259,7 +259,9 @@ export function ShopifyConnectionManager({
                 <code className="ms-1 rounded bg-slate-200 px-1 text-[10px]">read_products</code>,{" "}
                 <code className="rounded bg-slate-200 px-1 text-[10px]">read_orders</code>,{" "}
                 <code className="rounded bg-slate-200 px-1 text-[10px]">read_customers</code>,{" "}
-                <code className="rounded bg-slate-200 px-1 text-[10px]">read_inventory</code>.
+                <code className="rounded bg-slate-200 px-1 text-[10px]">read_inventory</code>{" "}
+                (add <code className="rounded bg-slate-200 px-1 text-[10px]">write_discounts</code> for
+                affiliate coupon creation).
               </li>
               <li>
                 Click <strong>Install app</strong> at the top right — confirm.

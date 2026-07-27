@@ -12,7 +12,7 @@ export async function POST(request: Request) {
     if (!shopDomain) {
       return NextResponse.json({ ok: false, error: "Missing shop domain header." }, { status: 400 });
     }
-    if (!verifyShopifyWebhookSignature(rawBody, signature)) {
+    if (!(await verifyShopifyWebhookSignature(rawBody, signature))) {
       return NextResponse.json({ ok: false, error: "Invalid webhook signature." }, { status: 401 });
     }
 

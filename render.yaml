@@ -210,8 +210,10 @@ services:
         sync: false
       - key: SHOPIFY_CLIENT_SECRET
         sync: false
+      # write_discounts backs affiliate coupon creation. This env var fully
+      # REPLACES the code's DEFAULT_SCOPES — keep the two lists in sync.
       - key: SHOPIFY_OAUTH_SCOPES
-        value: "read_products,read_orders,read_customers,read_inventory,read_customer_journey"
+        value: "read_products,read_orders,read_customers,read_inventory,read_customer_journey,write_discounts"
 
       # ─── Google Search Console (DATA-01) ───────────────────────────────
       # OAuth app credentials from Google Cloud Console → APIs & Services →

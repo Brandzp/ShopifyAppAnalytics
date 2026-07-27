@@ -35,7 +35,7 @@ type ImportResult = {
   programsCreated: number;
 };
 
-const SAMPLE_EXPORT_COLUMNS = [
+export const SAMPLE_EXPORT_COLUMNS = [
   "Email",
   "First Name",
   "Last Name",
@@ -318,9 +318,11 @@ async function ensureUniqueAffiliateCode(context: DirectoryContext, preferredCod
   for (let attempt = 0; attempt < 50; attempt += 1) {
     // Scoped lookup: codes are unique PER STORE, not globally. Without
     // this scope another tenant's code would block ours AND we'd leak the
-    // existence of their members by trial-and-error.
+    // existence of their members by trial-and-error. Case-insensitive so
+    // "sara" can't slip past an existing "SARA" — matching is insensitive
+    // downstream, so case-variant duplicates would be credited arbitrarily.
     const existing = await context.db.affiliateMember.findFirst({
-      where: { storeId: context.store.id, affiliateCode: candidate }
+      where: { storeId: context.store.id, affiliateCode: { equals: candidate, mode: "insensitive" } }
     }).catch(() => null);
     if (!existing || existing.id === currentAffiliateId) {
       return candidate;
@@ -656,40 +658,65 @@ export async function importAffiliatesFromFile(file: File, storeId?: string): Pr
   };
 }
 
+// One cell per SAMPLE_EXPORT_COLUMNS entry, derived from a header→value
+// record so a count/order mismatch is structurally impossible — the previous
+// positional array shipped 28 cells under 30 headers and corrupted
+// round-trips through our own importer.
+export function buildAffiliateExportRow(affiliate: {
+  email: string;
+  firstName: string;
+  lastName: string;
+  country: string;
+  instagramProfileUrl?: string | null;
+  programName: string;
+  shortLink: string;
+  affiliateCode: string;
+  referralLink: string;
+  couponCode?: string | null;
+  status: string;
+  dateJoined: string;
+  lastLogin?: string | null;
+}): string[] {
+  const record: Record<(typeof SAMPLE_EXPORT_COLUMNS)[number], string> = {
+    "Email": affiliate.email,
+    "First Name": affiliate.firstName,
+    "Last Name": affiliate.lastName,
+    "Address": "",
+    "Company": "",
+    "Country": affiliate.country,
+    "Phone": "",
+    "Personal ID": "",
+    "City": "",
+    "Zipcode": "",
+    "Site": "",
+    "Website": "",
+    "Facebook": "",
+    "Youtube": "",
+    "Instagram": affiliate.instagramProfileUrl ?? "",
+    "Tiktok": "",
+    "Additional Tiktok": "",
+    "Program": affiliate.programName,
+    "Shortlink": affiliate.shortLink,
+    "Referral code": affiliate.affiliateCode,
+    "Network link": affiliate.referralLink,
+    "Payment Method": "",
+    "Payment Info": "",
+    "Coupons": affiliate.couponCode ?? "",
+    "Status": affiliate.status,
+    "Approved": affiliate.status === "approved" ? "Yes" : "No",
+    "Date created": affiliate.dateJoined,
+    "Parent name": "",
+    "Parent email": "",
+    "Last login": affiliate.lastLogin ?? ""
+  };
+  return SAMPLE_EXPORT_COLUMNS.map((column) => record[column] ?? "");
+}
+
 export async function exportAffiliatesAsCsv() {
   const affiliates = await getAffiliates();
   const rows = [
     [...SAMPLE_EXPORT_COLUMNS],
-    ...affiliates.map((affiliate) => [
-      affiliate.email,
-      affiliate.firstName,
-      affiliate.lastName,
-      "",
-      "",
-      affiliate.country,
-      "",
-      "",
-      "",
-      "",
-      "",
-      "",
-      affiliate.instagramProfileUrl ?? "",
-      "",
-      "",
-      affiliate.programName,
-      affiliate.shortLink,
-      affiliate.affiliateCode,
-      affiliate.referralLink,
-      "",
-      "",
-      affiliate.couponCode ?? "",
-      affiliate.status,
-      affiliate.status === "approved" ? "Yes" : "No",
-      affiliate.dateJoined,
-      "",
-      "",
-      affiliate.lastLogin ?? ""
-    ])
+    ...affiliates.map((affiliate) => buildAffiliateExportRow(affiliate))
   ];
 
   return buildCsv(rows);

@@ -1,23 +1,32 @@
 import { NextResponse } from "next/server";
 import { importAffiliatesFromFile } from "@/lib/services/affiliate-portal-directory-service";
 import { AppError, toErrorMessage } from "@/lib/server/errors";
-import { getAuthContext } from "@/lib/auth/session";
+import { assertStoreInActiveOrg } from "@/lib/auth/guards";
+import { resolveActiveStoreId } from "@/lib/services/offline-sales-service";
 
 export async function POST(request: Request) {
   try {
-    const auth = await getAuthContext();
-    if (!auth.userId) return NextResponse.json({ ok: false, error: "Unauthorized." }, { status: 401 });
     const formData = await request.formData();
     const file = formData.get("file");
-    const storeId = formData.get("storeId");
+    const rawStoreId = formData.get("storeId");
 
     if (!(file instanceof File)) {
       throw new AppError("Upload an Excel, CSV, or JSON file first.", 400);
     }
 
-    const result = await importAffiliatesFromFile(file, typeof storeId === "string" ? storeId : undefined);
+    // Writes affiliates into a store — resolve the target (explicit form
+    // storeId, else the caller's active store) and assert org ownership.
+    const storeId: string | undefined =
+      typeof rawStoreId === "string" && rawStoreId
+        ? rawStoreId
+        : ((await resolveActiveStoreId()) ?? undefined);
+    if (!storeId) throw new AppError("No active store.", 400);
+    await assertStoreInActiveOrg(storeId);
+
+    const result = await importAffiliatesFromFile(file, storeId);
     return NextResponse.json(result);
   } catch (error) {
-    return NextResponse.json({ ok: false, error: toErrorMessage(error) }, { status: 400 });
+    const status = error instanceof AppError ? error.statusCode : 400;
+    return NextResponse.json({ ok: false, error: toErrorMessage(error) }, { status });
   }
 }

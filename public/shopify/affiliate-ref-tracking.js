@@ -63,13 +63,31 @@
   var savedClickId = clickId || readStored(COOKIE_CLICK_ID, 'affiliate_click_id');
   if (!savedRef && !savedClickId) return;
 
+  // Only cart ATTRIBUTES — never the cart note. Attributes surface as
+  // note_attributes on the order (which is what the app's webhook reads);
+  // writing `note` here would overwrite anything the customer typed into
+  // the "order note" box on every page view.
   var payload = {
     attributes: {
       ref: savedRef || '',
       agent_click_id: savedClickId || ''
-    },
-    note: [savedRef ? 'ref:' + savedRef : '', savedClickId ? 'agent_click_id:' + savedClickId : ''].filter(Boolean).join(' | ')
+    }
   };
+
+  // Skip the cart POST if we already synced these exact values to THIS
+  // cart — no point hammering /cart/update.js on every page view. The
+  // Shopify 'cart' cookie (the cart token) is part of the key: after
+  // checkout Shopify issues a fresh cart, the token changes, and the new
+  // cart must receive the attributes again or a repeat purchase in the
+  // same tab session would go unattributed.
+  var syncKey = 'affiliate_cart_synced';
+  var cartToken = getCookie('cart') || '';
+  var syncValue = (savedRef || '') + '|' + (savedClickId || '') + '|' + cartToken;
+  try {
+    if (sessionStorage.getItem(syncKey) === syncValue) return;
+  } catch (error) {
+    // sessionStorage unavailable — fall through and post anyway.
+  }
 
   fetch('/cart/update.js', {
     method: 'POST',
@@ -78,6 +96,14 @@
       'Accept': 'application/json'
     },
     body: JSON.stringify(payload)
+  }).then(function (response) {
+    if (response && response.ok) {
+      try {
+        sessionStorage.setItem(syncKey, syncValue);
+      } catch (error) {
+        // Best effort only.
+      }
+    }
   }).catch(function (error) {
     console.warn('Affiliate cart attribution update failed', error);
   });

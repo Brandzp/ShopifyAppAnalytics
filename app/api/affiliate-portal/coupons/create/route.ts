@@ -1,14 +1,23 @@
 ﻿import { NextResponse } from "next/server";
 import { createAffiliateCouponInShopify } from "@/lib/services/affiliate-portal-admin-service";
-import { toErrorMessage } from "@/lib/server/errors";
+import { AppError, toErrorMessage } from "@/lib/server/errors";
 import { assertStoreInActiveOrg } from "@/lib/auth/guards";
+import { resolveActiveStoreId } from "@/lib/services/offline-sales-service";
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    if (body.storeId) await assertStoreInActiveOrg(body.storeId);
+    // This route creates a REAL discount on the store's Shopify — it must
+    // never run unauthenticated. Resolve the target store (explicit body
+    // storeId, else the caller's active store) and assert org ownership.
+    const storeId: string | undefined =
+      typeof body.storeId === "string" && body.storeId
+        ? body.storeId
+        : ((await resolveActiveStoreId()) ?? undefined);
+    if (!storeId) throw new AppError("No active store.", 400);
+    await assertStoreInActiveOrg(storeId);
     const result = await createAffiliateCouponInShopify({
-      storeId: body.storeId,
+      storeId,
       affiliateId: body.affiliateId,
       code: body.code,
       title: body.title,
@@ -32,6 +41,7 @@ export async function POST(request: Request) {
     });
     return NextResponse.json(result);
   } catch (error) {
-    return NextResponse.json({ ok: false, error: toErrorMessage(error) }, { status: 400 });
+    const status = error instanceof AppError ? error.statusCode : 400;
+    return NextResponse.json({ ok: false, error: toErrorMessage(error) }, { status });
   }
 }

@@ -44,11 +44,16 @@ import { mapShopMetadata } from "@/lib/shopify/mappers/shopify-mappers";
 //
 // read_inventory backs the restock-hero alerts (variant inventory levels)
 // and is not protected.
+//
+// write_discounts backs the affiliate portal's coupon creation
+// (discountCodeBasicCreate). Not a protected scope. Stores installed
+// before it was added must re-run the OAuth install to grant it.
 const DEFAULT_SCOPES = [
   "read_products",
   "read_orders",
   "read_customers",
-  "read_inventory"
+  "read_inventory",
+  "write_discounts"
 ];
 
 // Strict shop-domain guard for OAuth: only `<store>.myshopify.com`. Prevents the

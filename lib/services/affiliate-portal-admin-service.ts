@@ -223,7 +223,11 @@ async function getCouponAdminContext(storeId?: string) {
 }
 
 async function resolveAffiliateOrThrow(context: CouponAdminContext, affiliateId: string) {
-  const affiliate = await context.db.affiliateMember.findUnique({ where: { id: affiliateId } });
+  // Scope to the context's store — an affiliateId from another tenant must
+  // read as "not found", not attach coupons across stores.
+  const affiliate = await context.db.affiliateMember.findFirst({
+    where: { id: affiliateId, storeId: context.store.id }
+  });
   if (!affiliate) throw new AppError("Affiliate was not found.", 404);
   return affiliate;
 }
@@ -620,12 +624,10 @@ export async function ensureAffiliateProgramSeed(storeId?: string) {
   if (db.affiliateProgram) {
     await db.affiliateProgram.upsert({
       where: { id: `${store.id}-default-program` },
-      update: {
-        name: DEFAULT_PROGRAM_NAME,
-        status: "active",
-        commissionRate: DEFAULT_COMMISSION_RATE,
-        signUpLink: `https://${store.domain}/pages/affiliate-signup`
-      },
+      // Ensure-exists ONLY. This runs on every coupon action and every cron
+      // tick — resetting name/status/commissionRate here silently reverted
+      // merchant edits to the program.
+      update: {},
       create: {
         id: `${store.id}-default-program`,
         storeId: store.id,
@@ -711,7 +713,38 @@ export async function createAffiliateCouponsInBulk(input: BulkCouponInput) {
   };
 }
 
-export async function syncAffiliateAttributionFromOrders(storeId?: string) {
+// Pure matcher for the attribution backfill. EXACT matches only — substring
+// matching ("ANA" inside "BANANA10") attributed unrelated store-wide promos
+// to affiliates, and this heuristic runs unattended on the cron.
+// `orderCodes` must already be uppercased.
+export function matchAffiliateMemberForOrder(input: {
+  members: any[];
+  coupons: any[];
+  orderCodes: string[];
+  refCode?: string | null;
+}) {
+  const { members, coupons, orderCodes, refCode } = input;
+  return (
+    members.find((member: any) => {
+      const memberCode = member.couponCode?.toUpperCase();
+      const affiliateCode = member.affiliateCode?.toUpperCase();
+      const couponMatch = memberCode && orderCodes.includes(memberCode);
+      const couponTableMatch = coupons.some(
+        (coupon: any) =>
+          coupon.affiliateMemberId === member.id &&
+          orderCodes.includes(String(coupon.code).toUpperCase())
+      );
+      const affiliateCodeMatch = affiliateCode && orderCodes.includes(affiliateCode);
+      const refCodeMatch = affiliateCode && refCode && affiliateCode === String(refCode).toUpperCase();
+      return couponMatch || couponTableMatch || affiliateCodeMatch || refCodeMatch;
+    }) ?? null
+  );
+}
+
+export async function syncAffiliateAttributionFromOrders(
+  storeId?: string,
+  options?: { since?: Date }
+) {
   const { db, store } = await getStoreOrThrow(storeId);
   await ensureAffiliateProgramSeed(store.id);
 
@@ -719,11 +752,23 @@ export async function syncAffiliateAttributionFromOrders(storeId?: string) {
     throw new AppError("Affiliate tables are not ready. Run Prisma generate and db push first.", 500);
   }
 
+  // Most stores have zero affiliates — skip the expensive order/webhook
+  // scan entirely instead of loading the whole order table for nothing.
+  const memberCount = await db.affiliateMember.count({ where: { storeId: store.id } });
+  if (memberCount === 0) {
+    return { ok: true, syncedOrders: 0, affiliatesMatched: 0 };
+  }
+
   const [members, coupons, orders] = await Promise.all([
-    db.affiliateMember.findMany({ where: { storeId: store.id } }),
+    db.affiliateMember.findMany({ where: { storeId: store.id }, include: { program: true } }),
     db.affiliateCoupon.findMany({ where: { storeId: store.id } }).catch(() => []),
     db.order.findMany({
-      where: { storeId: store.id },
+      where: {
+        storeId: store.id,
+        // Cancelled orders must not accrue commission.
+        cancelledAt: null,
+        ...(options?.since ? { createdAt: { gte: options.since } } : {})
+      },
       include: { discountUsages: true },
       orderBy: { createdAt: "desc" }
     })
@@ -735,9 +780,23 @@ export async function syncAffiliateAttributionFromOrders(storeId?: string) {
           platform: "shopify",
           externalId: { in: orders.map((order: any) => order.shopifyOrderId) }
         },
+        select: { externalId: true, payload: true, createdAt: true },
         orderBy: { createdAt: "desc" }
       }).catch(() => [])
     : [];
+
+  // Rows that already exist (webhook, BixGrow, manual entry) carry better
+  // commission data than this heuristic backfill — never overwrite them.
+  const existingPairs = new Set<string>();
+  {
+    const rows = (await db.affiliateAttribution.findMany({
+      where: { storeId: store.id },
+      select: { affiliateMemberId: true, orderId: true }
+    })) as Array<{ affiliateMemberId: string; orderId: string | null }>;
+    for (const row of rows) {
+      if (row.orderId) existingPairs.add(`${row.affiliateMemberId}:${row.orderId}`);
+    }
+  }
   const webhookByOrderId = new Map<string, any>();
   for (const webhook of webhookRows as any[]) {
     if (webhook.externalId && !webhookByOrderId.has(webhook.externalId)) {
@@ -767,23 +826,17 @@ export async function syncAffiliateAttributionFromOrders(storeId?: string) {
       bgRefCode
     });
 
-    const matchedMember = members.find((member: any) => {
-      const memberCode = member.couponCode?.toUpperCase();
-      const affiliateCode = member.affiliateCode?.toUpperCase();
-      const couponMatch = memberCode && orderCodes.includes(memberCode);
-      const couponTableMatch = coupons.some(
-        (coupon: any) =>
-          coupon.affiliateMemberId === member.id &&
-          orderCodes.includes(String(coupon.code).toUpperCase())
-      );
-      const affiliateCodeMatch = affiliateCode && orderCodes.some((code: string) => code.includes(affiliateCode));
-      const refCodeMatch = affiliateCode && refCode && affiliateCode === String(refCode).toUpperCase();
-      return couponMatch || couponTableMatch || affiliateCodeMatch || refCodeMatch;
-    });
+    const matchedMember = matchAffiliateMemberForOrder({ members, coupons, orderCodes, refCode });
 
     if (!matchedMember) continue;
+    if (existingPairs.has(`${matchedMember.id}:${order.id}`)) continue;
 
-    const commissionAmount = Number(order.totalPrice) * DEFAULT_COMMISSION_RATE;
+    const commissionRate = Number(
+      matchedMember.commissionRateOverride
+        ?? matchedMember.program?.commissionRate
+        ?? DEFAULT_COMMISSION_RATE
+    );
+    const commissionAmount = Number(order.totalPrice) * commissionRate;
     const hasLinkSignal = Boolean(refCode || sourcePlatform === "bixgrow");
     const trackingMethod = buildAffiliateTrackingMethod({
       hasClickSignal: hasLinkSignal,
@@ -793,18 +846,8 @@ export async function syncAffiliateAttributionFromOrders(storeId?: string) {
     const sourceType = hasLinkSignal ? "link" : "coupon";
     const sourceUrl = landingSite ?? referringSite ?? null;
 
-    await db.affiliateAttribution.upsert({
-      where: { affiliateMemberId_orderId: { affiliateMemberId: matchedMember.id, orderId: order.id } },
-      update: {
-        sourceType,
-        trackingMethod,
-        sourceUrl,
-        salesAmount: order.totalPrice,
-        commissionAmount,
-        ordersCount: 1,
-        occurredAt: order.createdAt
-      },
-      create: {
+    await db.affiliateAttribution.create({
+      data: {
         storeId: store.id,
         affiliateMemberId: matchedMember.id,
         orderId: order.id,
@@ -817,6 +860,7 @@ export async function syncAffiliateAttributionFromOrders(storeId?: string) {
         occurredAt: order.createdAt
       }
     });
+    existingPairs.add(`${matchedMember.id}:${order.id}`);
 
     synced += 1;
   }
@@ -828,13 +872,18 @@ export async function syncAffiliateAttributionFromOrders(storeId?: string) {
     const salesTotal = memberRows.reduce((sum: number, row: any) => sum + Number(row.salesAmount ?? 0), 0);
     const commissionTotal = memberRows.reduce((sum: number, row: any) => sum + Number(row.commissionAmount ?? 0), 0);
     const ordersTotal = memberRows.reduce((sum: number, row: any) => sum + Number(row.ordersCount ?? 0), 0);
+    // approvedBalance = money still owed. Paid/cancelled/refunded rows must
+    // not resurrect into the balance (commissionTotal stays lifetime).
+    const approvedBalance = memberRows
+      .filter((row: any) => row.payoutStatus === "unpaid" || row.payoutStatus === "approved")
+      .reduce((sum: number, row: any) => sum + Number(row.commissionAmount ?? 0), 0);
 
     await db.affiliateMember.update({
       where: { id: member.id },
       data: {
         salesTotal,
         commissionTotal,
-        approvedBalance: commissionTotal,
+        approvedBalance,
         ordersTotal
       }
     });

@@ -5,13 +5,21 @@ import { AffiliatePortalNav } from "@/components/affiliate-portal/portal-nav";
 import { getAppChromeData } from "@/lib/services/analytics-service";
 import { getAffiliateById } from "@/lib/services/affiliate-portal-service";
 import { getAffiliateCouponBuilderOptions } from "@/lib/services/affiliate-portal-admin-service";
+import { resolveActiveStoreId } from "@/lib/services/offline-sales-service";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCurrency, formatNumber } from "@/lib/utils";
 import { DataTable } from "@/components/shared/data-table";
 import { AffiliateCouponManager } from "@/components/affiliate-portal/affiliate-coupon-manager";
 
 export default async function AffiliateDetailPage({ params }: { params: Promise<{ affiliateId: string }> }) {
-  const [{ affiliateId }, chrome, options] = await Promise.all([params, getAppChromeData(), getAffiliateCouponBuilderOptions()]);
+  // Builder options must come from the caller's org store — the same store
+  // coupon creation targets — not the globally-newest connected store.
+  const activeStoreId = await resolveActiveStoreId();
+  const [{ affiliateId }, chrome, options] = await Promise.all([
+    params,
+    getAppChromeData(),
+    getAffiliateCouponBuilderOptions(activeStoreId ?? undefined)
+  ]);
   const payload = await getAffiliateById(affiliateId);
 
   if (!payload) notFound();

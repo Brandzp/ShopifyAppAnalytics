@@ -113,11 +113,17 @@ You need a registered Shopify app to use OAuth (instead of paste-token).
 5. Configuration → **API access scopes** → grant at least:
    - `read_products`, `read_orders`, `read_customers`
    - `read_inventory`
+   - `write_discounts` ← required for affiliate coupon creation
    - `read_customer_journey` ← required for UTM/referrer attribution
 6. Copy the **Client ID** and **Client secret** into Render as
    `SHOPIFY_CLIENTID` and `SHOPIFY_CLIENT_SECRET`.
-7. (Optional) Set up an HMAC webhook secret in the app config and copy it
-   to `SHOPIFY_WEBHOOK_SECRET`. This is used to verify webhook callbacks.
+7. Webhook verification: order webhooks registered by the OAuth install
+   flow are signed by Shopify with the app's **client secret**, and the
+   app verifies against `SHOPIFY_WEBHOOK_SECRET` *or*
+   `SHOPIFY_CLIENT_SECRET` — so with `SHOPIFY_CLIENT_SECRET` set you're
+   done. Only set `SHOPIFY_WEBHOOK_SECRET` if you also create webhooks
+   manually in the Partner dashboard (those are signed with the separate
+   secret shown there).
 
 After redeploy, opening `${APP_URL}/api/shopify/oauth/install?shop=YOUR_SHOP.myshopify.com`
 will start the OAuth flow.

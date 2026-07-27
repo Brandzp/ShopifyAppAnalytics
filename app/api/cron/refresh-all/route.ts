@@ -88,6 +88,7 @@ interface PerStoreResult {
   bixgrow: { ok: boolean; skipped: boolean };
   gsc: { ok: boolean; skipped?: boolean; pagesUpserted?: number; queriesUpserted?: number; error?: string };
   affiliateReconcile?: { linked: number; deletedDuplicates: number; stillOrphan: number };
+  affiliateSync?: { syncedOrders: number; error?: string };
 }
 
 async function handler(request: Request) {
@@ -187,6 +188,29 @@ async function handler(request: Request) {
           }
         } catch (err) {
           console.error(`[refresh-all] reconcile failed for ${store.id}:`, err);
+        }
+
+        // ── Affiliate attribution backfill ──────────────────────────
+        // Coupon/ref-matching over recently synced orders. This is the
+        // safety net for conversions the order webhook missed (webhook not
+        // yet registered, delivery failed, or the shopper's browser never
+        // ran the tracking snippet but used an affiliate coupon). It is
+        // CREATE-ONLY (never rewrites webhook/BixGrow/manual rows) and
+        // windowed to 30 days — older orders were covered by prior ticks;
+        // a full-history pass is still available via the portal's manual
+        // "Sync affiliate attributions" button.
+        try {
+          const { syncAffiliateAttributionFromOrders } = await import(
+            "@/lib/services/affiliate-portal-admin-service"
+          );
+          const affiliateSync = await syncAffiliateAttributionFromOrders(store.id, {
+            since: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+          });
+          result.affiliateSync = { syncedOrders: affiliateSync.syncedOrders };
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          result.affiliateSync = { syncedOrders: 0, error: message };
+          console.error(`[refresh-all] affiliate sync failed for ${store.id}:`, err);
         }
       }
 

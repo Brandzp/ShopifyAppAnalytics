@@ -8,6 +8,16 @@ function hashInput(value: string) {
   return crypto.createHash("sha256").update(value).digest("hex");
 }
 
+// Open-redirect guard for the PUBLIC redirect route. The destination is
+// concatenated onto the store domain, so only same-store relative paths are
+// allowed: a single leading "/" and no backslashes anywhere. With the host
+// fixed and the path "/"-anchored, a later "@" can never reach the URL
+// authority — legit paths like /pages/contact?email=a@b.com must pass.
+export function sanitizeDestinationPath(raw: string | null | undefined): string {
+  const value = raw ?? "/";
+  return /^\/(?![\/\\])/.test(value) && !value.includes("\\") ? value : "/";
+}
+
 async function getStoreOrThrow(storeId?: string) {
   const db = getDb();
   if (!db) throw new AppError("Database client is not available.", 500);
@@ -39,7 +49,17 @@ export async function createAffiliateRedirectSession(input: {
   userAgent?: string | null;
 }) {
   const { db, store } = await getStoreOrThrow(input.storeId);
-  const affiliate = await db.affiliateMember?.findFirst({ where: { storeId: store.id, affiliateCode: input.affiliateCode } });
+  // Exact match first — the schema's unique is case-sensitive, so case
+  // variants ("SARA"/"sara") can coexist and the exact code must win.
+  // Insensitive only as a fallback for retyped links and lowercase codes
+  // from BixGrow/CSV imports.
+  const affiliate =
+    (await db.affiliateMember?.findFirst({
+      where: { storeId: store.id, affiliateCode: input.affiliateCode }
+    }))
+    ?? (await db.affiliateMember?.findFirst({
+      where: { storeId: store.id, affiliateCode: { equals: input.affiliateCode, mode: "insensitive" } }
+    }));
   if (!affiliate) throw new AppError("Affiliate was not found for the redirect link.", 404);
 
   const clickId = crypto.randomUUID();

@@ -13,6 +13,7 @@ export async function POST(request: Request) {
     const result = await syncAffiliateAttributionFromOrders(body.storeId);
     return NextResponse.json(result);
   } catch (error) {
-    return NextResponse.json({ ok: false, error: toErrorMessage(error) }, { status: 400 });
+    const status = error instanceof AppError ? error.statusCode : 400;
+    return NextResponse.json({ ok: false, error: toErrorMessage(error) }, { status });
   }
 }

@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 import { AppError, toErrorMessage } from "@/lib/server/errors";
 import { resolveAffiliateSourcePlatform } from "@/lib/services/affiliate-attribution-source";
-import { buildTrackedDestinationUrl, createAffiliateRedirectSession } from "@/lib/services/affiliate-link-tracking-service";
+import {
+  buildTrackedDestinationUrl,
+  createAffiliateRedirectSession,
+  sanitizeDestinationPath
+} from "@/lib/services/affiliate-link-tracking-service";
 
 export async function GET(request: Request) {
   try {
@@ -12,15 +16,33 @@ export async function GET(request: Request) {
     }
 
     const couponCode = url.searchParams.get("coupon");
-    const destinationPath = url.searchParams.get("destination") ?? "/";
+    const destinationPath = sanitizeDestinationPath(url.searchParams.get("destination"));
     const productId = url.searchParams.get("product") ?? url.searchParams.get("productId");
     const sourcePlatform = resolveAffiliateSourcePlatform({
       sourcePlatform: url.searchParams.get("sourcePlatform"),
       sourceUrl: url.searchParams.get("sourceUrl"),
       bgRefCode: url.searchParams.get("bg_ref")
     });
+    // Multi-tenant disambiguation: without a store hint this public route
+    // falls back to the base store, which is wrong the moment a second
+    // tenant connects. Links can append &shop=<store>.myshopify.com.
+    const shopParam = url.searchParams.get("shop") ?? url.searchParams.get("store");
+    let storeId: string | undefined;
+    if (shopParam) {
+      const { getDb } = await import("@/lib/server/db");
+      const store = await getDb()?.store.findFirst({
+        where: { domain: shopParam.trim().toLowerCase() },
+        select: { id: true }
+      });
+      if (!store) {
+        return NextResponse.json({ ok: false, error: "Unknown store." }, { status: 404 });
+      }
+      storeId = store.id;
+    }
+
     const session = await createAffiliateRedirectSession({
-      affiliateCode: affiliateCode.toUpperCase(),
+      storeId,
+      affiliateCode,
       couponCode,
       destinationPath,
       productId,

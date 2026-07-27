@@ -4,16 +4,20 @@ import { AffiliatePortalNav } from "@/components/affiliate-portal/portal-nav";
 import { getAppChromeData } from "@/lib/services/analytics-service";
 import { getAffiliateCoupons, getAffiliates } from "@/lib/services/affiliate-portal-service";
 import { getAffiliateCouponBuilderOptions } from "@/lib/services/affiliate-portal-admin-service";
+import { resolveActiveStoreId } from "@/lib/services/offline-sales-service";
 import { DataTable } from "@/components/shared/data-table";
 import { AffiliateCouponManager } from "@/components/affiliate-portal/affiliate-coupon-manager";
 import { AffiliateAttributionSyncButton } from "@/components/affiliate-portal/affiliate-attribution-sync-button";
 
 export default async function CouponsPage() {
+  // Builder options query the store's LIVE Shopify catalog — they must come
+  // from the caller's org store, the same store coupons/create will target.
+  const activeStoreId = await resolveActiveStoreId();
   const [chrome, coupons, affiliates, options] = await Promise.all([
     getAppChromeData(),
     getAffiliateCoupons(),
     getAffiliates(),
-    getAffiliateCouponBuilderOptions()
+    getAffiliateCouponBuilderOptions(activeStoreId ?? undefined)
   ]);
   const baseStoreUrl = `https://${chrome.store.domain}`;
 

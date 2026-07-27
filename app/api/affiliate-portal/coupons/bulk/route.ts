@@ -1,15 +1,22 @@
 import { NextResponse } from "next/server";
 import { createAffiliateCouponsInBulk } from "@/lib/services/affiliate-portal-admin-service";
-import { toErrorMessage } from "@/lib/server/errors";
-import { getAuthContext } from "@/lib/auth/session";
+import { AppError, toErrorMessage } from "@/lib/server/errors";
+import { assertStoreInActiveOrg } from "@/lib/auth/guards";
+import { resolveActiveStoreId } from "@/lib/services/offline-sales-service";
 
 export async function POST(request: Request) {
   try {
-    const auth = await getAuthContext();
-    if (!auth.userId) return NextResponse.json({ ok: false, error: "Unauthorized." }, { status: 401 });
     const body = await request.json();
+    // Creates real Shopify discounts in bulk — resolve the target store and
+    // assert the caller's org owns it before any write.
+    const storeId: string | undefined =
+      typeof body.storeId === "string" && body.storeId
+        ? body.storeId
+        : ((await resolveActiveStoreId()) ?? undefined);
+    if (!storeId) throw new AppError("No active store.", 400);
+    await assertStoreInActiveOrg(storeId);
     const result = await createAffiliateCouponsInBulk({
-      storeId: body.storeId,
+      storeId,
       affiliateIds: Array.isArray(body.affiliateIds) ? body.affiliateIds : [],
       title: body.title,
       codePrefix: body.codePrefix,
@@ -32,6 +39,7 @@ export async function POST(request: Request) {
     });
     return NextResponse.json(result);
   } catch (error) {
-    return NextResponse.json({ ok: false, error: toErrorMessage(error) }, { status: 400 });
+    const status = error instanceof AppError ? error.statusCode : 400;
+    return NextResponse.json({ ok: false, error: toErrorMessage(error) }, { status });
   }
 }

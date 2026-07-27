@@ -1,5 +1,7 @@
 import { exportAffiliatesAsCsv, exportAffiliatesAsJson } from "@/lib/services/affiliate-portal-directory-service";
-import { getAuthContext } from "@/lib/auth/session";
+import { assertStoreInActiveOrg } from "@/lib/auth/guards";
+import { resolveActiveStoreId } from "@/lib/services/offline-sales-service";
+import { AppError, toErrorMessage } from "@/lib/server/errors";
 import { NextResponse } from "next/server";
 
 function buildTimestamp() {
@@ -7,8 +9,17 @@ function buildTimestamp() {
 }
 
 export async function GET(request: Request) {
-  const auth = await getAuthContext();
-  if (!auth.userId) return NextResponse.json({ ok: false, error: "Unauthorized." }, { status: 401 });
+  // Affiliate exports contain PII — make sure the caller's org actually
+  // owns the store the export will be built from (the service resolves the
+  // same active store).
+  try {
+    const storeId = await resolveActiveStoreId();
+    if (!storeId) throw new AppError("No active store.", 400);
+    await assertStoreInActiveOrg(storeId);
+  } catch (error) {
+    const status = error instanceof AppError ? error.statusCode : 401;
+    return NextResponse.json({ ok: false, error: toErrorMessage(error) }, { status });
+  }
   const format = new URL(request.url).searchParams.get("format")?.toLowerCase();
 
   if (format === "json") {

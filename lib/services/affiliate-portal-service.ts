@@ -141,6 +141,24 @@ function buildProgramPayload(store: any | null, row: any | null, affiliateRows: 
 }
 
 async function getAffiliateStore() {
+  // Signed-in callers FAIL CLOSED to their own org's active store: a user
+  // with no org or no store sees empty portal data — never another
+  // tenant's. (The legacy active_store_id cookie is deliberately NOT
+  // honored here; it has no ownership check.) The base-store fallback is
+  // reserved for contexts with no signed-in user at all (cron, report
+  // generation, single-tenant/self-hosted mode).
+  try {
+    const { getAuthContext } = await import("@/lib/auth/session");
+    const auth = await getAuthContext();
+    if (auth.userId) {
+      if (!auth.orgId || !auth.storeId) return null;
+      const db = getDb();
+      const store = await db?.store.findUnique({ where: { id: auth.storeId } });
+      return store ?? null;
+    }
+  } catch {
+    // No request scope (cron/background) — fall through to base store.
+  }
   try {
     return await resolveOrCreateBaseStore();
   } catch {
