@@ -20,7 +20,9 @@ bun.lockb
 bi14append.js
 _bi_*.js
 bi_query_*.js
+bi_*.cjs
 tmp_*.js
+tmp_*.cjs
 tmp_bi_*.mjs
 tmp_bi_*.js
 *_check*.js
