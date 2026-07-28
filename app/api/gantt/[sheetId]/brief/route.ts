@@ -11,7 +11,9 @@ import { resolveActiveStoreId } from "@/lib/services/offline-sales-service";
 import { assertStoreInActiveOrg } from "@/lib/auth/guards";
 import { getDb } from "@/lib/server/db";
 import {
+  auditBriefDiscounts,
   generateMarketingBrief,
+  type ExistingDiscountCode,
   type MarketingBrief
 } from "@/lib/services/gantt-brief-generator-service";
 
@@ -119,6 +121,40 @@ export async function POST(
         generatedAt: new Date().toISOString(),
         rowCount: sheet.rows.length
       };
+    }
+
+    // Discount audit — flags duplicate coupon codes inside the brief,
+    // collisions with existing affiliate codes/coupons, and offers whose
+    // mechanics need special setup on a standard (non-Plus) Shopify plan.
+    // Best-effort: an audit failure must never block the brief.
+    try {
+      const [members, affiliateCoupons] = await Promise.all([
+        db.affiliateMember
+          .findMany({ where: { storeId }, select: { affiliateCode: true, couponCode: true } })
+          .catch(() => []),
+        db.affiliateCoupon
+          ? db.affiliateCoupon
+              .findMany({ where: { storeId }, select: { code: true } })
+              .catch(() => [])
+          : []
+      ]);
+      const existingCodes: ExistingDiscountCode[] = [
+        ...(members as Array<{ affiliateCode: string | null; couponCode: string | null }>).flatMap(
+          (m) => [
+            m.affiliateCode ? { code: m.affiliateCode, source: "קוד שותף" } : null,
+            m.couponCode ? { code: m.couponCode, source: "קופון שותף" } : null
+          ]
+        ),
+        ...(affiliateCoupons as Array<{ code: string | null }>).map((c) =>
+          c.code ? { code: c.code, source: "קופון שותף קיים" } : null
+        )
+      ].filter((c): c is ExistingDiscountCode => Boolean(c));
+      brief = auditBriefDiscounts(brief, existingCodes);
+    } catch (err) {
+      console.warn(
+        "[gantt-brief] discount audit failed (brief returned unaudited):",
+        err instanceof Error ? err.message : String(err)
+      );
     }
 
     // Best-effort cache — if the write fails we still return the brief.

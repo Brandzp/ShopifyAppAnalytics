@@ -102,21 +102,42 @@ export interface MarketingBrief {
 
 // ─── Pattern extractors (deterministic — no LLM) ──────────────────────
 
-const COUPON_PATTERNS: RegExp[] = [
-  // "קוד להטבה: welcome" / "קוד קופון: LIHI" / "קופון: NAME15"
-  /(?:קוד(?:\s+קופון)?(?:\s+להטבה)?|קופון)\s*[:\-]\s*([A-Z0-9][A-Z0-9_\-]{1,32})/i,
-  // Inline uppercase code (2-16 chars, mostly caps).
-  /\b([A-Z][A-Z0-9]{1,15})(?=\s|$|[.,)])/
-];
+// "קוד להטבה: welcome" / "קוד קופון: LIHI" / "קופון: NAME15" — an operator
+// writing the keyword means it; this is the high-confidence pattern.
+const COUPON_KEYWORD_PATTERN =
+  /(?:קוד(?:\s+קופון)?(?:\s+להטבה)?|קופון)\s*[:\-]\s*([A-Z0-9][A-Z0-9_\-]{1,32})/i;
+// Inline uppercase token (2-16 chars) — a much weaker signal, so it gets
+// filtered against marketing vocabulary below.
+const COUPON_INLINE_PATTERN = /\b([A-Z][A-Z0-9]{1,15})(?=\s|$|[.,)])/g;
+
+// Uppercase tokens that look like inline coupon codes but never are —
+// marketing acronyms and channel names that briefs are full of. Without
+// this list, "בושם 702 BUY1 GET2" put "BUY1" on the offer card as the
+// customer-facing coupon code.
+const COUPON_STOPWORDS = new Set([
+  "THE", "AND", "OR", "PDF", "URL", "ROAS", "UGC", "KPI", "SALE", "NEW",
+  "SMS", "ASAP", "BOGO", "LIVE", "STORY", "REELS", "REEL", "POST", "FREE",
+  "GIFT", "TIKTOK", "END", "TBD", "TBA", "EOD", "ETA", "FAQ", "DIY", "CTA",
+  "ASAP", "AB", "QA"
+]);
+// Shape-based rejects: BXGY mechanics ("BUY1", "GET2"), budget shorthand
+// ("20K"), quarter markers ("Q3").
+const COUPON_REJECT_SHAPES: RegExp[] = [/^(BUY|GET)\d{0,3}$/, /^\d{1,3}K$/, /^[QH]\d$/];
 
 export function extractCouponCode(text: string): string | null {
-  for (const re of COUPON_PATTERNS) {
-    const m = text.match(re);
-    if (m && m[1] && m[1].length >= 2) {
-      // Reject obvious noise (single letters, common HTML tags).
-      if (["THE", "AND", "OR", "PDF", "URL"].includes(m[1].toUpperCase())) continue;
-      return m[1];
-    }
+  const keyworded = text.match(COUPON_KEYWORD_PATTERN);
+  if (keyworded?.[1] && keyworded[1].length >= 2) {
+    return keyworded[1];
+  }
+  // Scan ALL inline candidates and take the first that isn't marketing
+  // noise — so "BUY1 GET2 SET15" still yields SET15.
+  for (const m of text.matchAll(COUPON_INLINE_PATTERN)) {
+    const candidate = m[1];
+    if (!candidate || candidate.length < 2) continue;
+    const upper = candidate.toUpperCase();
+    if (COUPON_STOPWORDS.has(upper)) continue;
+    if (COUPON_REJECT_SHAPES.some((re) => re.test(upper))) continue;
+    return candidate;
   }
   return null;
 }
@@ -395,6 +416,140 @@ function buildAgentPrompt(digests: RowDigest[], input: BriefGeneratorInput): str
     `Output ONLY a single JSON object with these top-level keys:`,
     `  { "header": {...}, "permanentOffers": {...}, "influencerBlocks": [...], "siteDiscounts": [...], "paidPromotion": {...}, "ugcContent": [...] }`
   ].join("\n");
+}
+
+// ─── Discount audit ───────────────────────────────────────────────────
+//
+// Deterministic post-pass over a generated brief. Three jobs:
+//   1. Duplicates INSIDE the brief — same coupon code on two different
+//      offers, or the same headline twice (a dup that slipped the row
+//      dedupe or the LLM).
+//   2. Collisions with codes that ALREADY exist in the system (affiliate
+//      codes / affiliate coupons) — creating them again in Shopify would
+//      either fail or, worse, silently retarget an affiliate's discount.
+//   3. Shopify-plan feasibility — every offer must be buildable as a
+//      standard discount on a NON-Plus plan (percentage / fixed amount /
+//      free shipping / Buy X Get Y + combination settings). Mechanics
+//      that need extra setup or an app get a callout so the operator
+//      finds out at brief time, not on launch day.
+//
+// Callouts render on the marketing-brief print page (callout-critical /
+// callout-warning / callout-info styles already exist there).
+
+export interface ExistingDiscountCode {
+  code: string;
+  // Where the code lives today, shown to the operator (e.g. "קוד שותף").
+  source: string;
+}
+
+function collectBriefOffers(brief: MarketingBrief): BriefOffer[] {
+  return [
+    ...brief.influencerBlocks.flatMap((block) => block.offers ?? []),
+    ...brief.siteDiscounts,
+    ...(brief.paidPromotion?.campaigns ?? [])
+  ];
+}
+
+function addCallout(offer: BriefOffer, level: "critical" | "warning" | "info", text: string) {
+  offer.callouts = offer.callouts ?? [];
+  if (!offer.callouts.some((c) => c.text === text)) {
+    offer.callouts.push({ level, text });
+  }
+}
+
+export function auditBriefDiscounts(
+  brief: MarketingBrief,
+  existingCodes: ExistingDiscountCode[] = []
+): MarketingBrief {
+  const offers = collectBriefOffers(brief);
+
+  // 1a. Same coupon code on two+ different offers.
+  const byCode = new Map<string, BriefOffer[]>();
+  for (const offer of offers) {
+    const code = offer.couponCode?.trim().toUpperCase();
+    if (!code) continue;
+    byCode.set(code, [...(byCode.get(code) ?? []), offer]);
+  }
+  for (const [code, group] of byCode) {
+    if (group.length > 1) {
+      for (const offer of group) {
+        addCallout(offer, "critical", `קוד הקופון ${code} מופיע ב-${group.length} הטבות שונות בבריף — ודאו שאין כפילות לפני יצירה בשופיפיי`);
+      }
+    }
+  }
+
+  // 1b. Same headline twice — duplicate offer that slipped the dedupe.
+  const byHeadline = new Map<string, BriefOffer[]>();
+  for (const offer of offers) {
+    const key = (offer.headline ?? "").replace(/\s+/g, " ").trim().toLowerCase();
+    if (!key) continue;
+    byHeadline.set(key, [...(byHeadline.get(key) ?? []), offer]);
+  }
+  for (const group of byHeadline.values()) {
+    if (group.length > 1) {
+      for (const offer of group) {
+        addCallout(offer, "warning", `הטבה זו מופיעה ${group.length} פעמים בבריף — ככל הנראה כפילות`);
+      }
+    }
+  }
+
+  // 2. Collision with codes that already exist in the system.
+  const existing = new Map(
+    existingCodes
+      .filter((e) => e.code && e.code.trim())
+      .map((e) => [e.code.trim().toUpperCase(), e.source] as const)
+  );
+  for (const offer of offers) {
+    const code = offer.couponCode?.trim().toUpperCase();
+    if (!code) continue;
+    const source = existing.get(code);
+    if (source) {
+      addCallout(offer, "critical", `הקוד ${code} כבר קיים במערכת (${source}) — אל תיצרו אותו שוב בשופיפיי, או ודאו שמדובר באותה הטבה`);
+    }
+  }
+
+  // 3. Standard-plan (non-Plus) feasibility per offer.
+  for (const offer of offers) {
+    const text = [offer.headline, offer.body, ...(offer.conditions ?? [])]
+      .filter(Boolean)
+      .join(" · ");
+
+    // Tiered discount ("10% מעל 200, 15% מעל 300") — a single Shopify code
+    // can't do tiers on any plan; needs one code per tier (or a Functions
+    // app). Signal: explicit "מדורג", or 2+ distinct percentages combined
+    // with 2+ "מעל <amount>" thresholds.
+    const pcts = [...new Set(
+      Array.from(text.matchAll(/(\d{1,2})\s*%/g))
+        .map((m) => Number(m[1]))
+        .filter((n) => n >= 1 && n <= 99)
+    )];
+    const thresholdCount = (text.match(/מעל\s*\d/g) ?? []).length;
+    if (/מדורג|מדרג/.test(text) || (pcts.length >= 2 && thresholdCount >= 2)) {
+      addCallout(offer, "warning", "הנחה מדורגת לא נתמכת בקוד אחד בשופיפיי — פצלו לקוד נפרד לכל מדרגה");
+    }
+
+    // Unique one-time codes ("חד ערכי") — Shopify can't mass-generate
+    // unique codes natively on any plan; needs an app for bulk generation.
+    if (/חד[\s\-־]?ערכי/.test(text)) {
+      addCallout(offer, "info", "קודים חד־ערכיים בכמות דורשים אפליקציה — בשופיפיי עצמו ניתן ליצור קוד בודד בלבד; הגבלת שימוש-פעם-אחת-ללקוח נתמכת מובנה");
+    }
+
+    // Gift with purchase — fully supported without Plus as Buy X Get Y
+    // (minimum purchase amount → gift at 100% off). Info so the operator
+    // knows the exact mechanic to pick.
+    if (/מתנה/.test(text) && /(מעל|ברכישה|בקנייה|בכל רכישה)/.test(text)) {
+      addCallout(offer, "info", "מתנה ברכישה: להגדיר בשופיפיי כ-Buy X Get Y — תנאי סכום מינימום והמתנה ב-100% הנחה. נתמך בכל תוכנית, ללא צורך ב-Plus");
+    }
+
+    // Affirmative stacking ("כולל כפל מבצעים") — supported via the
+    // discount Combinations settings, but only if every participating
+    // discount is marked combinable.
+    if (/כפל\s+מבצעים/.test(text) && !/לא\s+כולל\s+כפל/.test(text)) {
+      addCallout(offer, "warning", "כפל מבצעים דורש סימון Combinations בכל אחת מההנחות המשתתפות בשופיפיי — לוודא בהגדרת ההנחה");
+    }
+  }
+
+  return brief;
 }
 
 // ─── Public entry ─────────────────────────────────────────────────────
