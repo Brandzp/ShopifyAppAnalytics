@@ -114,12 +114,15 @@ export function StoreSwitcher({
         aria-expanded={open}
       >
         {pending ? <Loader2 className="h-3 w-3 animate-spin" aria-hidden /> : null}
-        <span>{current?.name ?? (locale === "he" ? "בחר מותג" : "Pick brand")}</span>
+        <span>{current?.name ?? (locale === "he" ? "בחרו מותג" : "Pick brand")}</span>
         <ChevronDown className="h-3 w-3" aria-hidden />
       </button>
 
+      {/* Panel uses bg-card, NOT bg-popover — this project's Tailwind theme
+          has no `popover` color token, so bg-popover compiles to nothing and
+          the page text bleeds straight through the open dropdown. */}
       {open ? (
-        <div className="absolute z-50 mt-1.5 min-w-[260px] rounded-lg border border-border bg-popover shadow-lg start-0">
+        <div className="absolute z-50 mt-1.5 min-w-[260px] rounded-lg border border-border bg-card shadow-xl start-0">
           <ul role="listbox" className="max-h-80 overflow-y-auto py-1">
             {stores.map((s) => {
               const isCurrent = s.id === currentStoreId;

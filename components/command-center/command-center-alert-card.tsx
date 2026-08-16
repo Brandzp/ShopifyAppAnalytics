@@ -176,7 +176,7 @@ export function CommandCenterAlertCard({
             ) : (
               <>
                 <ChevronDown className="h-3 w-3" aria-hidden />
-                {lang("קרא עוד", "Read more")}
+                {lang("קראו עוד", "Read more")}
               </>
             )}
           </button>
@@ -202,7 +202,7 @@ export function CommandCenterAlertCard({
             ) : (
               <Check className="h-3 w-3" aria-hidden />
             )}
-            {lang("אישור — אני בעניינים", "Got it")}
+            {lang("אישור — הבנתי", "Got it")}
           </button>
           <button
             type="button"
@@ -220,7 +220,7 @@ export function CommandCenterAlertCard({
             className="inline-flex items-center gap-1 rounded-md border border-border bg-card px-2.5 py-1 text-[11px] font-semibold text-muted-foreground hover:bg-accent disabled:opacity-60"
           >
             <X className="h-3 w-3" aria-hidden />
-            {lang("התעלם", "Dismiss")}
+            {lang("התעלמות", "Dismiss")}
           </button>
           <span className="ms-auto inline-flex items-center gap-1 text-[10px] text-muted-foreground">
             <Clock className="h-3 w-3" aria-hidden />
@@ -259,7 +259,7 @@ function RelatedEntityLink({
       href={href}
       className="inline-flex items-center gap-1 text-[11px] font-medium text-sky-700 underline-offset-2 hover:underline"
     >
-      → {isHe ? "פתח בהקשר" : "Open in context"}
+      → {isHe ? "פתחו בהקשר" : "Open in context"}
     </a>
   );
 }

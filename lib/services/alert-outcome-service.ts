@@ -247,7 +247,7 @@ async function measureRestockHeroOutcome(input: {
       measuredAt: new Date().toISOString(),
       verdict: "win",
       summary: {
-        he: `${title} → ${units} יחידות, ₪${Math.round(revenue).toLocaleString("en-US")} מאז שטיפלת בזה.`,
+        he: `${title} → ${units} יחידות, ₪${Math.round(revenue).toLocaleString("en-US")} מאז שטיפלתם בזה.`,
         en: `${productName} → ${units} units, ₪${Math.round(revenue).toLocaleString("en-US")} since you closed this.`
       },
       detail: { units, revenue }
@@ -257,7 +257,7 @@ async function measureRestockHeroOutcome(input: {
     measuredAt: new Date().toISOString(),
     verdict: "miss",
     summary: {
-      he: `${title} → 0 מכירות מאז שטיפלת בזה — בדקי שהמלאי באמת זמין ושיש קמפיין פעיל.`,
+      he: `${title} → 0 מכירות מאז שטיפלתם בזה — בדקו שהמלאי באמת זמין ושיש קמפיין פעיל.`,
       en: `${productName} → 0 sales since you closed this — check inventory is actually live and a campaign is running.`
     },
     detail: { units: 0, revenue: 0 }

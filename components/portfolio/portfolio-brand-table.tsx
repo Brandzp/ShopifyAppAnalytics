@@ -45,7 +45,7 @@ export function PortfolioBrandTable({
       startTransition(() => router.push("/" as never));
     } catch (e) {
       window.alert(
-        e instanceof Error ? e.message : isHe ? "תקלה." : "Something went wrong."
+        e instanceof Error ? e.message : isHe ? "משהו השתבש." : "Something went wrong."
       );
       setSwitchingId(null);
     }
@@ -61,7 +61,7 @@ export function PortfolioBrandTable({
         refundRate: "שיעור החזרים",
         change: "שינוי",
         sync: "סנכרון",
-        view: "פתח",
+        view: "צפייה",
         notConnected: "לא מחובר",
         neverSynced: "טרם סונכרן",
         hoursAgo: (h: number) => `לפני ${h} שעות`,
@@ -136,7 +136,17 @@ export function PortfolioBrandTable({
                 )}
               >
                 <td className={cn("px-4 py-3 align-middle", isHe ? "text-right" : "text-left")}>
-                  <p className="font-semibold text-foreground">{row.storeName}</p>
+                  <p className="font-semibold text-foreground">
+                    {row.storeName}
+                    {row.isDemo ? (
+                      <span
+                        className="ms-2 inline-flex items-center rounded-full border border-violet-300 bg-violet-50 px-2 py-0.5 text-[10px] font-semibold text-violet-800 align-middle"
+                        title={isHe ? "חנות הדגמה — נתונים סינתטיים" : "Demo store — synthetic data"}
+                      >
+                        {isHe ? "נתוני הדגמה" : "Demo data"}
+                      </span>
+                    ) : null}
+                  </p>
                   <p className="text-xs text-muted-foreground">{row.domain}</p>
                   {!row.connected ? (
                     <span className="mt-1 inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-900">

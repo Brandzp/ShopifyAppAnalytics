@@ -70,12 +70,16 @@ export async function getDailyTrendContext(
       select: {
         processedAt: true,
         lineItems: {
-          select: { title: true, quantity: true, price: true }
+          // lineSubtotal is the line's post-quantity subtotal (there is no
+          // `price` field on OrderLineItem — selecting it threw a
+          // PrismaClientValidationError on every dashboard load and this
+          // whole section silently returned empty).
+          select: { title: true, quantity: true, lineSubtotal: true }
         }
       }
     })) as Array<{
       processedAt: Date | null;
-      lineItems: Array<{ title: string | null; quantity: number; price: any }>;
+      lineItems: Array<{ title: string | null; quantity: number; lineSubtotal: any }>;
     }>;
 
     // perDay: day → product title → { revenue, units }
@@ -90,7 +94,7 @@ export async function getDailyTrendContext(
       }
       for (const li of order.lineItems) {
         const title = (li.title ?? "Unknown product").trim();
-        const revenue = num(li.price) * num(li.quantity);
+        const revenue = num(li.lineSubtotal);
         const units = num(li.quantity);
         const existing = dayMap.get(title);
         if (existing) {

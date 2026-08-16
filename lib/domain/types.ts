@@ -15,6 +15,8 @@ export interface Store {
   dateRangePreset: DateRangePreset;
   estimatedCostMode: "margin_profile" | "fixed_cost_map";
   defaultCostRatio?: number;
+  // Synthetic demo store — renders the "Demo data" badge in the chrome.
+  isDemo?: boolean;
 }
 
 export interface ShopifyConnectionSummary {

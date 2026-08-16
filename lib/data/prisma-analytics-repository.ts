@@ -17,7 +17,7 @@ import { getReportingDateRangeSelection, getStoreTimeZone } from "@/lib/server/r
 
 const DISCONNECTED_PREVIEW_STORE: Store = {
   id: "local-preview-store",
-  name: "Shopify Profit Ops Preview",
+  name: "Hiloomy Preview",
   domain: "setup-required.local",
   currency: "USD",
   connected: false,
@@ -38,7 +38,8 @@ function mapStore(store: any): Store {
     planName: store.planName ?? undefined,
     dateRangePreset: store.dateRangePreset,
     estimatedCostMode: store.estimatedCostMode,
-    defaultCostRatio: toNumber(store.defaultCostRatio)
+    defaultCostRatio: toNumber(store.defaultCostRatio),
+    isDemo: Boolean(store.isDemo)
   };
 }
 
@@ -129,6 +130,28 @@ async function getConnectedStoreRecord(): Promise<any | null> {
 async function getStoreRecord(storeId?: string): Promise<any | null> {
   if (storeId) {
     return withOptionalDb((db) => db.store.findUnique({ where: { id: storeId } }), null);
+  }
+
+  // Honor the operator's active-store pick (StoreSwitcher cookie / org
+  // context) before the legacy "first store with a Shopify connection"
+  // fallback. The legacy pick silently ignored the switcher and made any
+  // store WITHOUT a ShopifyConnection row (e.g. the demo store) impossible
+  // to view — the switch POST succeeded, the cookie was set, and the
+  // dashboard still rendered the connected store. Session-less contexts
+  // (crons, webhooks) throw inside resolveActiveStoreId's cookie read and
+  // fall through to the legacy behavior unchanged.
+  try {
+    const { resolveActiveStoreId } = await import("@/lib/services/offline-sales-service");
+    const activeId = await resolveActiveStoreId();
+    if (activeId) {
+      const active = await withOptionalDb(
+        (db) => db.store.findUnique({ where: { id: activeId } }),
+        null
+      );
+      if (active) return active;
+    }
+  } catch {
+    // No request/auth context — use the legacy fallback below.
   }
 
   return getConnectedStoreRecord();

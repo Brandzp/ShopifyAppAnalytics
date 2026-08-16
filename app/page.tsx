@@ -21,9 +21,13 @@ import { getOverviewPayload, getAppChromeData } from "@/lib/services/analytics-s
 import { listOpenAlerts } from "@/lib/services/alert-writer-service";
 import { buildStockoutImminentReport } from "@/lib/services/stockout-imminent-service";
 import { buildRoasCollapseReport } from "@/lib/services/roas-collapse-service";
+import { upsertCompetitorResponseAlerts } from "@/lib/services/competitor-intel-service";
+import { getCompetitorBrief } from "@/lib/services/competitor-brief-service";
+import { CompetitorBriefSection } from "@/components/command-center/competitor-brief-section";
 import { buildContributionMargin } from "@/lib/services/contribution-margin-service";
 import { buildSetupHealth } from "@/lib/services/setup-health-service";
 import { SetupHealthBadge } from "@/components/setup-health/setup-health-badge";
+import { SetupHealthChecklistCard } from "@/components/setup-health/setup-health-checklist-card";
 import {
   measureOutcomesForResolvedAlerts,
   getRecentlyResolvedWithOutcomes,
@@ -137,6 +141,17 @@ export default async function CommandCenterPage() {
       measureOutcomesForResolvedAlerts({ storeId }).catch((e) => {
         console.error("[command-center] outcome measurement failed:", e);
         return null;
+      }),
+      // Competitor moves (opened promo / deepened discount) → approvable
+      // alerts. Fixed last-7-days window — the competitor diff is weekly
+      // by nature, independent of the dashboard's selected date range.
+      upsertCompetitorResponseAlerts({
+        storeId,
+        start: new Date(Date.now() - 7 * 86_400_000),
+        end: new Date()
+      }).catch((e) => {
+        console.error("[command-center] competitor alert engine failed:", e);
+        return null;
       })
     ]);
   }
@@ -152,6 +167,13 @@ export default async function CommandCenterPage() {
   const setupHealth = storeId
     ? await buildSetupHealth({ storeId }).catch(() => null)
     : null;
+
+  // Competitor brief — intel snapshot + BI-prescribed actions (today/this
+  // week). storeId lets the generator feed LIVE store facts (product movers,
+  // campaign ROAS, open alerts) into the prompt so actions name real things.
+  // Cached 24h; falls back to the intel's own action list when the BI agent
+  // is unreachable, so the section always renders.
+  const competitorBrief = await getCompetitorBrief(storeId ?? undefined).catch(() => null);
 
   // Contribution margin for the same window the controls have selected.
   // This is the "money snapshot" anchor — explicit accuracy label, no
@@ -256,37 +278,16 @@ export default async function CommandCenterPage() {
           {setupHealth ? <SetupHealthBadge report={setupHealth} locale={locale} /> : null}
         </div>
 
-        {/* ── CLOSED LOOP — "you did X last week → result Y" ──────────── */}
-        {closedLoop.length > 0 ? (
-          <ClosedLoopSection items={closedLoop} isHe={isHe} />
-        ) : null}
+        {/* ── SETUP CHECKLIST — actionable to-do list until 100% ──────── */}
+        {setupHealth ? <SetupHealthChecklistCard report={setupHealth} locale={locale} /> : null}
 
-        {/* ── SECTION 1 — Critical + High alerts as full cards ────────── */}
-        {criticalAndHigh.length > 0 ? (
-          <section className="space-y-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <SectionHead
-                eyebrow={lang("דורש פעולה היום", "Needs action today")}
-                title={lang("התראות בעדיפות גבוהה", "High-priority alerts")}
-                hint={lang("כל כרטיס כולל פעולה מומלצת.", "Each card has a suggested action.")}
-              />
-              <PriorityBadge level="critical" isHe={isHe} />
-            </div>
-            <div className="grid gap-3 lg:grid-cols-2">
-              {criticalAndHigh.map((alert) => (
-                <CommandCenterAlertCard key={alert.id} alert={alert} locale={locale} />
-              ))}
-            </div>
-          </section>
-        ) : null}
-
-        {/* ── SECTION 2 — Money snapshot ──────────────────────────────── */}
+        {/* ── SECTION — Money snapshot (הכסף) — leads, per CEO order ──── */}
         <section className="space-y-3">
           <SectionHead
             eyebrow={lang("הכסף", "The money")}
             title={lang("מצב פיננסי", "Money snapshot")}
             hint={lang(
-              "המספרים המהותיים של החלון הנוכחי. שש מטריקות שעונות 'האם החנות בריאה?'",
+              "המספרים המהותיים של החלון הנוכחי. שישה מדדים שעונים על השאלה 'האם החנות בריאה?'",
               "The vitals for this window. Six metrics that answer 'is the store healthy?'"
             )}
           />
@@ -325,26 +326,7 @@ export default async function CommandCenterPage() {
           </div>
         </section>
 
-        {/* ── SECTION 3 — Medium/Low alerts compact list ──────────────── */}
-        {mediumAndLow.length > 0 ? (
-          <section className="space-y-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <SectionHead
-                eyebrow={lang("השבוע", "This week")}
-                title={lang("התראות לבדיקה", "Alerts to review")}
-                hint={lang("לא דחוף — שווה עין במהלך השבוע.", "Not urgent — check during weekly planning.")}
-              />
-              <PriorityBadge level="important" isHe={isHe} />
-            </div>
-            <div className="grid gap-3 lg:grid-cols-2">
-              {mediumAndLow.map((alert) => (
-                <CommandCenterAlertCard key={alert.id} alert={alert} locale={locale} />
-              ))}
-            </div>
-          </section>
-        ) : null}
-
-        {/* ── SECTION 4 — Trend chart (context, not action) ───────────── */}
+        {/* ── SECTION — Trend chart (מגמה) ────────────────────────────── */}
         <section className="space-y-3">
           <SectionHead
             eyebrow={lang("מגמה", "Trend")}
@@ -383,6 +365,64 @@ export default async function CommandCenterPage() {
           </Card>
         </section>
 
+        {/* ── SECTION — Competitors (מתחרים): intel + prescribed response ─ */}
+        {competitorBrief ? (
+          <section className="space-y-3">
+            <SectionHead
+              eyebrow={lang("מתחרים", "Competitors")}
+              title={lang("מה המתחרים עושים — ואיך להגיב", "What competitors are doing — and the response")}
+              hint={lang(
+                "תמונת מודיעין עדכנית ופעולות מומלצות להיום ולשבוע.",
+                "Current intel snapshot plus prescribed actions for today and this week."
+              )}
+            />
+            <CompetitorBriefSection brief={competitorBrief} isHe={isHe} />
+          </section>
+        ) : null}
+
+        {/* ── SECTION — Critical + High alerts (התראות גבוהות) ────────── */}
+        {criticalAndHigh.length > 0 ? (
+          <section className="space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <SectionHead
+                eyebrow={lang("דורש פעולה היום", "Needs action today")}
+                title={lang("התראות בעדיפות גבוהה", "High-priority alerts")}
+                hint={lang("כל כרטיס כולל פעולה מומלצת.", "Each card has a suggested action.")}
+              />
+              <PriorityBadge level="critical" isHe={isHe} />
+            </div>
+            <div className="grid gap-3 lg:grid-cols-2">
+              {criticalAndHigh.map((alert) => (
+                <CommandCenterAlertCard key={alert.id} alert={alert} locale={locale} />
+              ))}
+            </div>
+          </section>
+        ) : null}
+
+        {/* ── SECTION — Medium/Low alerts (התראות) ────────────────────── */}
+        {mediumAndLow.length > 0 ? (
+          <section className="space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <SectionHead
+                eyebrow={lang("השבוע", "This week")}
+                title={lang("התראות לבדיקה", "Alerts to review")}
+                hint={lang("לא דחוף — שווה לבדוק במהלך השבוע.", "Not urgent — check during weekly planning.")}
+              />
+              <PriorityBadge level="important" isHe={isHe} />
+            </div>
+            <div className="grid gap-3 lg:grid-cols-2">
+              {mediumAndLow.map((alert) => (
+                <CommandCenterAlertCard key={alert.id} alert={alert} locale={locale} />
+              ))}
+            </div>
+          </section>
+        ) : null}
+
+        {/* ── CLOSED LOOP — "you did X last week → result Y" ──────────── */}
+        {closedLoop.length > 0 ? (
+          <ClosedLoopSection items={closedLoop} isHe={isHe} />
+        ) : null}
+
         {/* ── SECTION 5 — Products carrying the store (below-fold detail) ─
             Memo initiative 3.1 — the Command Center's primary scan is
             Signals · Money · Trend. Everything else, including the top
@@ -396,7 +436,7 @@ export default async function CommandCenterPage() {
               <span className="text-muted-foreground transition-transform group-open:rotate-90">▸</span>
               {lang("מוצרים מובילים ופרטים נוספים", "Top products & more detail")}
               <span className="ms-auto text-xs font-normal text-muted-foreground">
-                {lang("לחצי כדי לפתוח", "click to expand")}
+                {lang("לחצו כדי לפתוח", "click to expand")}
               </span>
             </span>
           </summary>
@@ -405,7 +445,7 @@ export default async function CommandCenterPage() {
             eyebrow={lang("מוצרים", "Products")}
             title={lang("מוצרים שמחזיקים את החנות", "Products carrying the store")}
             hint={lang(
-              "10 המובילים בהכנסות. החליטי לאן להפנות תקציב או על מה לשמור מלאי.",
+              "10 המובילים בהכנסות. החליטו לאן להפנות תקציב או על מה לשמור מלאי.",
               "Top 10 by revenue. Decide where to send ad budget or which SKUs to keep stocked."
             )}
             cta={{ href: "/profit", label: lang("הטבלה המלאה →", "Full table →") }}
@@ -523,9 +563,9 @@ function ClosedLoopSection({
     <section className="space-y-3">
       <SectionHead
         eyebrow={lang("הלולאה נסגרת", "Closed loop")}
-        title={lang("מה קרה אחרי הפעולה שלך", "What happened after you acted")}
+        title={lang("מה קרה אחרי הפעולה שלכם", "What happened after you acted")}
         hint={lang(
-          `מעקב על ההמלצות שביצעת לאחרונה. ${wins} הצליחו · ${misses} לא — שווה ללמוד מהכישלונות.`,
+          `מעקב אחרי ההמלצות שביצעתם לאחרונה. ${wins} הצליחו · ${misses} לא — שווה ללמוד מהכישלונות.`,
           `Tracking recent recommendations you actioned. ${wins} worked · ${misses} didn't — failures are where the learning is.`
         )}
       />
@@ -677,11 +717,11 @@ function CommandCenterHeadline({
           <TrendingUp className="h-5 w-5 text-emerald-700" aria-hidden />
           <div>
             <p className="text-sm font-semibold text-emerald-900">
-              {lang("הכל בסדר", "All clear")}
+              {lang("הכל תקין", "All clear")}
             </p>
             <p className="text-xs text-emerald-800">
               {lang(
-                "אין התראות פתוחות. המשיכי לפי התכנון השבועי.",
+                "אין התראות פתוחות. המשיכו לפי התכנון השבועי.",
                 "No open alerts. Stay on your weekly plan."
               )}
             </p>
@@ -716,16 +756,16 @@ function CommandCenterHeadline({
           >
             {isCritical
               ? lang(
-                  `🚩 ${criticalCount} התראה קריטית${criticalCount === 1 ? "" : "ות"} פתוחה${criticalCount === 1 ? "" : "ות"} — דורש פעולה היום`,
+                  `🚩 ${criticalCount} התראה${criticalCount === 1 ? " קריטית פתוחה" : "ות קריטיות פתוחות"} — דורש פעולה היום`,
                   `🚩 ${criticalCount} critical alert${criticalCount === 1 ? "" : "s"} — needs action today`
                 )
               : highCount > 0
                 ? lang(
-                    `${highCount} התראה גבוהה${highCount === 1 ? "" : "ות"} פתוחה${highCount === 1 ? "" : "ות"}`,
+                    `${highCount} התראה${highCount === 1 ? " גבוהה פתוחה" : "ות גבוהות פתוחות"}`,
                     `${highCount} high-priority alert${highCount === 1 ? "" : "s"} open`
                   )
                 : lang(
-                    `${mediumCount} התראה לבדיקה השבוע`,
+                    `${mediumCount} התראה${mediumCount === 1 ? "" : "ות"} לבדיקה השבוע`,
                     `${mediumCount} alert${mediumCount === 1 ? "" : "s"} to review this week`
                   )}
           </p>

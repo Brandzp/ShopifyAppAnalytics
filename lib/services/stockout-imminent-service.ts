@@ -257,7 +257,7 @@ export async function buildStockoutImminentReport(
       source: "Shopify",
       detectedBy: "stockout-imminent-service",
       title: `${f.title} עומד להיגמר במלאי`,
-      description: `מלאי נוכחי: ${f.currentInventory} · קצב מכירה יומי: ${f.dailyVelocity.toFixed(1)} · יוצא ממלאי בעוד ${f.daysToStockout.toFixed(1)} ימים · הכנסה ב-14 ימים: ₪${Math.round(f.trailingRevenue).toLocaleString("en-US")}.`,
+      description: `מלאי נוכחי: ${f.currentInventory} · קצב מכירה יומי: ${f.dailyVelocity.toFixed(1)} · יוצא ממלאי בעוד ${f.daysToStockout.toFixed(1)} ימים · הכנסה ב14 ימים: ₪${Math.round(f.trailingRevenue).toLocaleString("en-US")}.`,
       recommendedAction: f.suggestedReorder.he,
       metricName: "days_to_stockout",
       currentValue: f.daysToStockout,

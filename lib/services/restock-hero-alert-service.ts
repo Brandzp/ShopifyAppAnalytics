@@ -308,8 +308,8 @@ export async function buildRestockHeroAlerts(
       `₪${Math.round(n).toLocaleString("en-US")}`;
     const suggestedAction = {
       he: resumedBySales
-        ? `כבר נרשמו ${inWin.orders} מכירות השבוע — תפעילי קמפיין Meta יעודי על המוצר תוך 48 שעות. הכנסה בעבר: ${fmtIls(hero.revenue)} ב-90 ימים.`
-        : `המלאי חזר (${currentInventory ?? "?"} יחידות) אך עדיין אין מכירות. תפעילי קמפיין Meta יעודי + פוסט אורגני מיידית. הכנסה בעבר: ${fmtIls(hero.revenue)} ב-90 ימים.`,
+        ? `כבר נרשמו ${inWin.orders} מכירות השבוע — תפעילי קמפיין Meta יעודי על המוצר תוך 48 שעות. הכנסה בעבר: ${fmtIls(hero.revenue)} ב90 ימים.`
+        : `המלאי חזר (${currentInventory ?? "?"} יחידות) אך עדיין אין מכירות. תפעילי קמפיין Meta יעודי + פוסט אורגני מיידית. הכנסה בעבר: ${fmtIls(hero.revenue)} ב90 ימים.`,
       en: resumedBySales
         ? `${inWin.orders} sales already this week — launch a dedicated Meta campaign within 48h. Prior 90-day revenue: ${fmtIls(hero.revenue)}.`
         : `Stock is back (${currentInventory ?? "?"} units) but no sales yet — launch a dedicated Meta campaign + organic post now. Prior 90-day revenue: ${fmtIls(hero.revenue)}.`

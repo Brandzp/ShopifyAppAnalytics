@@ -43,6 +43,25 @@ export interface PortfolioBrandRow {
   totalSalesChange: number | null;
   // Has *any* sales data in the current window (helps gray-out unactivated).
   isActive: boolean;
+  // Demo store — synthetic data. Participates fully in totals and
+  // highlights (operator preference: treat it as a real brand so the
+  // portfolio shows the combined picture); the row badge marks its origin.
+  isDemo: boolean;
+}
+
+// CEO-grade per-brand story: WHAT moved this brand's number this window.
+// The driver/drag are the products whose revenue delta vs the previous
+// window was the largest up / down — "the push" behind the growth line.
+export interface BrandStory {
+  storeId: string;
+  storeName: string;
+  isDemo: boolean;
+  revenue: number;
+  revenueChange: number | null; // % vs previous window, null = no base
+  ordersChangePercent: number | null;
+  aovChangePercent: number | null;
+  topDriver: { title: string; delta: number } | null;
+  topDrag: { title: string; delta: number } | null;
 }
 
 export interface PortfolioOverview {
@@ -77,6 +96,8 @@ export interface PortfolioOverview {
   totalSalesChange: number | null;
   // Per-brand rows, sorted by current-window totalSales desc.
   brands: PortfolioBrandRow[];
+  // Per-brand growth stories (same order as `brands`, active brands only).
+  stories: BrandStory[];
   // Highlights — pre-computed insights so the UI doesn't reinvent ranking.
   highlights: {
     topBrand: { storeId: string; storeName: string; totalSales: number } | null;
@@ -119,19 +140,30 @@ export async function buildPortfolioOverview(input?: {
 
   // Stores in the active org (scoped via listAllStoresForSwitcher which
   // already honors the user's auth context).
-  const stores = await listAllStoresForSwitcher();
+  const allStores = await listAllStoresForSwitcher();
 
   // Pull per-store metadata we need beyond name/domain (currency + sync
-  // freshness). Single query, indexed by id.
+  // freshness). Single query, indexed by id. Also fetches isDemo so demo
+  // stores can be excluded from the rollup below.
   const db = getDb();
   const storeMeta = await db.store.findMany({
-    where: { id: { in: stores.map((s) => s.id) } },
+    where: { id: { in: allStores.map((s) => s.id) } },
     select: {
       id: true,
       currency: true,
+      isDemo: true,
       connection: { select: { lastSuccessfulSyncAt: true, lastSyncAt: true } }
     }
   });
+  // Demo stores are flagged (row badge) but participate fully in the
+  // rollup — the operator wants the combined two-store picture while the
+  // demo brand stands in for a second real brand.
+  const demoIds = new Set(
+    (storeMeta as Array<{ id: string; isDemo?: boolean }>)
+      .filter((m) => m.isDemo)
+      .map((m) => m.id)
+  );
+  const stores = allStores;
   const metaById = new Map(
     (storeMeta as Array<{
       id: string;
@@ -178,7 +210,8 @@ export async function buildPortfolioOverview(input?: {
       previousTotalSales: prev.totalSales,
       previousOrders: prev.orders,
       totalSalesChange: percentChange(cur.totalSales, prev.totalSales),
-      isActive: cur.orders > 0 || cur.totalSales > 0
+      isActive: cur.orders > 0 || cur.totalSales > 0,
+      isDemo: demoIds.has(store.id)
     };
   });
 
@@ -255,7 +288,7 @@ export async function buildPortfolioOverview(input?: {
   // Stale data: brands whose latest sync is older than 24 hours.
   const STALE_HOURS = 24;
   const staleData = brands
-    .filter((b) => b.syncAgeHours !== null && b.syncAgeHours > STALE_HOURS)
+    .filter((b) => !b.isDemo && b.syncAgeHours !== null && b.syncAgeHours > STALE_HOURS)
     .sort((a, b) => (b.syncAgeHours ?? 0) - (a.syncAgeHours ?? 0))
     .slice(0, 5)
     .map((b) => ({
@@ -263,6 +296,48 @@ export async function buildPortfolioOverview(input?: {
       storeName: b.storeName,
       ageHours: Math.round(b.syncAgeHours as number)
     }));
+  // Per-brand growth stories — the product-level "why" behind each line.
+  // One line-item scan per brand per window, aggregated in JS (row count is
+  // bounded by the window; Prisma can't filter groupBy on a relation).
+  const stories: BrandStory[] = (
+    await Promise.all(
+      brands
+        .filter((b) => b.totalSales > 0 || b.previousTotalSales > 0)
+        .map(async (b) => {
+          const [currentByProduct, previousByProduct] = await Promise.all([
+            productRevenueByTitle(b.storeId, windowStart, windowEnd),
+            productRevenueByTitle(b.storeId, previousWindowStart, previousWindowEnd)
+          ]);
+          const titles = new Set([...currentByProduct.keys(), ...previousByProduct.keys()]);
+          let topDriver: BrandStory["topDriver"] = null;
+          let topDrag: BrandStory["topDrag"] = null;
+          for (const title of titles) {
+            const delta = (currentByProduct.get(title) ?? 0) - (previousByProduct.get(title) ?? 0);
+            if (delta > 0 && (topDriver === null || delta > topDriver.delta)) {
+              topDriver = { title, delta };
+            }
+            // Ignore sub-₪100 dips — noise, not a story.
+            if (delta < -100 && (topDrag === null || delta < topDrag.delta)) {
+              topDrag = { title, delta };
+            }
+          }
+          const prevAov = b.previousOrders > 0 ? b.previousTotalSales / b.previousOrders : null;
+          return {
+            storeId: b.storeId,
+            storeName: b.storeName,
+            isDemo: b.isDemo,
+            revenue: b.totalSales,
+            revenueChange: b.totalSalesChange,
+            ordersChangePercent: percentChange(b.orders, b.previousOrders),
+            aovChangePercent:
+              prevAov !== null ? percentChange(b.averageOrderValue, prevAov) : null,
+            topDriver,
+            topDrag
+          };
+        })
+    )
+  ).sort((a, b) => b.revenue - a.revenue);
+
   // Quiet brands: connected + recent sync + zero sales this window.
   const quietBrands = brands
     .filter(
@@ -300,8 +375,36 @@ export async function buildPortfolioOverview(input?: {
     },
     totalSalesChange: percentChange(totalSales, previousTotalSales),
     brands,
+    stories,
     highlights: { topBrand, biggestMover, staleData, quietBrands }
   };
+}
+
+// Revenue per product title inside a window, computed from line items joined
+// to their (non-cancelled, non-test) orders by processedAt.
+async function productRevenueByTitle(
+  storeId: string,
+  start: Date,
+  end: Date
+): Promise<Map<string, number>> {
+  const db = getDb();
+  const rows = (await db.orderLineItem.findMany({
+    where: {
+      storeId,
+      order: {
+        processedAt: { gte: start, lte: end },
+        cancelledAt: null,
+        test: false
+      }
+    },
+    select: { title: true, lineSubtotal: true }
+  })) as Array<{ title: string | null; lineSubtotal: unknown }>;
+  const byTitle = new Map<string, number>();
+  for (const row of rows) {
+    const title = (row.title ?? "Unknown product").trim();
+    byTitle.set(title, (byTitle.get(title) ?? 0) + Number(row.lineSubtotal ?? 0));
+  }
+  return byTitle;
 }
 
 function sumBy<T>(items: T[], pick: (t: T) => number): number {

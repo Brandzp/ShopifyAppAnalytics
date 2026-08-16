@@ -1040,7 +1040,7 @@ function buildNarrative(input: {
     const rev = formatMoneyish(r.onlineSales);
     bodyParts.push(
       isHe
-        ? `🚀 הזדמנות אונליין: ${r.matchedProductTitle ?? r.itemName} עם ₪${rev} ב-Shopify (${r.onlinePct.toFixed(0)}% מהנפח שלו) — להגדיל תקציב Meta ב-20%+ השבוע.`
+        ? `🚀 הזדמנות אונליין: ${r.matchedProductTitle ?? r.itemName} עם ₪${rev} בShopify (${r.onlinePct.toFixed(0)}% מהנפח שלו) — להגדיל תקציב Meta ב20%+ השבוע.`
         : `🚀 Online opportunity: ${r.matchedProductTitle ?? r.itemName} drove ₪${rev} on Shopify (${r.onlinePct.toFixed(0)}% of its volume) — scale Meta budget +20% this week.`
     );
   }
@@ -1060,7 +1060,7 @@ function buildNarrative(input: {
   if (unmatchedCount > 1 || (unmatchedCount > 0 && input.unmatchedSales > 500)) {
     bodyParts.push(
       isHe
-        ? `📋 ניקיון נתונים: ${heRows(unmatchedCount)} (₪${formatMoneyish(input.unmatchedSales)}) ${heFoundVerb(unmatchedCount)} ב-Shopify — עדכנו ברקודים לתובנות ברמת SKU.`
+        ? `📋 ניקיון נתונים: ${heRows(unmatchedCount)} (₪${formatMoneyish(input.unmatchedSales)}) ${heFoundVerb(unmatchedCount)} בShopify — עדכנו ברקודים לתובנות ברמת SKU.`
         : `📋 Data hygiene: ${unmatchedCount} unmatched row${unmatchedCount === 1 ? "" : "s"} (₪${formatMoneyish(input.unmatchedSales)}) — fix barcodes for per-SKU insights.`
     );
   }
@@ -1070,7 +1070,7 @@ function buildNarrative(input: {
     if (halo.hasCouponColumn && halo.totalDirectOfflineSales > 0) {
       bodyParts.push(
         isHe
-          ? `קופוני שותפים הביאו כ־${formatMoneyish(halo.totalDirectOfflineSales)} מהאופליין (ייחוס ישיר מטור הקופון).`
+          ? `קופוני שותפים הביאו כ${formatMoneyish(halo.totalDirectOfflineSales)} מהאופליין (ייחוס ישיר מטור הקופון).`
           : `Affiliate coupons drove ~${formatMoneyish(halo.totalDirectOfflineSales)} of offline revenue (direct-attribution from coupon column).`
       );
     } else if (top && top.haloOfflineSales > 0) {

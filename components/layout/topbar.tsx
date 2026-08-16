@@ -67,6 +67,18 @@ export async function Topbar({
           <Badge className="whitespace-nowrap">
             {store.connected ? labels.common.connectedStore : labels.common.storeSetup}
           </Badge>
+          {store.isDemo ? (
+            <span
+              className="inline-flex items-center whitespace-nowrap rounded-full border border-violet-300 bg-violet-50 px-2.5 py-0.5 text-xs font-semibold text-violet-800"
+              title={
+                locale === "he"
+                  ? "חנות הדגמה — כל הנתונים סינתטיים"
+                  : "Demo store — all data is synthetic"
+              }
+            >
+              {locale === "he" ? "נתוני הדגמה" : "Demo data"}
+            </span>
+          ) : null}
           <p className="text-sm text-muted-foreground truncate max-w-full">{store.domain}</p>
           {allStores ? (
             <StoreSwitcher currentStoreId={store.id} stores={allStores} locale={locale === "he" ? "he" : "en"} />

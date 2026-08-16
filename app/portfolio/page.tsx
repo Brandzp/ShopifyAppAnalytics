@@ -8,7 +8,6 @@ import {
   Minus,
   ShoppingBag,
   ShieldAlert,
-  Sparkles,
   TrendingUp
 } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
@@ -18,7 +17,7 @@ import { KpiTile } from "@/components/dashboard-v2/kpi-tile";
 import { NarrativeBanner } from "@/components/dashboard-v2/narrative-banner";
 import { PortfolioBrandTable } from "@/components/portfolio/portfolio-brand-table";
 import { getAppChromeData } from "@/lib/services/analytics-service";
-import { buildPortfolioOverview } from "@/lib/services/portfolio-service";
+import { buildPortfolioOverview, type BrandStory } from "@/lib/services/portfolio-service";
 import { getAppLocale } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
@@ -46,8 +45,8 @@ export default async function PortfolioPage() {
   const t = isHe
     ? {
         eyebrow: "סקירת תיק מותגים",
-        title: "כל המותגים שלך, בתמונה אחת",
-        description: "סיכום הכנסות, רווחיות ושימור לקוחות מצטבר מכל המותגים בארגון. לחץ על שורה כדי לעבור לתצוגה של מותג בודד.",
+        title: "כל המותגים שלכם, בתמונה אחת",
+        description: "סיכום הכנסות, רווחיות ושימור לקוחות מצטבר מכל המותגים בארגון. לחצו על שורה כדי לעבור לתצוגה של מותג בודד.",
         bannerEyebrow: "דופק התיק",
         revenue: "הכנסה כוללת",
         orders: "סך הזמנות",
@@ -56,9 +55,9 @@ export default async function PortfolioPage() {
         refundRate: "שיעור החזרים",
         brandsActive: "מותגים פעילים",
         perBrandTitle: "ביצועים לפי מותג",
-        perBrandHint: "ממוין לפי הכנסה. השוואה לתקופה הקודמת ב-30 ימים אחורה.",
+        perBrandHint: "ממוין לפי הכנסה. ההשוואה היא מול התקופה הקודמת באותו אורך.",
         highlightsTitle: "תובנות מהירות",
-        highlightsHint: "מה לבדוק קודם — המותג הגדול, המתקדם ביותר, ומי דורש תשומת לב.",
+        highlightsHint: "מה לבדוק קודם — המותג הגדול ביותר, השינוי הבולט ביותר ומי דורש תשומת לב.",
         topBrandLabel: "המותג המוביל",
         biggestMoverLabel: "השינוי הגדול",
         staleLabel: "מותגים עם נתונים ישנים",
@@ -94,6 +93,17 @@ export default async function PortfolioPage() {
       };
 
   const brandCount = portfolio.brands.length;
+
+  // Explicit comparison window label — "13.7–11.8 מול 13.6–12.7". Every
+  // "vs the previous period" phrase on this page means exactly this.
+  const fmtDay = (iso: string) =>
+    new Intl.DateTimeFormat(isHe ? "he-IL" : "en-US", {
+      day: "numeric",
+      month: "numeric"
+    }).format(new Date(iso));
+  const windowLabel = isHe
+    ? `התקופה: ${fmtDay(portfolio.windowStart)}–${fmtDay(portfolio.windowEnd)} מול ${fmtDay(portfolio.previousWindowStart)}–${fmtDay(portfolio.previousWindowEnd)} (${portfolio.windowDays} ימים).`
+    : `Window: ${fmtDay(portfolio.windowStart)}–${fmtDay(portfolio.windowEnd)} vs ${fmtDay(portfolio.previousWindowStart)}–${fmtDay(portfolio.previousWindowEnd)} (${portfolio.windowDays} days).`;
 
   // Empty / single-brand states.
   if (brandCount === 0) {
@@ -229,9 +239,9 @@ export default async function PortfolioPage() {
         {/* Per-brand breakdown */}
         <section className="space-y-3">
           <SectionHead
-            eyebrow={isHe ? "שלב 1" : "Step 1"}
+            eyebrow={isHe ? "פירוט" : "Breakdown"}
             title={t.perBrandTitle}
-            hint={t.perBrandHint}
+            hint={`${t.perBrandHint} ${windowLabel}`}
           />
           <PortfolioBrandTable
             rows={portfolio.brands}
@@ -240,132 +250,151 @@ export default async function PortfolioPage() {
           />
         </section>
 
-        {/* Highlights */}
+        {/* CEO insights — the story behind each brand's number */}
         <section className="space-y-3">
           <SectionHead
-            eyebrow={isHe ? "שלב 2" : "Step 2"}
-            title={t.highlightsTitle}
-            hint={t.highlightsHint}
+            eyebrow={isHe ? "תובנות" : "Insights"}
+            title={isHe ? "מה הזיז את המספרים" : "What moved the numbers"}
+            hint={
+              isHe
+                ? `המנוע והמשקולת של כל מותג בתקופה — מאיפה הצמיחה מגיעה, מה מושך למטה, והאם זה נפח הזמנות או גודל סל. ${windowLabel}`
+                : `Each brand's engine and drag this window — where growth comes from, what pulls it down, and whether it's order volume or basket size. ${windowLabel}`
+            }
           />
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <HighlightCard
-              icon={Crown}
-              tone="up"
-              label={t.topBrandLabel}
-              value={
-                portfolio.highlights.topBrand
-                  ? portfolio.highlights.topBrand.storeName
-                  : "—"
-              }
-              hint={
-                portfolio.highlights.topBrand
-                  ? formatCurrency(
-                      portfolio.highlights.topBrand.totalSales,
-                      portfolio.currency,
-                      isHe
-                    )
-                  : isHe
-                    ? "אין מכירות בתקופה זו"
-                    : "No sales this period"
-              }
-            />
-            <HighlightCard
-              icon={
-                portfolio.highlights.biggestMover?.direction === "down"
-                  ? ArrowDownRight
-                  : ArrowUpRight
-              }
-              tone={
-                portfolio.highlights.biggestMover?.direction === "down"
-                  ? "down"
-                  : "up"
-              }
-              label={t.biggestMoverLabel}
-              value={
-                portfolio.highlights.biggestMover
-                  ? portfolio.highlights.biggestMover.storeName
-                  : "—"
-              }
-              hint={
-                portfolio.highlights.biggestMover
-                  ? `${
-                      portfolio.highlights.biggestMover.changePercent >= 0 ? "+" : ""
-                    }${portfolio.highlights.biggestMover.changePercent.toFixed(1)}%`
-                  : isHe
-                    ? "אין מספיק היסטוריה"
-                    : "Not enough history"
-              }
-            />
-            <HighlightCard
-              icon={ShieldAlert}
-              tone={portfolio.highlights.staleData.length > 0 ? "down" : "neutral"}
-              label={t.staleLabel}
-              value={String(portfolio.highlights.staleData.length)}
-              hint={
-                portfolio.highlights.staleData.length > 0
-                  ? portfolio.highlights.staleData
-                      .slice(0, 2)
-                      .map((b) => `${b.storeName} (${b.ageHours}h)`)
-                      .join(", ")
-                  : isHe
-                    ? "כל הנתונים טריים"
-                    : "All data fresh"
-              }
-            />
-            <HighlightCard
-              icon={Minus}
-              tone={portfolio.highlights.quietBrands.length > 0 ? "neutral" : "up"}
-              label={t.quietLabel}
-              value={String(portfolio.highlights.quietBrands.length)}
-              hint={
-                portfolio.highlights.quietBrands.length > 0
-                  ? portfolio.highlights.quietBrands
-                      .slice(0, 2)
-                      .map((b) => b.storeName)
-                      .join(", ")
-                  : isHe
-                    ? "כל המותגים פעילים"
-                    : "All brands active"
-              }
-            />
+          <div className="grid gap-3 lg:grid-cols-2">
+            {portfolio.stories.map((story) => (
+              <BrandStoryCard
+                key={story.storeId}
+                story={story}
+                currency={portfolio.currency}
+                isHe={isHe}
+              />
+            ))}
           </div>
+          {portfolio.highlights.staleData.length > 0 ? (
+            <p className="text-xs font-medium text-amber-700">
+              ⚠{" "}
+              {isHe
+                ? `נתונים ישנים: ${portfolio.highlights.staleData.map((b) => `${b.storeName} (${b.ageHours} שעות)`).join(", ")} — הסיפור למעלה מבוסס על הסנכרון האחרון.`
+                : `Stale data: ${portfolio.highlights.staleData.map((b) => `${b.storeName} (${b.ageHours}h)`).join(", ")} — the story above reflects the last sync.`}
+            </p>
+          ) : null}
         </section>
       </div>
     </AppShell>
   );
 }
 
-function HighlightCard({
-  icon: Icon,
-  tone,
-  label,
-  value,
-  hint
+// One brand's growth story: change chip, the product that pushed the number
+// up, the product that dragged it down, and the volume-vs-basket mix.
+function BrandStoryCard({
+  story,
+  currency,
+  isHe
 }: {
-  icon: typeof Sparkles;
-  tone: "up" | "down" | "neutral";
-  label: string;
-  value: string;
-  hint: string;
+  story: BrandStory;
+  currency: string;
+  isHe: boolean;
 }) {
+  const change = story.revenueChange;
+  const up = (change ?? 0) >= 0;
+  const fmtPct = (v: number) => `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`;
+
+  const mixLine = (() => {
+    if (story.ordersChangePercent === null || story.aovChangePercent === null) return null;
+    const volumeLed =
+      Math.abs(story.ordersChangePercent) >= Math.abs(story.aovChangePercent);
+    return isHe
+      ? `הזמנות ${fmtPct(story.ordersChangePercent)} · סל ממוצע ${fmtPct(story.aovChangePercent)} — השינוי מגיע בעיקר מ${volumeLed ? "נפח ההזמנות" : "גודל הסל"}.`
+      : `Orders ${fmtPct(story.ordersChangePercent)} · AOV ${fmtPct(story.aovChangePercent)} — the change is mostly ${volumeLed ? "order volume" : "basket size"}.`;
+  })();
+
   return (
     <Card className="transition-shadow hover:shadow-md">
-      <CardContent className="p-4">
-        <div className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-          <span
-            className={cn(
-              "inline-flex h-6 w-6 items-center justify-center rounded-md",
-              tone === "up" && "bg-emerald-500/10 text-emerald-700",
-              tone === "down" && "bg-rose-500/10 text-rose-700",
-              tone === "neutral" && "bg-muted text-muted-foreground"
-            )}
-          >
-            <Icon className="h-3.5 w-3.5" aria-hidden />
-          </span>
-          {label}
+      <CardContent className="p-5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <p className="text-base font-semibold text-foreground">{story.storeName}</p>
+            {story.isDemo ? (
+              <span className="inline-flex items-center rounded-full border border-violet-300 bg-violet-50 px-2 py-0.5 text-[10px] font-semibold text-violet-800">
+                {isHe ? "נתוני הדגמה" : "Demo data"}
+              </span>
+            ) : null}
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-semibold text-foreground">
+              {formatCurrency(story.revenue, currency, isHe)}
+            </span>
+            {change !== null ? (
+              <span
+                className={cn(
+                  "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold",
+                  up ? "bg-emerald-500/10 text-emerald-700" : "bg-rose-500/10 text-rose-700"
+                )}
+              >
+                {up ? (
+                  <ArrowUpRight className="h-3 w-3" aria-hidden />
+                ) : (
+                  <ArrowDownRight className="h-3 w-3" aria-hidden />
+                )}
+                {fmtPct(change)}
+              </span>
+            ) : null}
+          </div>
         </div>
-        <p className="mt-3 truncate text-lg font-semibold text-foreground">{value}</p>
-        <p className="mt-1 truncate text-xs text-muted-foreground">{hint}</p>
+
+        <ul className="mt-4 space-y-2.5 text-sm leading-6">
+          {story.topDriver ? (
+            <li className="flex items-start gap-2">
+              <Flame className="mt-1 h-4 w-4 shrink-0 text-emerald-600" aria-hidden />
+              <span>
+                <span className="font-semibold">{isHe ? "המנוע: " : "Engine: "}</span>
+                {story.topDriver.title} —{" "}
+                <span className="font-semibold text-emerald-700">
+                  +{formatCurrency(story.topDriver.delta, currency, isHe)}
+                </span>{" "}
+                {isHe ? "לעומת התקופה הקודמת." : "vs the previous window."}
+              </span>
+            </li>
+          ) : (
+            <li className="flex items-start gap-2 text-muted-foreground">
+              <Minus className="mt-1 h-4 w-4 shrink-0" aria-hidden />
+              <span>
+                {isHe
+                  ? "אין מוצר בולט שדחף את המספר למעלה בתקופה הזו."
+                  : "No standout product pushed the number up this window."}
+              </span>
+            </li>
+          )}
+          {story.topDrag ? (
+            <li className="flex items-start gap-2">
+              <ArrowDownRight className="mt-1 h-4 w-4 shrink-0 text-rose-600" aria-hidden />
+              <span>
+                <span className="font-semibold">{isHe ? "המשקולת: " : "Drag: "}</span>
+                {story.topDrag.title} —{" "}
+                <span className="font-semibold text-rose-700">
+                  {formatCurrency(story.topDrag.delta, currency, isHe)}
+                </span>{" "}
+                {isHe ? "לעומת התקופה הקודמת." : "vs the previous window."}
+              </span>
+            </li>
+          ) : null}
+          {mixLine ? (
+            <li className="flex items-start gap-2">
+              <TrendingUp className="mt-1 h-4 w-4 shrink-0 text-indigo-600" aria-hidden />
+              <span>{mixLine}</span>
+            </li>
+          ) : (
+            <li className="flex items-start gap-2 text-muted-foreground">
+              <Minus className="mt-1 h-4 w-4 shrink-0" aria-hidden />
+              <span>
+                {isHe
+                  ? "תקופה ראשונה עם נתונים — עדיין אין בסיס השוואה."
+                  : "First window with data — no comparison base yet."}
+              </span>
+            </li>
+          )}
+        </ul>
       </CardContent>
     </Card>
   );
@@ -376,7 +405,9 @@ function formatCurrency(value: number, currency: string, isHe: boolean): string 
     return new Intl.NumberFormat(isHe ? "he-IL" : "en-US", {
       style: "currency",
       currency,
-      maximumFractionDigits: value >= 1000 ? 0 : 2
+      // Math.abs — a -145,151.59 drag is "large", the sign must not drop
+      // it into the 2-decimal branch.
+      maximumFractionDigits: Math.abs(value) >= 1000 ? 0 : 2
     }).format(value);
   } catch {
     return `${value.toLocaleString(isHe ? "he-IL" : "en-US")} ${currency}`;
