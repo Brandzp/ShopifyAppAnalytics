@@ -157,17 +157,17 @@ function getStrings(locale: PanelLocale) {
       detectedFrom: isHe ? "זוהה מההעלאה האחרונה:" : "Detected from last upload:",
       submit: isHe ? "העלאה והתאמה" : "Upload & match",
       submitting: isHe ? "מעלה..." : "Uploading...",
-      chooseFirst: isHe ? "בחר/י קובץ אקסל קודם." : "Choose an Excel file first."
+      chooseFirst: isHe ? "בחרו קובץ אקסל תחילה." : "Choose an Excel file first."
     },
     sync: {
       title: isHe ? "מוצרי Shopify" : "Shopify products",
       hint: isHe
-        ? "מסנכרן מחדש את מוצרי Shopify כדי שהברקודים יהיו מעודכנים. השתמש/י בזה כשהרבה שורות אופליין מופיעות כלא מותאמות."
+        ? "מסנכרן מחדש את מוצרי Shopify כדי שהברקודים יהיו מעודכנים. השתמשו בזה כששורות אופליין רבות מופיעות כלא מותאמות."
         : "Re-syncs Shopify products so barcodes are up to date. Run this if many offline rows show as unmatched.",
       button: isHe ? "סנכרון ברקודי Shopify" : "Sync Shopify barcodes",
       running: isHe ? "מסנכרן..." : "Syncing...",
       done: (n: number) =>
-        isHe ? `סונכרנו ${n} מוצרים מ־Shopify.` : `Synced ${n} products from Shopify.`
+        isHe ? `סונכרנו ${n} מוצרים מShopify.` : `Synced ${n} products from Shopify.`
     },
     history: {
       title: isHe ? "היסטוריה" : "History",
@@ -221,7 +221,7 @@ function getStrings(locale: PanelLocale) {
         : "≥80% of revenue comes from offline. Stock matters more than the listing.",
       webTitle: isHe ? "מנצחי אונליין" : "Web heroes",
       webDesc: isHe
-        ? "≥80% מההכנסה מגיעה מ־Shopify. מלאי + פרסום משלמים פה."
+        ? "≥80% מההכנסה מגיעה מShopify. מלאי + פרסום משלמים פה."
         : "≥80% of revenue comes from Shopify. Inventory + ad spend pay off here.",
       empty: isHe ? "אין עדיין מנצחים ברורים — צריך נפח גבוה יותר." : "No clear winners yet — need higher volume to call it.",
       shareLabel: (pct: string, channel: "online" | "offline") =>
@@ -251,7 +251,7 @@ function getStrings(locale: PanelLocale) {
         ? "מק\"טים בסיכון מלאי (≤14 ימים) — בראש הרשימה"
         : "Stock-risk SKUs (≤14 days) — pinned to top",
       stockRiskHelp: isHe
-        ? "הימים הצפויים עד גמר מלאי, מחושבים על קצב המכירות המשולב (אונליין + אופליין). מוצרי טיוטה / לא־פעילים לא נכללים."
+        ? "הימים הצפויים עד גמר מלאי, מחושבים על קצב המכירות המשולב (אונליין + אופליין). מוצרי טיוטה / לא פעילים לא נכללים."
         : "Days until stock-out at the combined sales pace (online + offline). Excludes draft / archived products.",
       channelMixHelp: isHe
         ? "הסגול = אונליין (Shopify), הכתום = אופליין (קובץ שהועלה). 100% למוצרים עם מכירות."
@@ -266,7 +266,7 @@ function getStrings(locale: PanelLocale) {
             חלקה של ההכנסה מהמוצר בכל ערוץ.
             <strong className="text-indigo-300"> סגול</strong> = אונליין (Shopify),
             <strong className="text-amber-300"> כתום</strong> = אופליין (קובץ שהועלה).
-            סוכם ל־100% עבור מוצרים עם מכירות.
+            סוכם ל100% עבור מוצרים עם מכירות.
           </>
         ) : (
           <>
@@ -309,10 +309,10 @@ function getStrings(locale: PanelLocale) {
     unmatched: {
       title: isHe ? "שורות אופליין ללא התאמה · איכות נתונים" : "Unmatched offline rows · data quality",
       desc: isHe
-        ? "הברקודים האלה מהקובץ לא קיימים (או עם ברקוד שונה) באף וריאציה ב־Shopify. עד שיותאמו, הסוכן לא יוכל לחשב ימי מלאי או פילוח ערוצים עבורם."
+        ? "הברקודים האלה מהקובץ לא קיימים (או עם ברקוד שונה) באף וריאציה בShopify. עד שיותאמו, הסוכן לא יוכל לחשב ימי מלאי או פילוח ערוצים עבורם."
         : "These barcodes from your offline file don't exist (or have a different barcode) on any Shopify variant. Until they're matched, the agent can't compute days-of-stock or per-SKU channel mix for them.",
       cta: isHe
-        ? `אם הברקודים נכונים ב־Shopify, לחצו על "סנכרון ברקודי Shopify" משמאל.`
+        ? `אם הברקודים נכונים בShopify, לחצו על "סנכרון ברקודי Shopify" משמאל.`
         : `If barcodes look right in Shopify, click "Sync Shopify barcodes" on the left.`,
       product: isHe ? "מוצר" : "Product",
       barcodeInFile: isHe ? "ברקוד בקובץ" : "Barcode in file",
@@ -321,7 +321,7 @@ function getStrings(locale: PanelLocale) {
       noBarcode: isHe ? "אין ברקוד בשורה" : "no barcode in row",
       footnote: (showing: number, total: number) =>
         isHe
-          ? `מציג ${showing} מתוך ${total} שורות לא־מותאמות.`
+          ? `מציג ${showing} מתוך ${total} שורות לא מותאמות.`
           : `Showing first ${showing} of ${total} unmatched rows.`
     },
     halo: {

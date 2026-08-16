@@ -8,9 +8,9 @@
 import { ArrowRight, Check, X, HelpCircle } from "lucide-react";
 
 export const metadata = {
-  title: "Brandzp Analytics מול המתחרים — השוואה לחנויות Shopify ישראליות",
+  title: "Hiloomy מול המתחרים — השוואה לחנויות Shopify ישראליות",
   description:
-    "השוואה ישרה בין Brandzp Analytics ל-GoProfit, BeProfit, Triple Whale ו-Polar Analytics — בעברית, עם ILS, ותמיכה ישראלית."
+    "השוואה ישרה בין Hiloomy לGoProfit, BeProfit, Triple Whale וPolar Analytics — בעברית, עם ILS ותמיכה ישראלית."
 };
 
 // -----------------------------------------------------------------------
@@ -94,7 +94,7 @@ const rows: ComparisonRow[] = [
     polar: "no"
   },
   {
-    feature: "Native ל-Shopify",
+    feature: "Native לShopify",
     brandzp: "yes",
     goprofit: "yes",
     beprofit: "yes",
@@ -187,7 +187,7 @@ const competitors: CompetitorSection[] = [
     differentiators: [
       "מעקב אפיל/משפיענים ייעודי דרך BixGrow (GoProfit: לא אומת)",
       "סיכום AI שבועי בעברית שנשלח אוטומטית לאימייל — ללא צורך להיכנס לדשבורד",
-      "התראות מלאי עם עדיפות לפי הכנסות מוצר ב-90 יום האחרונים"
+      "התראות מלאי עם עדיפות לפי הכנסות המוצר ב90 הימים האחרונים"
     ]
   },
   {
@@ -200,7 +200,7 @@ const competitors: CompetitorSection[] = [
       "קהילת משתמשים גדולה"
     ],
     differentiators: [
-      "כל הממשק עברי-ראשי — לא צריך לנווט בממשק אנגלי כדי להבין את המספרים שלך",
+      "כל הממשק בעברית ראשית — לא צריך לנווט בממשק אנגלי כדי להבין את המספרים שלכם",
       "סיכום שבועי בעברית שנשלח פרואקטיבית לאימייל — BeProfit לא מציע מקביל",
       "COGS לפי SKU זמין בכל התוכניות, לא רק בגבוהות"
     ]
@@ -208,7 +208,7 @@ const competitors: CompetitorSection[] = [
   {
     name: "Triple Whale — הסטנדרט האמריקאי",
     subtitle:
-      "Triple Whale מוביל את שוק האטריבוציה ה-DTC האמריקאי. חזק מאוד — אבל מיועד לחנויות גדולות עם תקציב דולרי ($129+/חודש).",
+      "Triple Whale מוביל את שוק האטריבוציה הDTC האמריקאי. חזק מאוד — אבל מיועד לחנויות גדולות עם תקציב דולרי ($129+/חודש).",
     strengths: [
       "attribution מתקדם ורב-ערוצי",
       "ecosystem רחב ואינטגרציות רבות",
@@ -216,23 +216,23 @@ const competitors: CompetitorSection[] = [
     ],
     differentiators: [
       "מחיר בסדר גודל שונה לחלוטין — Triple Whale לא נגיש לרוב החנויות הישראליות בשלב הגדילה",
-      "כל הממשק, ההתראות, והסיכום השבועי — בעברית. Triple Whale: אנגלית בלבד",
+      "כל הממשק, ההתראות והסיכום השבועי — בעברית. Triple Whale: אנגלית בלבד",
       "מעקב אפיל ישראלי (BixGrow) — Triple Whale לא בנוי סביב מודל האפיל הישראלי"
     ]
   },
   {
     name: "Polar Analytics — הכלי האירופי",
     subtitle:
-      "Polar Analytics מכוון לחנויות Shopify בינוניות-גדולות בשוק האירופי ($300+/חודש). ידוע ב-data blending ובממשק נקי.",
+      "Polar Analytics מכוון לחנויות Shopify בינוניות-גדולות בשוק האירופי ($300+/חודש). ידוע בdata blending ובממשק נקי.",
     strengths: [
       "data blending ממקורות מרובים",
       "ממשק אנליטי עמוק",
-      "retention ו-cohort analysis מוקפד"
+      "retention וcohort analysis מוקפד"
     ],
     differentiators: [
       "תמחור — Polar ב-$300+ היא קטגוריה שונה לחלוטין",
       "הכלי מיועד לקהל ישראלי, לא לקהל EU שתורגם לישראל",
-      "Weekly Digest בעברית: לא קיים ב-Polar Analytics"
+      "Weekly Digest בעברית: לא קיים בPolar Analytics"
     ]
   }
 ];
@@ -245,22 +245,22 @@ const uniqueFeatures = [
   {
     num: "1",
     title: "סיכום שבועי AI בעברית — ישירות לאימייל",
-    body: "כל שני בבוקר מגיע לתיבת הדואר שלך סיכום מה קרה בשבוע שעבר: אילו מוצרים נמכרו, מה השתנה ב-ROAS, ואיזו המלצה ראשונה כדאי לשקול. בעברית. ללא צורך להיכנס לדשבורד."
+    body: "כל יום שני בבוקר מגיע לתיבת הדואר שלכם סיכום של מה שקרה בשבוע שעבר: אילו מוצרים נמכרו, מה השתנה בROAS ואיזו המלצה ראשונה כדאי לשקול. בעברית. ללא צורך להיכנס לדשבורד."
   },
   {
     num: "2",
     title: "מעקב אפיל ומשפיענים (BixGrow)",
-    body: "מודל הפרסום הישראלי מבוסס חלק ניכר על משפיענים ואפיל. Brandzp Analytics עוקב אחר קמפיינים של אפיל דרך BixGrow ומציג בדיוק כמה הכנסה כל שותף הביא."
+    body: "מודל הפרסום הישראלי מבוסס חלק ניכר על משפיענים ואפיל. Hiloomy עוקב אחר קמפיינים של אפיל דרך BixGrow ומציג בדיוק כמה הכנסה כל שותף הביא."
   },
   {
     num: "3",
     title: "COGS לפי SKU — רווח אמיתי, לא מחזור",
-    body: "הכנסות הן הסיפור. הרווח הוא המציאות. Brandzp Analytics מאפשר הזנת עלות מוצר לפי יחידת מלאי (SKU) ומחשב אוטומטית את מרג'ין הגולמי האמיתי לכל מוצר ולכל תקופה."
+    body: "הכנסות הן הסיפור. הרווח הוא המציאות. Hiloomy מאפשר הזנת עלות מוצר לפי יחידת מלאי (SKU) ומחשב אוטומטית את המרווח הגולמי האמיתי לכל מוצר ולכל תקופה."
   },
   {
     num: "4",
     title: "התראות מלאי חכמות",
-    body: "כאשר מוצר עם פוטנציאל הכנסה גבוה עומד לאזול — תקבל/י התראה בעברית, עם הקשר של הכנסות ה-90 יום האחרונים של אותו מוצר. לא עוד מוצר מוביל שנגמר בשקט."
+    body: "כאשר מוצר עם פוטנציאל הכנסה גבוה עומד לאזול — תקבלו התראה בעברית, עם ההקשר של הכנסות 90 הימים האחרונים של אותו מוצר. לא עוד מוצר מוביל שנגמר בשקט."
   }
 ];
 
@@ -270,7 +270,7 @@ const uniqueFeatures = [
 
 export default function CompareHePage() {
   const columns = [
-    { key: "brandzp", label: "Brandzp Analytics", highlight: true },
+    { key: "brandzp", label: "Hiloomy", highlight: true },
     { key: "goprofit", label: "GoProfit", highlight: false },
     { key: "beprofit", label: "BeProfit", highlight: false },
     { key: "tripleWhale", label: "Triple Whale", highlight: false },
@@ -288,7 +288,7 @@ export default function CompareHePage() {
         <div className="mx-auto max-w-6xl px-4 sm:px-6 py-4 flex items-center justify-between">
           <a href="/welcome" className="inline-flex items-center gap-2">
             <span className="inline-block h-8 w-8 rounded-lg bg-gradient-to-br from-violet-600 to-indigo-600" />
-            <span className="text-base font-semibold tracking-tight">Brandzp</span>
+            <span className="text-base font-semibold tracking-tight">Hiloomy</span>
           </a>
           <a
             href="/signup"
@@ -306,11 +306,11 @@ export default function CompareHePage() {
           כלי אנליטיקס לחנויות Shopify ישראליות
         </p>
         <h1 className="mt-3 text-3xl sm:text-5xl font-bold tracking-tight">
-          לא כל כלי אנליטיקס נבנה בשבילך
+          לא כל כלי אנליטיקס נבנה בשבילכם
         </h1>
         <p className="mt-5 text-base sm:text-lg text-muted-foreground leading-7 max-w-2xl mx-auto">
-          רוב הכלים נבנו עבור חנויות אמריקאיות — ממשק באנגלית, מחיר בדולרים, תמיכה ב-timezone אחר.
-          אם אתה מנהל/ת חנות Shopify ישראלית, הנה השוואה ישרה שתעזור לך להחליט.
+          רוב הכלים נבנו עבור חנויות אמריקאיות — ממשק באנגלית, מחיר בדולרים, תמיכה באזור זמן אחר.
+          אם אתם מנהלים חנות Shopify ישראלית, הנה השוואה ישרה שתעזור לכם להחליט.
         </p>
       </section>
 
@@ -387,7 +387,7 @@ export default function CompareHePage() {
 
         {/* Disclaimer */}
         <p className="mt-4 text-center text-xs text-muted-foreground max-w-2xl mx-auto">
-          נתוני מחירים למתחרים עודכנו נכון לסריקה ציבורית של יוני 2026. מחירים עשויים להשתנות — בדוק/י תמיד
+          נתוני מחירים למתחרים עודכנו נכון לסריקה ציבורית של יוני 2026. מחירים עשויים להשתנות — בדקו תמיד
           מול האתר הרשמי של כל כלי. נתונים שסומנו &quot;חלקי&quot; לא אומתו ממקורות ראשוניים.
         </p>
       </section>
@@ -429,7 +429,7 @@ export default function CompareHePage() {
                 {/* Differentiators */}
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-wide text-violet-600 mb-2">
-                    היכן Brandzp Analytics שונה
+                    היכן Hiloomy שונה
                   </p>
                   <ul className="space-y-1.5">
                     {comp.differentiators.map((d) => (
@@ -452,10 +452,10 @@ export default function CompareHePage() {
       {/* Unique features */}
       <section className="mx-auto max-w-4xl px-4 sm:px-6 py-10">
         <h2 className="text-xl sm:text-2xl font-bold tracking-tight mb-2 text-center">
-          מה מייחד את Brandzp Analytics לחנויות ישראליות
+          מה מייחד את Hiloomy לחנויות ישראליות
         </h2>
         <p className="text-center text-sm text-muted-foreground mb-8">
-          ארבעה דברים שרק Brandzp Analytics מציע לחנות ישראלית הפועלת ב-Shopify
+          ארבעה דברים שרק Hiloomy מציע לחנות ישראלית הפועלת בShopify
         </p>
         <div className="grid sm:grid-cols-2 gap-5">
           {uniqueFeatures.map((feat) => (
@@ -485,16 +485,16 @@ export default function CompareHePage() {
       <section className="mx-auto max-w-4xl px-4 sm:px-6 py-10">
         <div className="rounded-2xl border border-border bg-card p-6 sm:p-8">
           <h2 className="text-lg sm:text-xl font-bold tracking-tight mb-3">
-            מי Brandzp Analytics מתאים לו?
+            למי Hiloomy מתאים?
           </h2>
           <p className="text-sm sm:text-base text-muted-foreground leading-7">
-            Brandzp Analytics מתאים לחנות Shopify ישראלית שמייצרת מאות הזמנות לחודש, מנהלת קמפיינים
-            ב-Meta ו/או עם אפיל, ורוצה תמונה שבועית ברורה של הרווחיות — בלי להיות אנליסט ובלי לשלם
+            Hiloomy מתאים לחנות Shopify ישראלית שמייצרת מאות הזמנות לחודש, מנהלת קמפיינים
+            בMeta ו/או עם אפיל, ורוצה תמונה שבועית ברורה של הרווחיות — בלי להיות אנליסט ובלי לשלם
             על כלי שנבנה עבור מישהו אחר.
           </p>
           <p className="mt-3 text-sm text-muted-foreground leading-7">
-            אם החנות שלך עוד בשלב ה-0–50 הזמנות לחודש, Brandzp Analytics עדיין רלוונטי — אבל הסיכום
-            השבועי ישמעשי יותר כשיש נפח נתונים לנתח.
+            אם החנות שלכם עוד בשלב של 0–50 הזמנות לחודש, Hiloomy עדיין רלוונטי — אבל הסיכום
+            השבועי יהיה שימושי יותר כשיש נפח נתונים לנתח.
           </p>
         </div>
       </section>
@@ -503,21 +503,21 @@ export default function CompareHePage() {
       <section className="mx-auto max-w-4xl px-4 sm:px-6 py-12">
         <div className="rounded-3xl bg-gradient-to-br from-violet-600 to-indigo-600 p-10 sm:p-14 text-center text-white shadow-2xl">
           <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">
-            נסה/י 14 יום בחינם — ללא כרטיס אשראי
+            נסו 14 יום בחינם — ללא כרטיס אשראי
           </h2>
           <p className="mt-3 text-sm sm:text-base text-violet-100 leading-7">
-            חיבור ה-Shopify לוקח פחות מ-10 דקות. הסיכום הראשון בעברית מגיע תוך שבוע.
-            שאלות? המייסד זמין לשיחה ישירה — זו לא תמיכת טיקטים.
+            חיבור הShopify לוקח פחות מ10 דקות. הסיכום הראשון בעברית מגיע תוך שבוע.
+            שאלות? המייסד זמין לשיחה ישירה — לא תמיכה דרך טיקטים.
           </p>
           <a
             href="https://shopifyappanalytics.onrender.com/signup"
             className="mt-6 inline-flex items-center gap-2 rounded-md bg-white px-6 py-3 text-sm font-semibold text-violet-700 shadow-md hover:bg-violet-50"
           >
-            התחל/י ניסיון חינם
+            התחילו ניסיון חינם
             <ArrowRight className="h-4 w-4 rotate-180" aria-hidden />
           </a>
           <p className="mt-3 text-xs text-violet-200">
-            ללא כרטיס אשראי · מבוטל בכל רגע
+            ללא כרטיס אשראי · ביטול בכל רגע
           </p>
         </div>
       </section>

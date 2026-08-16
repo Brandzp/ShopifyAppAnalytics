@@ -225,7 +225,7 @@ export default async function DailySummaryPrintPage({
       <div className="dr-root">
         <div className="dr-report">
           <header className="dr-hero">
-            <p className="dr-eyebrow">דוח יומי — Brandzp Analytics</p>
+            <p className="dr-eyebrow">דוח יומי — Hiloomy</p>
             <h1 className="dr-title">סיכום אתמול</h1>
             <div className="dr-date-row">
               <span className="dr-date-badge">{reportDateLabel}</span>
@@ -368,7 +368,7 @@ export default async function DailySummaryPrintPage({
           ) : null}
 
           <p className="dr-footer">
-            נוצר אוטומטית · Brandzp Analytics
+            נוצר אוטומטית · Hiloomy
             {bundle ? ` · ${reportDateLabel}` : ""}
           </p>
         </div>

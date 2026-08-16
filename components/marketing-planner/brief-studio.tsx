@@ -292,7 +292,7 @@ function RecommendationsList({ items }: { items: MarketingPlannerResult["insight
               <strong className="text-foreground">למה:</strong> {item.why}
             </p>
             <p className="mt-1 text-muted-foreground">
-              <strong className="text-foreground">איפה ב-GANTT:</strong> {item.ganttPlacement}
+              <strong className="text-foreground">איפה בGANTT:</strong> {item.ganttPlacement}
             </p>
             {item.dataSource ? (
               <p className="mt-2 rounded-lg border border-border/50 bg-muted/40 px-3 py-1.5 text-xs text-muted-foreground">
@@ -324,9 +324,9 @@ function CampaignPlanPreview({
   return (
     <Card dir={direction} className={getDirectionClasses(direction)}>
       <CardHeader>
-        <CardTitle>קמפיינים שזוהו ל-GANTT</CardTitle>
+        <CardTitle>קמפיינים שזוהו לGANTT</CardTitle>
         <CardDescription>
-          זה מה שהמערכת משייכת לקובץ ה-Excel: שורת גאנט, תאריכים והמסר שנשלף מהבריף.
+          זה מה שהמערכת משייכת לקובץ הExcel: שורת גאנט, תאריכים והמסר שנשלף מהבריף.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -371,7 +371,7 @@ function PreviousMonthBaselineCard({
       <CardHeader className="pb-3">
         <CardTitle className="text-base">Baseline מהחודש הקודם</CardTitle>
         <CardDescription>
-          אותו סטור, אותו חיבור Shopify. כך ה-GANT נבחן מול המצב האמיתי של העסק.
+          אותה חנות, אותו חיבור Shopify. כך הGANTT נבחן מול המצב האמיתי של העסק.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -402,7 +402,7 @@ function PreviousMonthBaselineCard({
             </ul>
           </>
         ) : (
-          <p className="text-sm text-muted-foreground">לא הצלחתי לטעון כרגע baseline של החודש הקודם מהסטור המחובר.</p>
+          <p className="text-sm text-muted-foreground">לא הצלחתי לטעון כרגע baseline של החודש הקודם מהחנות המחוברת.</p>
         )}
       </CardContent>
     </Card>
@@ -465,7 +465,7 @@ function DiscountProposalsCard({
       <CardHeader className="pb-3">
         <CardTitle className="text-base">Discount candidates</CardTitle>
         <CardDescription>
-          אם זוהו קוד + ערך הנחה ברור, אפשר ליצור את הקוד ב-Shopify בלחיצה. היצירה מוגדרת כברירת מחדל כלא-נערמת עם קודים אחרים כדי למנוע בלבול ללקוחה.
+          אם זוהו קוד + ערך הנחה ברור, אפשר ליצור את הקוד בShopify בלחיצה. היצירה מוגדרת כברירת מחדל כלא-נערמת עם קודים אחרים כדי למנוע בלבול ללקוחה.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -522,7 +522,7 @@ function CustomerVoiceCard({
       <CardHeader className="pb-3">
         <CardTitle className="text-base">Customer voice / Flashy</CardTitle>
         <CardDescription>
-          מה הלקוחות באמת אומרים על המוצרים הפעילים בחנות, כדי שה-GANT וההמלצות לא יישענו רק על הבריף.
+          מה הלקוחות באמת אומרים על המוצרים הפעילים בחנות, כדי שהGANT וההמלצות לא יישענו רק על הבריף.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -840,7 +840,7 @@ function InfluencerIntelligenceCard({
 
             {influencer.suggestedActions.length ? (
               <div className="rounded-2xl border border-border/70 bg-background/70 p-4">
-                <p className="text-sm font-semibold text-foreground">פעולות מומלצות ל-GANT</p>
+                <p className="text-sm font-semibold text-foreground">פעולות מומלצות לGANT</p>
                 <div className="mt-3 grid gap-3 xl:grid-cols-2">
                   {influencer.suggestedActions.map((action, index) => (
                     <div key={`influencer-action-${index}`} className="rounded-xl border border-border/60 bg-background p-3 text-sm">
@@ -1212,7 +1212,7 @@ export function MarketingBriefStudio({ storeId }: { storeId: string }) {
       const payload = await response.json();
 
       if (!response.ok || !payload.ok) {
-        throw new Error(payload.error ?? "לא הצלחתי ליצור את קוד ההנחה ב-Shopify.");
+        throw new Error(payload.error ?? "לא הצלחתי ליצור את קוד ההנחה בShopify.");
       }
 
       setResult((current) => current ? {
@@ -1222,18 +1222,18 @@ export function MarketingBriefStudio({ storeId }: { storeId: string }) {
               ...item,
               canCreate: false,
               alreadyExists: true,
-              createDisabledReason: `נוצר ב-Shopify כ-${payload.code}.`
+              createDisabledReason: `נוצר בShopify כ-${payload.code}.`
             }
           : item)
       } : current);
       setNotice({
         tone: "success",
-        text: `קוד ההנחה ${payload.code} נוצר ב-Shopify בהצלחה.`
+        text: `קוד ההנחה ${payload.code} נוצר בShopify בהצלחה.`
       });
     } catch (error) {
       setNotice({
         tone: "error",
-        text: error instanceof Error ? error.message : "לא הצלחתי ליצור את קוד ההנחה ב-Shopify."
+        text: error instanceof Error ? error.message : "לא הצלחתי ליצור את קוד ההנחה בShopify."
       });
     } finally {
       setIsCreatingMap((current) => ({ ...current, [proposal.id]: false }));
@@ -1274,7 +1274,7 @@ export function MarketingBriefStudio({ storeId }: { storeId: string }) {
         setResult(payload);
         setNotice({
           tone: "success",
-          text: `הגאנט נוצר בהצלחה עבור ${payload.sheetName}. עכשיו יש לך baseline מהחודש הקודם, אזהרות discount, customer voice מ-Flashy ותובנות משפיעניות.`
+          text: `הגאנט נוצר בהצלחה עבור ${payload.sheetName}. עכשיו יש לכם baseline מהחודש הקודם, אזהרות discount, customer voice מFlashy ותובנות משפיעניות.`
         });
       } catch (error) {
         setNotice({
@@ -1298,7 +1298,7 @@ export function MarketingBriefStudio({ storeId }: { storeId: string }) {
         <CardHeader>
           <CardTitle>העלאת בריף</CardTitle>
           <CardDescription>
-            העלי קובץ DOCX / PDF / TXT או הדביקי את הבריף כאן. הפעם ה-GANTT והאינסייטים נשענים גם על הסטור המחובר, החודש הקודם והגדרות discount ב-Shopify.
+            העלו קובץ DOCX / PDF / TXT או הדביקו את הבריף כאן. הפעם הGANTT והתובנות נשענים גם על החנות המחוברת, החודש הקודם והגדרות discount בShopify.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -1534,7 +1534,7 @@ export function MarketingBriefStudio({ storeId }: { storeId: string }) {
             <CardHeader>
               <CardTitle>תובנות גרות&apos; אג&apos;נט / Growth Insights</CardTitle>
               <CardDescription>
-                התובנות למטה כבר לא נשענות רק על הבריף. הן משלבות את הבריף עם הסטור המחובר, החודש הקודם, בחירת הפוקוס שלך ומבנה ה-discountים ב-Shopify.
+                התובנות למטה כבר לא נשענות רק על הבריף. הן משלבות את הבריף עם הסטור המחובר, החודש הקודם, בחירת הפוקוס שלך ומבנה הdiscountים בShopify.
               </CardDescription>
             </CardHeader>
             <CardContent className="grid gap-4 xl:grid-cols-2">

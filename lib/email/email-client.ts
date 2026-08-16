@@ -32,7 +32,7 @@ function getResendClient(): Resend | null {
 }
 
 function getFromAddress(): string {
-  return process.env.REPORT_FROM_EMAIL ?? "Brandzp <noreply@brandzp.co.il>";
+  return process.env.REPORT_FROM_EMAIL ?? "Hiloomy <noreply@brandzp.co.il>";
 }
 
 /**

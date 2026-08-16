@@ -146,7 +146,7 @@ export default async function GanttBriefPrintPage({
     social: "צוות סושיאל",
     graphic: "צוות גרפיקה",
     affiliates: "צוות אפיליאייטים / משפיענים",
-    email: "צוות אימייל ו-SMS",
+    email: "צוות אימייל וSMS",
     marketing: "צוות שיווק / מבצעים",
     customer_service: "שירות לקוחות — מבצעים והשקות"
   };

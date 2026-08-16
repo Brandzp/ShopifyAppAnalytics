@@ -43,7 +43,7 @@ export default async function CreativeSprintsPage() {
           eyebrow: "Creative Sprint",
           title: "ספרינטים של 100 מודעות",
           description:
-            "ייצרו 100 קונספטים שונים, פרסמו ב-Meta עם תקציב קטן לכל מודעה, ותנו למערכת להרוג את הגרועות בשעות 6/24/72 ולהשאיר רק את המנצחות."
+            "ייצרו 100 קונספטים שונים, פרסמו בMeta עם תקציב קטן לכל מודעה, ותנו למערכת לפסול את החלשות אחרי 6/24/72 שעות ולהשאיר רק את המנצחות."
         }
       : {
           eyebrow: "Creative Sprint",
@@ -68,7 +68,7 @@ export default async function CreativeSprintsPage() {
           <div className="rounded-2xl border border-dashed border-border bg-card/40 p-12 text-center">
             <p className="text-sm text-muted-foreground">
               {locale === "he"
-                ? "עדיין לא יצרת ספרינטים. לחץ על 'ספרינט חדש' למעלה כדי להתחיל."
+                ? "עדיין לא יצרתם ספרינטים. לחצו על 'ספרינט חדש' למעלה כדי להתחיל."
                 : "No sprints yet. Click 'New sprint' above to start."}
             </p>
           </div>
@@ -80,8 +80,8 @@ export default async function CreativeSprintsPage() {
                   <th className="px-4 py-3 text-start font-semibold">{locale === "he" ? "שם" : "Name"}</th>
                   <th className="px-4 py-3 text-start font-semibold">{locale === "he" ? "סטטוס" : "Status"}</th>
                   <th className="px-4 py-3 text-start font-semibold">{locale === "he" ? "שלב" : "Stage"}</th>
-                  <th className="px-4 py-3 text-end font-semibold">{locale === "he" ? "בחיים" : "Alive"}</th>
-                  <th className="px-4 py-3 text-end font-semibold">{locale === "he" ? "מתו" : "Killed"}</th>
+                  <th className="px-4 py-3 text-end font-semibold">{locale === "he" ? "פעילות" : "Alive"}</th>
+                  <th className="px-4 py-3 text-end font-semibold">{locale === "he" ? "נפסלו" : "Killed"}</th>
                   <th className="px-4 py-3 text-end font-semibold">{locale === "he" ? "מנצחות" : "Winners"}</th>
                   <th className="px-4 py-3 text-start font-semibold">{locale === "he" ? "פורסם" : "Published"}</th>
                   <th className="px-4 py-3 text-start font-semibold">{locale === "he" ? "נוצר" : "Created"}</th>

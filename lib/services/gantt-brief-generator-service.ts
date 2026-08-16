@@ -336,9 +336,9 @@ function fallbackBrief(input: BriefGeneratorInput): MarketingBrief {
         conditions: ["למימוש פעם אחת בלבד ללקוח לכל החיים"]
       },
       abandonedCart: {
-        text: "הנחת עגלה נטושה 15%- בתוקף ל-48 שעות",
+        text: "הנחת עגלה נטושה 15%- בתוקף ל48 שעות",
         couponCode: "חד ערכי",
-        conditions: ["למימוש פעם אחת בלבד ללקוח ל-48 שעות", "לא כולל מארזים"]
+        conditions: ["למימוש פעם אחת בלבד ללקוח ל48 שעות", "לא כולל מארזים"]
       }
     },
     influencerBlocks,
@@ -530,15 +530,15 @@ export function auditBriefDiscounts(
 
     // Unique one-time codes ("חד ערכי") — Shopify can't mass-generate
     // unique codes natively on any plan; needs an app for bulk generation.
-    if (/חד[\s\-־]?ערכי/.test(text)) {
-      addCallout(offer, "info", "קודים חד־ערכיים בכמות דורשים אפליקציה — בשופיפיי עצמו ניתן ליצור קוד בודד בלבד; הגבלת שימוש-פעם-אחת-ללקוח נתמכת מובנה");
+    if (/חד[\s\-]?ערכי/.test(text)) {
+      addCallout(offer, "info", "קודים חד ערכיים בכמות דורשים אפליקציה — בשופיפיי עצמו ניתן ליצור קוד בודד בלבד; הגבלת שימוש-פעם-אחת-ללקוח נתמכת מובנה");
     }
 
     // Gift with purchase — fully supported without Plus as Buy X Get Y
     // (minimum purchase amount → gift at 100% off). Info so the operator
     // knows the exact mechanic to pick.
     if (/מתנה/.test(text) && /(מעל|ברכישה|בקנייה|בכל רכישה)/.test(text)) {
-      addCallout(offer, "info", "מתנה ברכישה: להגדיר בשופיפיי כ-Buy X Get Y — תנאי סכום מינימום והמתנה ב-100% הנחה. נתמך בכל תוכנית, ללא צורך ב-Plus");
+      addCallout(offer, "info", "מתנה ברכישה: להגדיר בשופיפיי כBuy X Get Y — תנאי סכום מינימום והמתנה ב100% הנחה. נתמך בכל תוכנית, ללא צורך בPlus");
     }
 
     // Affirmative stacking ("כולל כפל מבצעים") — supported via the

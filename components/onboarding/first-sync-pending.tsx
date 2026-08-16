@@ -26,12 +26,12 @@ export function FirstSyncPending({
   const t =
     locale === "he"
       ? {
-          title: "אנחנו מושכים את הנתונים מ-Shopify…",
+          title: "אנחנו מושכים את הנתונים מShopify…",
           body:
             "זה לוקח בין 30 שניות לכמה דקות בהתאם לכמות ההזמנות. נטען מחדש את הדף אוטומטית כשהנתונים מוכנים.",
           syncNow: "סנכרון ידני עכשיו",
           syncing: "מסנכרן…",
-          tip: "טיפ: אתם יכולים להוסיף את חיבור Meta Ads ו-Instagram בזמן שזה רץ ב-Settings."
+          tip: "טיפ: בזמן שהסנכרון רץ אפשר להוסיף בהגדרות את חיבור Meta Ads וInstagram."
         }
       : {
           title: "Pulling your Shopify data…",

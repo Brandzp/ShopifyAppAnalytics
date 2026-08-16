@@ -429,7 +429,7 @@ export function InventoryClient({
           title={
             lastSyncedAt
               ? locale === "he"
-                ? `סנכרון מוצרים מלא אחרון מ־Shopify: ${lastSyncedAt.toLocaleString()}`
+                ? `סנכרון מוצרים מלא אחרון מShopify: ${lastSyncedAt.toLocaleString()}`
                 : `Last full Shopify product sync: ${lastSyncedAt.toLocaleString()}`
               : locale === "he"
                 ? "עדיין לא בוצע סנכרון מוצרים לחנות הזו."
@@ -454,7 +454,7 @@ export function InventoryClient({
             icon={Flame}
             label={locale === "he" ? "אזעקה (<5)" : "Emergency (<5)"}
             value={formatNumber(critical.length)}
-            hint={locale === "he" ? "פחות מ־5 יחידות — לחדש עכשיו." : "Below 5 units — restock now."}
+            hint={locale === "he" ? "פחות מ5 יחידות — לחדש עכשיו." : "Below 5 units — restock now."}
             isActive={filterFlag === "critical"}
             onClick={() => setFilterFlag(filterFlag === "critical" ? null : "critical")}
             accentClass="bg-rose-700/10 text-rose-800"
@@ -463,7 +463,7 @@ export function InventoryClient({
             icon={ShieldAlert}
             label={locale === "he" ? "קריטי (<20)" : "Critical (<20)"}
             value={formatNumber(red.length)}
-            hint={locale === "he" ? "פחות מ־20 יחידות — לחדש בהקדם." : "Below 20 units — restock soon."}
+            hint={locale === "he" ? "פחות מ20 יחידות — לחדש בהקדם." : "Below 20 units — restock soon."}
             isActive={filterFlag === "red"}
             onClick={() => setFilterFlag(filterFlag === "red" ? null : "red")}
             accentClass="bg-rose-500/10 text-rose-700"
@@ -493,7 +493,7 @@ export function InventoryClient({
             onClick={() => setFilterFlag(null)}
             className="mt-2 text-xs font-medium text-indigo-600 underline-offset-2 hover:underline"
           >
-            {locale === "he" ? "לבטל סינון" : "Clear filter"}
+            {locale === "he" ? "ביטול סינון" : "Clear filter"}
           </button>
         ) : null}
       </section>
@@ -550,7 +550,7 @@ export function InventoryClient({
                 eyebrow={locale === "he" ? "אזעקת מלאי" : "Stock emergency"}
                 title={
                   locale === "he"
-                    ? `מלאי קריטי — פחות מ־5 יחידות (${formatNumber(criticalFiltered.length)} מוצרים)`
+                    ? `מלאי קריטי — פחות מ5 יחידות (${formatNumber(criticalFiltered.length)} מוצרים)`
                     : `Critical stock — below 5 units (${criticalFiltered.length} products)`
                 }
                 hint={
@@ -577,7 +577,7 @@ export function InventoryClient({
                 }
                 hint={
                   locale === "he"
-                    ? "מלאי מתחת ל־20 יחידות — לחדש השבוע."
+                    ? "מלאי מתחת ל20 יחידות — לחדש השבוע."
                     : "Inventory below 20 units — restock this week."
                 }
                 accentClass="border-rose-400 bg-rose-50/70 text-rose-800"
@@ -621,7 +621,7 @@ export function InventoryClient({
                 }
                 hint={
                   locale === "he"
-                    ? "מוצרים עם מלאי מספיק. בדוק חריגים — מוצרים עם אלפי יחידות עלולים להיות אטיים."
+                    ? "מוצרים עם מלאי מספיק. בדקו חריגים — מוצרים עם אלפי יחידות עלולים להיות אטיים."
                     : "Products with sufficient inventory. Check for outliers — high-stock items may indicate slow movers."
                 }
                 accentClass="border-emerald-400 bg-emerald-50/70 text-emerald-900"
@@ -643,7 +643,7 @@ export function InventoryClient({
                 }
                 hint={
                   locale === "he"
-                    ? "מוצרים ללא מכירות ב-90 הימים האחרונים. שקול לעדכן מחיר, מיקום או לבדוק אם הם מופיעים בחנות."
+                    ? "מוצרים ללא מכירות ב90 הימים האחרונים. שקלו לעדכן מחיר, מיקום או לבדוק אם הם מופיעים בחנות."
                     : "Products with no sales in the last 90 days. Consider repricing, repositioning, or checking their store visibility."
                 }
                 accentClass="border-slate-300 bg-slate-50/70 text-slate-800"
@@ -665,7 +665,7 @@ export function InventoryClient({
                 }
                 hint={
                   locale === "he"
-                    ? "וריאציות בלי מעקב מלאי. לאפשר 'Track quantity' ב-Shopify כדי להפיק דגלים."
+                    ? "וריאציות בלי מעקב מלאי. הפעילו 'Track quantity' בShopify כדי להציג דגלי מלאי."
                     : "Variants without inventory tracking. Enable 'Track quantity' in Shopify to generate flags."
                 }
                 accentClass="border-slate-200 bg-slate-50/50 text-slate-700"

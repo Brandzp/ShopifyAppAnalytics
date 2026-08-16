@@ -48,8 +48,8 @@ export default async function OrganizationSettingsPage() {
   const t =
     auth.locale === "he"
       ? {
-          title: "הגדרות חברה",
-          subtitle: "שם החברה, מטבע, וחברי הצוות",
+          title: "הגדרות ארגון",
+          subtitle: "שם הארגון, מטבע וחברי הצוות",
           plan: "מסלול נוכחי",
           trial: "תקופת ניסיון מסתיימת",
           members: "חברי צוות",

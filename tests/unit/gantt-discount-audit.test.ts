@@ -130,13 +130,13 @@ test("gift with purchase → info naming the Buy X Get Y mechanic (non-Plus)", (
   const a = offer({ headline: "מתנה בכל רכישה מעל 199₪" });
   auditBriefDiscounts(brief([a]));
   assert.match(calloutTexts(a), /Buy X Get Y/);
-  assert.match(calloutTexts(a), /ללא צורך ב-Plus/);
+  assert.match(calloutTexts(a), /ללא צורך בPlus/);
 });
 
 test("unique one-time codes → info about needing an app for bulk", () => {
   const a = offer({ headline: "עגלה נטושה", body: "קוד חד ערכי בתוקף ל-48 שעות" });
   auditBriefDiscounts(brief([a]));
-  assert.match(calloutTexts(a), /חד־ערכיים/);
+  assert.match(calloutTexts(a), /חד ערכיים/);
 });
 
 test("plain percentage offer with unique code → no callouts", () => {

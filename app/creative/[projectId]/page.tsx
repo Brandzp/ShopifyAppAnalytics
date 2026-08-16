@@ -30,7 +30,7 @@ export default async function CreativeProjectPage({
       ? {
           eyebrow: "סטודיו קריאייטיב",
           title: project.name,
-          description: "צפו בנכסים שנוצרו ועברו לעריכה בקרוב."
+          description: "צפו בנכסים שנוצרו — עריכה בתוך המערכת תתווסף בקרוב."
         }
       : {
           eyebrow: "Creative Studio",

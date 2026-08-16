@@ -83,7 +83,7 @@ export default async function RetentionPage() {
       : `Repeat-purchase rate is ${repeatRate.toFixed(1)}% — ${repeatStateLabel}.`;
   const body = [
     locale === "he"
-      ? `${formatNumber(snap.newCustomers)} לקוחות חדשים ו־${formatNumber(snap.returningCustomers)} לקוחות חוזרים הזמינו בחלון הזמן הזה.`
+      ? `${formatNumber(snap.newCustomers)} לקוחות חדשים ו${formatNumber(snap.returningCustomers)} לקוחות חוזרים הזמינו בחלון הזמן הזה.`
       : `${formatNumber(snap.newCustomers)} new customers and ${formatNumber(snap.returningCustomers)} returning customers ordered in this window.`,
     snap.averageDaysToSecondOrder > 0
       ? locale === "he"
@@ -134,7 +134,7 @@ export default async function RetentionPage() {
             title={locale === "he" ? "תמהיל הלקוחות בתקופה" : "Customer mix this period"}
             hint={
               locale === "he"
-                ? "חמישה מספרים שמספרים אם הלקוחות חוזרים. ריחוף על ? יציג את הנוסחה."
+                ? "חמישה מספרים שמראים אם הלקוחות חוזרים. ריחוף על ? יציג את הנוסחה."
                 : "Five numbers that tell you if buyers come back. Hover any ? for the calculation."
             }
           />
@@ -210,12 +210,12 @@ export default async function RetentionPage() {
             eyebrow={locale === "he" ? "שלב 3" : "Step 3"}
             title={
               locale === "he"
-                ? "מה לקוחות קונים ראשון לעומת מה שמחזיר אותם"
+                ? "מה לקוחות קונים בפעם הראשונה לעומת מה שמחזיר אותם"
                 : "What customers buy first vs. what brings them back"
             }
             hint={
               locale === "he"
-                ? "שמאל = המוצרים הטובים ביותר לרכישת לקוחות חדשים. ימין = המוצרים שהכי משמרים. SKU-ים שונים בכל צד זה תקין — ולרוב מאוד מגלה."
+                ? "שמאל = המוצרים הטובים ביותר לרכישת לקוחות חדשים. ימין = המוצרים שהכי משמרים. SKU-ים שונים בכל צד זה תקין — ולרוב מלמד הרבה."
                 : "Left = best acquisition products. Right = best retention products. Different SKUs are normal — and often very revealing."
             }
           />
@@ -277,7 +277,7 @@ export default async function RetentionPage() {
             }
             hint={
               locale === "he"
-                ? "כל שורה היא קבוצת לקוחות שנרכשה באותו חודש. העמודות מציגות איזה אחוז מהקוהורט הזמין שוב N חודשים לאחר מכן. כהה יותר = שימור טוב יותר. שווה להשוות שורות עדכניות (למעלה) לשורות ישנות (למטה) — אם הקוהורטים החדשים משמרים פחות, השיווק מביא לקוחות חד־פעמיים."
+                ? "כל שורה היא קבוצת לקוחות שהצטרפה באותו חודש. העמודות מציגות איזה אחוז מהקוהורט הזמין שוב N חודשים לאחר מכן. כהה יותר = שימור טוב יותר. שווה להשוות שורות עדכניות (למעלה) לשורות ישנות (למטה) — אם הקוהורטים החדשים משמרים פחות, השיווק מביא לקוחות חד פעמיים."
                 : "Each row is a group of customers acquired in the same month. Columns show what percent of that cohort ordered again N months later. Darker = better retention. Compare recent rows (top) to older rows (bottom): if recent cohorts retain worse, marketing is buying first-order tourists."
             }
           />

@@ -43,12 +43,12 @@ export const authStrings = {
     },
     forgot: {
       title: "איפוס סיסמה",
-      subtitle: "נשלח לכם קישור לאיפוס לסיסמה החדשה",
+      subtitle: "נשלח לכם קישור לאיפוס הסיסמה",
       emailLabel: "אימייל",
       emailPlaceholder: "you@example.com",
       submit: "שלחו קישור איפוס",
       submitting: "שולח…",
-      backToSignin: "← חזרה להתחברות",
+      backToSignin: "חזרה להתחברות",
       checkInbox: "בדקו את האימייל",
       checkInboxBody: "אם הכתובת קיימת אצלנו, שלחנו קישור לאיפוס סיסמה."
     },
@@ -62,7 +62,7 @@ export const authStrings = {
       submitting: "מעדכן…",
       successTitle: "הסיסמה עודכנה",
       successBody: "התחברו עכשיו עם הסיסמה החדשה.",
-      goToSignin: "עבור להתחברות",
+      goToSignin: "עברו להתחברות",
       errors: {
         mismatch: "הסיסמאות לא תואמות.",
         invalidLink: "קישור איפוס לא תקין. בקשו קישור חדש.",

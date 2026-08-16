@@ -118,11 +118,11 @@ export function QuickBatchButton({ locale }: { locale: AppLocale }) {
 
               <div>
                 <span className="font-medium">
-                  {isHe ? "מוצר מהחנות (תמונה תשמש כרפרנס)" : "Product from store (image used as reference)"}
+                  {isHe ? "מוצר מהחנות (התמונה תשמש כרפרנס)" : "Product from store (image used as reference)"}
                 </span>
                 <p className="mt-0.5 text-[11px] text-muted-foreground">
                   {isHe
-                    ? "בחירת מוצר תזרים את תמונת המוצר ל-Higgsfield כרפרנס — המודעות יראו את המוצר האמיתי שלכם."
+                    ? "בחירת מוצר תעביר את תמונת המוצר לHiggsfield כרפרנס — המודעות יציגו את המוצר האמיתי שלכם."
                     : "Selecting a product passes its image to Higgsfield as a reference — the ads will feature your actual product."}
                 </p>
                 <div className="mt-2">
@@ -175,7 +175,7 @@ export function QuickBatchButton({ locale }: { locale: AppLocale }) {
                             type="button"
                             onClick={() => removeFile(i)}
                             className="text-muted-foreground hover:text-rose-600"
-                            title={isHe ? "הסר" : "Remove"}
+                            title={isHe ? "הסרה" : "Remove"}
                           >
                             <X className="h-3 w-3" />
                           </button>
@@ -187,7 +187,7 @@ export function QuickBatchButton({ locale }: { locale: AppLocale }) {
               </div>
 
               <label className="block">
-                <span className="font-medium">{isHe ? "כמה תמונות" : "How many images"}</span>
+                <span className="font-medium">{isHe ? "כמה תמונות?" : "How many images"}</span>
                 <input
                   type="number"
                   min={1}
@@ -222,17 +222,17 @@ export function QuickBatchButton({ locale }: { locale: AppLocale }) {
               {result ? (
                 <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
                   {isHe
-                    ? `נוצר: ${result.succeeded} הצליחו, ${result.failed} נכשלו.`
+                    ? `הושלם: ${result.succeeded} הצליחו, ${result.failed} נכשלו.`
                     : `Done: ${result.succeeded} succeeded, ${result.failed} failed.`}
                   <a href={`/creative/${result.projectId}`} className="ms-2 underline">
-                    {isHe ? "פתח את הפרויקט" : "Open project"}
+                    {isHe ? "פתחו את הפרויקט" : "Open project"}
                   </a>
                 </div>
               ) : null}
 
               <div className="flex justify-end gap-2 pt-2">
                 <Button type="button" variant="ghost" onClick={() => setOpen(false)} disabled={submitting}>
-                  {result ? (isHe ? "סגור" : "Close") : isHe ? "ביטול" : "Cancel"}
+                  {result ? (isHe ? "סגירה" : "Close") : isHe ? "ביטול" : "Cancel"}
                 </Button>
                 {!result ? (
                   <Button type="submit" disabled={submitting || !theme.trim()}>
@@ -252,7 +252,7 @@ export function QuickBatchButton({ locale }: { locale: AppLocale }) {
 
               <p className="mt-2 text-[11px] text-muted-foreground">
                 {isHe
-                  ? "ייצור 5 תמונות לוקח בערך 60-120 שניות. אל תסגרו את החלון."
+                  ? "ייצור 5 תמונות נמשך כ60-120 שניות. אל תסגרו את החלון."
                   : "5-image generation takes ~60-120 seconds. Don't close this window."}
               </p>
             </form>

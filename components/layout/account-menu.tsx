@@ -24,7 +24,7 @@ export function AccountMenu({
           orgSettings: "הגדרות חברה",
           auditLog: "יומן ביקורת",
           billing: "מנוי וחשבונות",
-          signOut: "התנתק"
+          signOut: "התנתקות"
         }
       : {
           accountSettings: "Account settings",

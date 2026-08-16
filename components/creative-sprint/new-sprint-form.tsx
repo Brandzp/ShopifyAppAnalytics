@@ -21,10 +21,10 @@ interface Props {
 
 const TARGET_COUNT_PRESETS = [10, 25, 50, 100];
 const APPROVAL_MODES: Array<{ value: SprintApprovalMode; labelHe: string; labelEn: string; descHe: string; descEn: string }> = [
-  { value: "review_both", labelHe: "אישור בתסריט + נכסים (מומלץ לראשון)", labelEn: "Review both (recommended for sprint #1)", descHe: "תאשרו תקצירים, אחר כך תאשרו נכסים, רק אז יתפרסם.", descEn: "Approve briefs, then approve assets, then publish." },
-  { value: "review_briefs", labelHe: "אישור רק על תסריטים", labelEn: "Review briefs only", descHe: "נכסים מתפרסמים אוטומטית אחרי שתאשרו את התסריטים.", descEn: "Assets auto-publish once you approve briefs." },
-  { value: "review_assets", labelHe: "אישור רק על נכסים", labelEn: "Review assets only", descHe: "תסריטים נוצרים אוטומטית; תאשרו את הנכסים לפני פרסום.", descEn: "Briefs auto-generate; you approve assets before publish." },
-  { value: "full_auto", labelHe: "אוטומטי לחלוטין (בלי גייט אנושי)", labelEn: "Full auto (no human gate)", descHe: "סיכון: מודעות מתפרסמות בלי שתראו אותן.", descEn: "Risk: ads publish without you seeing them." }
+  { value: "review_both", labelHe: "אישור תקצירים + נכסים (מומלץ לספרינט הראשון)", labelEn: "Review both (recommended for sprint #1)", descHe: "תאשרו את התקצירים, לאחר מכן את הנכסים, ורק אז יתבצע הפרסום.", descEn: "Approve briefs, then approve assets, then publish." },
+  { value: "review_briefs", labelHe: "אישור תקצירים בלבד", labelEn: "Review briefs only", descHe: "הנכסים מתפרסמים אוטומטית לאחר שתאשרו את התקצירים.", descEn: "Assets auto-publish once you approve briefs." },
+  { value: "review_assets", labelHe: "אישור נכסים בלבד", labelEn: "Review assets only", descHe: "התקצירים נוצרים אוטומטית; תאשרו את הנכסים לפני הפרסום.", descEn: "Briefs auto-generate; you approve assets before publish." },
+  { value: "full_auto", labelHe: "אוטומטי לחלוטין (ללא אישור אנושי)", labelEn: "Full auto (no human gate)", descHe: "סיכון: מודעות מתפרסמות בלי שתראו אותן.", descEn: "Risk: ads publish without you seeing them." }
 ];
 
 export function NewSprintForm({ locale, storeName, storeCurrency }: Props) {
@@ -113,7 +113,7 @@ export function NewSprintForm({ locale, storeName, storeCurrency }: Props) {
           </div>
           <p className="text-xs text-muted-foreground">
             {t
-              ? "10 הוא הגודל המומלץ לבדיקת עשן ראשונה. 100 הוא ברירת מחדל לייצור."
+              ? "10 הוא הגודל המומלץ להרצת ניסיון ראשונה. 100 הוא ברירת המחדל לריצה מלאה."
               : "10 is the recommended size for first-time smoke testing. 100 is the production default."}
           </p>
         </div>
@@ -132,7 +132,7 @@ export function NewSprintForm({ locale, storeName, storeCurrency }: Props) {
           />
           <p className="text-xs text-muted-foreground">
             {t
-              ? "Meta יחלק את התקציב על פני 24 שעות. בחלון של 6 שעות כל מודעה תוציא בערך רבע מהתקציב."
+              ? "Meta יחלק את התקציב על פני 24 שעות. בחלון של 6 שעות כל מודעה תוציא כרבע מהתקציב."
               : "Meta paces this across 24h, so in 6h each ad will spend roughly a quarter of this."}
           </p>
         </div>
@@ -170,7 +170,7 @@ export function NewSprintForm({ locale, storeName, storeCurrency }: Props) {
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
-            placeholder={t ? "למה אתם רצים את הספרינט הזה? לאיזה מוצר?" : "Why are you running this sprint? Which product?"}
+            placeholder={t ? "למה אתם מריצים את הספרינט הזה? לאיזה מוצר?" : "Why are you running this sprint? Which product?"}
           />
         </div>
 
@@ -206,7 +206,7 @@ export function NewSprintForm({ locale, storeName, storeCurrency }: Props) {
               </dd>
             </div>
             <div className="flex items-center justify-between border-t border-border pt-3">
-              <dt className="text-muted-foreground">{t ? "תקציב על 3 ימי הערכה" : "Total across 3-day eval"}</dt>
+              <dt className="text-muted-foreground">{t ? "תקציב כולל ל3 ימי הערכה" : "Total across 3-day eval"}</dt>
               <dd className="font-semibold tabular-nums">
                 {storeCurrency} {estAdSpend3d.toLocaleString()}
               </dd>
@@ -214,32 +214,32 @@ export function NewSprintForm({ locale, storeName, storeCurrency }: Props) {
           </dl>
           <p className="mt-4 text-xs text-muted-foreground">
             {t
-              ? "התקציב היומי הוא תקרה: רוב המודעות ימותו בשלב 1 (6 שעות) ויפסיקו להוציא. ההוצאה האמיתית בדרך כלל 30%-50% מהתקרה."
+              ? "התקציב היומי הוא תקרה: רוב המודעות ייעצרו בשלב 1 (6 שעות) ויפסיקו להוציא. ההוצאה בפועל היא בדרך כלל 30%-50% מהתקרה."
               : "Daily ceiling — most ads get killed at stage 1 (6h) and stop spending. Actual spend is usually 30-50% of the ceiling."}
           </p>
         </div>
 
         <div className="rounded-2xl border border-border bg-card p-5 shadow-soft">
           <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-            {t ? "תוכנית גזירה" : "Cascade plan"}
+            {t ? "תוכנית סינון מדורג" : "Cascade plan"}
           </h3>
           <ul className="mt-4 space-y-3 text-sm">
             <li className="flex justify-between gap-3">
               <span className="text-muted-foreground">+6h</span>
               <span>
-                CTR · {t ? "הורגים תחתון 70%" : "kill bottom 70%"}
+                CTR · {t ? "עצירת 70% התחתונים" : "kill bottom 70%"}
               </span>
             </li>
             <li className="flex justify-between gap-3">
               <span className="text-muted-foreground">+24h</span>
               <span>
-                CPC · {t ? "הורגים תחתון 50%" : "kill bottom 50%"}
+                CPC · {t ? "עצירת 50% התחתונים" : "kill bottom 50%"}
               </span>
             </li>
             <li className="flex justify-between gap-3">
               <span className="text-muted-foreground">+72h</span>
               <span>
-                CPA · {t ? "הורגים תחתון 50%" : "kill bottom 50%"}
+                CPA · {t ? "עצירת 50% התחתונים" : "kill bottom 50%"}
               </span>
             </li>
           </ul>

@@ -121,7 +121,7 @@ function buildDeterministicInsights(sheet: any): GanttInsightsPayload {
     insights.push({
       title: "קודי קופון שהוזכרו בגאנט",
       severity: "info",
-      body: `זוהו ${coupons.size} קודים בטקסט: ${[...coupons].slice(0, 6).join(", ")}. וודאו שכולם קיימים ב־Shopify Admin לפני הפרסום.`
+      body: `זוהו ${coupons.size} קודים בטקסט: ${[...coupons].slice(0, 6).join(", ")}. ודאו שכולם קיימים בShopify Admin לפני הפרסום.`
     });
   }
 
@@ -136,7 +136,7 @@ function buildDeterministicInsights(sheet: any): GanttInsightsPayload {
       insights.push({
         title: "ימים ריקים בגאנט",
         severity: "info",
-        body: `${emptyDays} מתוך ${totalDays} ימי החודש בלי אף משימה. אם זה בכוונה — סבבה; אם לא — יש חורים בכיסוי.`
+        body: `${emptyDays} מתוך ${totalDays} ימי החודש ללא אף משימה. אם זה מכוון — הכול תקין; אם לא — יש פערים בכיסוי.`
       });
     }
   }
@@ -155,19 +155,19 @@ function buildDeterministicInsights(sheet: any): GanttInsightsPayload {
     insights.push({
       title: "קוד קופון חוזר בהרבה משימות",
       severity: "warning",
-      body: `${duplicates.map(([k, n]) => `"${k}" (${n} פעמים)`).join(", ")} — אולי כפילות שלא במקום, או שיוצרת פערים בין מבצעים.`
+      body: `${duplicates.map(([k, n]) => `"${k}" (${n} פעמים)`).join(", ")} — ייתכן שמדובר בכפילות שלא במקומה, או בקוד שיוצר בלבול בין מבצעים.`
     });
   }
 
   // Universal action — always useful.
   actions.push({
     title: "עברו על ימי העומס",
-    body: "לימים המרוכזים ביותר בגאנט (מסומנים באזהרה), בדקו אם אפשר להזיז חלק מהמשימות ליום שכן."
+    body: "לימים העמוסים ביותר בגאנט (מסומנים באזהרה), בדקו אם אפשר להעביר חלק מהמשימות ליום סמוך."
   });
 
   const totalRows = rows.length;
   const summary = totalRows
-    ? `הגאנט כולל ${totalRows} משימות ב־${byDate.size} ימי פעילות. ${insights.length} תובנות מבוססות מבנה זוהו (הסוכן BI לא היה זמין — התובנות שלמעלה חושבו לוקאלית).`
+    ? `הגאנט כולל ${totalRows} משימות ב${byDate.size} ימי פעילות. זוהו ${insights.length} תובנות מבוססות מבנה (סוכן הBI לא היה זמין — התובנות שלמעלה חושבו מקומית).`
     : "הגאנט ריק. העלו קובץ עם משימות כדי לקבל תובנות.";
 
   return { summary, insights: insights.slice(0, 6), actions: actions.slice(0, 6) };

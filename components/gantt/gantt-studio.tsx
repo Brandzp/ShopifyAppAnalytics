@@ -98,43 +98,43 @@ const ACTION_META: Record<
   discount_code: {
     label: "קופון/הנחה",
     icon: Tag,
-    ctaLabel: "צור קופון בשופיפיי",
+    ctaLabel: "יצירת קופון בShopify",
     href: (row) => `/marketing-tools?action=discount&title=${encodeURIComponent(row.task.slice(0, 80))}`
   },
   creative_image: {
     label: "תמונה",
     icon: ImageIcon,
-    ctaLabel: "פתח סטודיו ליצירה",
+    ctaLabel: "פתיחת סטודיו ליצירה",
     href: (row) => `/creative/new?type=PACKSHOT&prompt=${encodeURIComponent(row.task.slice(0, 280))}`
   },
   creative_banner: {
     label: "באנר",
     icon: ImageIcon,
-    ctaLabel: "פתח סטודיו לבאנר",
+    ctaLabel: "פתיחת סטודיו לבאנר",
     href: (row) => `/creative/new?type=META_AD&prompt=${encodeURIComponent(row.task.slice(0, 280))}`
   },
   creative_video: {
     label: "וידאו",
     icon: ImageIcon,
-    ctaLabel: "פתח סטודיו לוידאו",
+    ctaLabel: "פתיחת סטודיו לווידאו",
     href: (row) => `/creative/new?type=UGC_VIDEO&prompt=${encodeURIComponent(row.task.slice(0, 280))}`
   },
   social_post: {
     label: "פוסט/סטורי",
     icon: MessageSquare,
-    ctaLabel: "פתח סטודיו ליצירה",
+    ctaLabel: "פתיחת סטודיו ליצירה",
     href: (row) => `/creative/new?type=INSTAGRAM_POST&prompt=${encodeURIComponent(row.task.slice(0, 280))}`
   },
   email_campaign: {
     label: "אימייל/ניוזלטר",
     icon: Mail,
-    ctaLabel: "צור טיוטה",
+    ctaLabel: "יצירת טיוטה",
     href: (row) => `/marketing-tools?action=email&title=${encodeURIComponent(row.task.slice(0, 80))}`
   },
   sms_campaign: {
     label: "סמס",
     icon: MessageSquare,
-    ctaLabel: "צור טיוטת סמס",
+    ctaLabel: "יצירת טיוטת סמס",
     href: (row) => `/marketing-tools?action=sms&title=${encodeURIComponent(row.task.slice(0, 80))}`
   },
   web_update: {
@@ -146,7 +146,7 @@ const ACTION_META: Record<
   blog_post: {
     label: "מאמר/בלוג",
     icon: FileText,
-    ctaLabel: "פתח עורך תוכן",
+    ctaLabel: "פתיחת עורך תוכן",
     href: (row) => `/creative/new?type=INSTAGRAM_POST&prompt=${encodeURIComponent(row.task.slice(0, 280))}`
   }
 };
@@ -377,7 +377,7 @@ export function GanttStudio({ initialSheets }: { initialSheets: GanttSheetSummar
       a.remove();
       URL.revokeObjectURL(objectUrl);
     } catch (err) {
-      alert(`PDF נכשל: ${err instanceof Error ? err.message : String(err)}`);
+      alert(`יצירת הPDF נכשלה: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setDownloadingRole(null);
     }
@@ -528,7 +528,7 @@ export function GanttStudio({ initialSheets }: { initialSheets: GanttSheetSummar
             ) : (
               <Upload className="h-4 w-4" aria-hidden />
             )}
-            {uploading ? "מעלה…" : "העלה גאנט (.xlsx / .csv)"}
+            {uploading ? "מעלה…" : "העלאת גאנט (.xlsx / .csv)"}
             <input
               type="file"
               accept=".xlsx,.xls,.csv"
@@ -665,7 +665,7 @@ export function GanttStudio({ initialSheets }: { initialSheets: GanttSheetSummar
                 ) : (
                   <Sparkles className="h-3 w-3" aria-hidden />
                 )}
-                {insights ? "רענן תובנות" : "הפעל ניתוח"}
+                {insights ? "רענון תובנות" : "הפעלת ניתוח"}
               </button>
             </div>
             {insightsError ? (
@@ -733,8 +733,8 @@ export function GanttStudio({ initialSheets }: { initialSheets: GanttSheetSummar
               </div>
             ) : (
               <p className="mt-3 text-sm text-muted-foreground">
-                לחצו על &quot;הפעל ניתוח&quot; כדי לקבל סיכום, אזהרות (חוסרים, התנגשויות,
-                חוסר זמן הכנה) והמלצות מסוכן ה-BI.
+                לחצו על &quot;הפעלת ניתוח&quot; כדי לקבל סיכום, אזהרות (חוסרים, התנגשויות,
+                חוסר זמן הכנה) והמלצות מסוכן הBI.
               </p>
             )}
           </div>
@@ -748,7 +748,7 @@ export function GanttStudio({ initialSheets }: { initialSheets: GanttSheetSummar
                   <h3 className="text-base font-semibold">בריף שיווקי חודשי</h3>
                 </div>
                 <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
-                  ה-BI יבנה בריף מלא בפורמט שאתם משתמשים בו: הטבות קבועות, קודי
+                  הBI יבנה בריף מלא בפורמט שאתם משתמשים בו: הטבות קבועות, קודי
                   קופון של משפיעניות, הנחות באתר, בריף קידום ממומן (תקציב + ROAS +
                   קמפיינים), ותוכן UGC — הכל עם הדגשות, קופונים, ותנאי המבצעים.
                 </p>
@@ -771,7 +771,7 @@ export function GanttStudio({ initialSheets }: { initialSheets: GanttSheetSummar
                 ) : (
                   <Sparkles className="h-4 w-4" aria-hidden />
                 )}
-                {briefReady ? "ייצר מחדש" : "צור בריף שיווקי"}
+                {briefReady ? "יצירה מחדש" : "יצירת בריף שיווקי"}
               </button>
               <button
                 type="button"
@@ -784,7 +784,7 @@ export function GanttStudio({ initialSheets }: { initialSheets: GanttSheetSummar
                 ) : (
                   <Download className="h-4 w-4" aria-hidden />
                 )}
-                הורד PDF
+                הורדת PDF
               </button>
               <a
                 href={`/print/gantt-marketing-brief?sheetId=${selectedSheetId}`}
@@ -1000,7 +1000,7 @@ export function GanttStudio({ initialSheets }: { initialSheets: GanttSheetSummar
                     type="button"
                     onClick={() => setDayModalOpen(false)}
                     className="rounded-lg border border-border p-1.5 hover:border-rose-300 hover:bg-rose-50"
-                    title="סגור"
+                    title="סגירה"
                   >
                     ✕
                   </button>
@@ -1081,7 +1081,7 @@ export function GanttStudio({ initialSheets }: { initialSheets: GanttSheetSummar
                                   ) : (
                                     <Icon className="h-3.5 w-3.5" aria-hidden />
                                   )}
-                                  {executed ? "פתח שוב" : meta.ctaLabel}
+                                  {executed ? "פתיחה מחדש" : meta.ctaLabel}
                                 </button>
                               ) : null}
                             </div>

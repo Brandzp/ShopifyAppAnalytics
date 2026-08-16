@@ -32,10 +32,10 @@ export default async function GrowthAgentOverviewPage() {
   const headline =
     overview.status === "active"
       ? locale === "he"
-        ? `הסוכן פעיל במצב ${modeLabel} – ${overview.alertsLast7Days} התראות ב-7 הימים האחרונים.`
+        ? `הסוכן פעיל במצב ${modeLabel} – ${overview.alertsLast7Days} התראות ב7 הימים האחרונים.`
         : `Agent is active in ${modeLabel} mode - ${overview.alertsLast7Days} alerts in the last 7 days.`
       : locale === "he"
-        ? "הסוכן מושהה. הפעל אותו כדי שיתחיל לעקוב אחרי החנות."
+        ? "הסוכן מושהה. הפעילו אותו כדי שיתחיל לעקוב אחרי החנות."
         : "Agent is paused. Switch it on to start watching your store.";
   const body =
     locale === "he"
@@ -86,7 +86,7 @@ export default async function GrowthAgentOverviewPage() {
             title={locale === "he" ? "הסוכן במבט מהיר" : "Agent at a glance"}
             hint={
               locale === "he"
-                ? "שישה מדדים שמספרים לך אם הסוכן תקין ומחובר."
+                ? "שישה מדדים שמספרים לכם אם הסוכן תקין ומחובר."
                 : "Six metrics that tell you if the agent is healthy and connected."
             }
           />
@@ -101,7 +101,7 @@ export default async function GrowthAgentOverviewPage() {
               icon={Bot}
               tooltip={
                 locale === "he"
-                  ? "האם הסוכן כרגע פעיל, מושהה, או בשגיאה."
+                  ? "האם הסוכן כרגע פעיל, מושהה או במצב שגיאה."
                   : "Whether the agent is currently active, paused, or in error."
               }
             />
@@ -111,7 +111,7 @@ export default async function GrowthAgentOverviewPage() {
               icon={ShieldCheck}
               tooltip={
                 locale === "he"
-                  ? "מצב הפעלה: צפייה בלבד, המלצה, או ביצוע אוטומטי."
+                  ? "מצב הפעלה: צפייה בלבד, המלצה או ביצוע אוטומטי."
                   : "Operating mode: observe-only, recommend, or auto-execute."
               }
             />
@@ -161,7 +161,7 @@ export default async function GrowthAgentOverviewPage() {
               icon={Lightbulb}
               tooltip={
                 locale === "he"
-                  ? "רעיונות סורסינג שהקראולר מצא ומתאימים לקטלוג ולמרווחים שלך."
+                  ? "רעיונות סורסינג שהקראולר מצא ומתאימים לקטלוג ולמרווחים שלכם."
                   : "Sourcing ideas surfaced by the crawler that match your catalog and margin targets."
               }
             />
@@ -205,7 +205,7 @@ export default async function GrowthAgentOverviewPage() {
                 <div className="rounded-xl border border-border/70 bg-muted/35 p-3">
                   <p>
                     <strong className="text-foreground">
-                      {locale === "he" ? "החנות בהיקף:" : "Store in scope:"}
+                      {locale === "he" ? "החנות שבמעקב:" : "Store in scope:"}
                     </strong>{" "}
                     {overview.provenance.storeName} ({overview.provenance.storeDomain})
                   </p>
@@ -231,19 +231,19 @@ export default async function GrowthAgentOverviewPage() {
                   </p>
                   <p>
                     <strong className="text-foreground">
-                      {locale === "he" ? "מקור הסנפשוט:" : "Snapshot source:"}
+                      {locale === "he" ? "מקור תמונת המצב:" : "Snapshot source:"}
                     </strong>{" "}
-                    {overview.provenance.lastSnapshotSource ?? (locale === "he" ? "אין סנפשוט עדיין" : "No snapshot yet")}
+                    {overview.provenance.lastSnapshotSource ?? (locale === "he" ? "אין תמונת מצב עדיין" : "No snapshot yet")}
                   </p>
                 </div>
                 <p className="rounded-lg bg-indigo-500/5 px-3 py-2 text-indigo-700">
                   {locale === "he"
-                    ? "הסוכן נעול לחנות המחוברת שמוצגת למעלה. פעולות רצות רק עבור אותה חנות אם הן מותרות, מחוברות, מעל סף הביטחון, ובתוך המגבלות שהגדרת."
+                    ? "הסוכן נעול לחנות המחוברת שמוצגת למעלה. פעולות רצות רק עבור אותה חנות אם הן מותרות, מחוברות, מעל סף הביטחון ובתוך המגבלות שהגדרתם."
                     : "This agent is locked to the connected store shown above. Actions only run for that store when they are allowed, connected, above confidence threshold, and inside your guardrails."}
                 </p>
                 <p className="rounded-lg bg-amber-500/10 px-3 py-2 text-amber-800">
                   {locale === "he"
-                    ? "ההסברים לפי ערוץ מדויקים יותר כשמחברי התנועה והפרסום תקינים. בלעדיהם, הסוכן נשען על אותות הזמנות מ-Shopify והערכות כיווניות."
+                    ? "ההסברים לפי ערוץ מדויקים יותר כשמחברי התנועה והפרסום תקינים. בלעדיהם, הסוכן נשען על אותות הזמנות מShopify והערכות כיווניות."
                     : "Channel explanations are strongest when traffic and ad connectors are healthy. Without them, the agent falls back to Shopify order signals and directional heuristics."}
                 </p>
               </CardContent>
@@ -259,7 +259,7 @@ export default async function GrowthAgentOverviewPage() {
               title={locale === "he" ? "רעיונות סורסינג ממתינים לבדיקה" : "Sourcing ideas waiting for review"}
               hint={
                 locale === "he"
-                  ? "מוצרים שהקראולר מצא ומתאימים לחנות שלך. אשר ב-Action Center כדי לפתוח עליהם טיוטה."
+                  ? "מוצרים שהקראולר מצא ומתאימים לחנות שלכם. אשרו בAction Center כדי לפתוח עליהם טיוטה."
                   : "Crawler-surfaced products that match your store. Approve in the Action Center to draft them."
               }
             />

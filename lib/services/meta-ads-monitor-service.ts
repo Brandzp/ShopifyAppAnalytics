@@ -81,7 +81,7 @@ function buildTokenExpiryEmail(issue: TokenExpiryIssue): { subject: string; html
     <tr>
       <td style="padding:24px;border-bottom:2px solid #dc2626;">
         <p style="margin:0 0 4px;font-size:11px;letter-spacing:0.18em;text-transform:uppercase;color:#dc2626;">
-          Action Required — Brandzp Analytics
+          Action Required — Hiloomy
         </p>
         <h1 style="margin:0;font-size:20px;color:#0f172a;">Meta Ads Token Expiry Warning</h1>
         <p style="margin:6px 0 0;font-size:13px;color:#475569;">Store: ${storeName}</p>
@@ -97,11 +97,11 @@ function buildTokenExpiryEmail(issue: TokenExpiryIssue): { subject: string; html
         <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:6px;padding:14px 16px;margin-bottom:16px;">
           <p style="margin:0;font-size:13px;font-weight:700;color:#7f1d1d;">
             To restore Meta Ads syncing, reconnect the account from the
-            <em>Settings → Connections</em> page in your Brandzp Analytics dashboard.
+            <em>Settings → Connections</em> page in your Hiloomy dashboard.
           </p>
         </div>
         <p style="margin:0;font-size:12px;color:#6b7280;">
-          This alert was generated automatically by Brandzp Analytics.
+          This alert was generated automatically by Hiloomy.
           If the connection has already been renewed, the alert will clear on the
           next daily check.
         </p>

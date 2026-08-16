@@ -42,16 +42,16 @@ export default async function ProfitPage() {
 
   const narrativeBody = [
     locale === "he"
-      ? `המרווח נחת סביב ${margin.toFixed(1)}% — מכל ₪100 הכנסה נשארו ${formatCurrency((totalProfit / Math.max(totalRevenue, 1)) * 100, currency)}.`
+      ? `המרווח עמד על כ-${margin.toFixed(1)}% — מכל ₪100 הכנסה נשארו ${formatCurrency((totalProfit / Math.max(totalRevenue, 1)) * 100, currency)}.`
       : `Margin landed near ${margin.toFixed(1)}% — every ₪100 in revenue kept ${formatCurrency((totalProfit / Math.max(totalRevenue, 1)) * 100, currency)}.`,
     topProduct
       ? locale === "he"
-        ? `${topProduct.productTitle} הוא מנוע הרווח המוביל שלך עם ${formatCurrency(topProduct.estimatedProfit, currency)}.`
+        ? `${topProduct.productTitle} הוא מנוע הרווח המוביל שלכם עם ${formatCurrency(topProduct.estimatedProfit, currency)}.`
         : `${topProduct.productTitle} is your top profit driver at ${formatCurrency(topProduct.estimatedProfit, currency)}.`
       : null,
     watchlistFirst
       ? locale === "he"
-        ? `מעקב: ${watchlistFirst.productTitle} הוא ה־SKU עם המרווח הנמוך ביותר ומומלץ לבחון תמחור.`
+        ? `מעקב: ${watchlistFirst.productTitle} הוא הSKU עם המרווח הנמוך ביותר ומומלץ לבחון תמחור.`
         : `Watchlist: ${watchlistFirst.productTitle} is the lowest-margin SKU and worth a pricing review.`
       : null
   ]
@@ -82,7 +82,7 @@ export default async function ProfitPage() {
                 ? "רווח חיובי"
                 : "Profit positive"
               : locale === "he"
-                ? "לחץ על המרווח"
+                ? "המרווח תחת לחץ"
                 : "Margin pressure"
           }
         />
@@ -191,7 +191,7 @@ export default async function ProfitPage() {
             title={locale === "he" ? "הפירוט המלא" : "The full breakdown"}
             hint={
               locale === "he"
-                ? "טבלאות עם מיון ועימוד. השתמש במחליף גודל-עמוד כדי לראות יותר שורות בבת אחת."
+                ? "טבלאות עם מיון ועימוד. השתמשו בבורר גודל העמוד כדי לראות יותר שורות בבת אחת."
                 : "Sortable, paginated tables. Use the page-size toggle if you want to see more rows at once."
             }
             cta={{
@@ -322,7 +322,7 @@ export default async function ProfitPage() {
             title={locale === "he" ? "מובילים ומעקב" : "Heroes & watchlist"}
             hint={
               locale === "he"
-                ? "המובילים הניעו את המרווח בתקופה. הרשימה למעקב דורשת תשומת לב הבאה — תמחור, באנדלים או בחינת החזרים."
+                ? "המובילים הניעו את המרווח בתקופה. רשימת המעקב היא הבאה בתור לטיפול — תמחור, באנדלים או בחינת החזרים."
                 : "Heroes drove margin this period. Watchlist needs your attention next — pricing, bundles, or refund review."
             }
           />
@@ -390,7 +390,7 @@ export default async function ProfitPage() {
               title={locale === "he" ? "רווח תרומה ועלות רכישת לקוח לפי ערוץ" : "Channel CAC & contribution margin"}
               hint={
                 locale === "he"
-                  ? "כמה כל ערוץ עולה לך, מה החזיר בהכנסה, ומה נשאר ברווח תרומה אחרי עלות מוצרים (COGS) והוצאת פרסום מיוחסת. מומלצת = להגדיל. לעיון = לבחון קריאייטיב/קהל. להרעיב = לעצור הוצאה."
+                  ? "כמה כל ערוץ עולה לכם, מה הוא החזיר בהכנסה ומה נשאר כרווח תרומה אחרי עלות מוצרים (COGS) והוצאת פרסום מיוחסת. להגדיל = להרחיב תקציב. לבדיקה = לבחון קריאייטיב/קהל. להרעיב = לעצור הוצאה."
                   : "How much each channel costs, what it returned in revenue, and what's left as contribution margin after COGS and attributed spend. Push = scale, review = check creative/audience, starve = stop spending."
               }
             />
@@ -405,7 +405,7 @@ export default async function ProfitPage() {
             title={locale === "he" ? "הכי רווחיים ופחות רווחיים" : "Most & least profitable products"}
             hint={
               locale === "he"
-                ? "המוצרים הכי רווחיים מניעים את המרווח — שקול להגביר את המכירות שלהם. המוצרים הפחות רווחיים (או מפסידים) ידרשו בדיקת תמחור, עלות או ביטול הנחות."
+                ? "המוצרים הכי רווחיים מניעים את המרווח — שקלו להגביר את המכירות שלהם. המוצרים הפחות רווחיים (או מפסידים) ידרשו בדיקת תמחור, עלות או ביטול הנחות."
                 : "Most profitable products drive your margin — consider scaling them. Least profitable (or loss-making) products need pricing, cost, or promo review."
             }
           />
@@ -441,7 +441,7 @@ export default async function ProfitPage() {
             {/* Least profitable */}
             <div>
               <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-rose-700">
-                {locale === "he" ? "המוצרים הכי פחות רווחיים" : "Least profitable products"}
+                {locale === "he" ? "המוצרים הפחות רווחיים" : "Least profitable products"}
               </p>
               <StyledTable
                 numbered
@@ -486,7 +486,7 @@ export default async function ProfitPage() {
             }
             hint={
               locale === "he"
-                ? "כרגע מקומות שמורים. הם יידלקו ברגע שניקלוט הרכבי באנדלים וסיבות החזר."
+                ? "כרגע אלה שומרי מקום. הם יופעלו ברגע שנקלוט הרכבי באנדלים וסיבות החזר."
                 : "Currently placeholders. They'll light up once we ingest bundle composition and refund reasons."
             }
           />
@@ -538,7 +538,7 @@ function ChannelCacTable({
     const label = {
       push: { he: "להגדיל", en: "Push" },
       hold: { he: "להחזיק", en: "Hold" },
-      review: { he: "לעיין", en: "Review" },
+      review: { he: "לבדיקה", en: "Review" },
       starve: { he: "להרעיב", en: "Starve" },
       no_data: { he: "אין נתונים", en: "No data" }
     }[rec];
@@ -623,7 +623,7 @@ function ChannelCacTable({
       </table>
       <div className="border-t border-border bg-slate-50 px-3 py-2 text-[10px] text-muted-foreground">
         {lang(
-          `כיסוי שיוך: ${Math.round(report.attributionCoverage * 100)}% · הקצאת עלות מוצרים (COGS) פר ערוץ ב-v1 לפי משקל הכנסה (יחודד בעתיד)`,
+          `כיסוי שיוך: ${Math.round(report.attributionCoverage * 100)}% · הקצאת עלות מוצרים (COGS) לכל ערוץ בv1 לפי משקל הכנסה (יחודד בעתיד)`,
           `Attribution coverage: ${Math.round(report.attributionCoverage * 100)}% · v1 allocates COGS per channel by revenue share (refined in future)`
         )}
       </div>

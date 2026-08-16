@@ -146,7 +146,7 @@ export function SprintDetailBoard({ initial, locale, storeName, storeCurrency }:
     if (s === "draft") {
       actions.push(
         <Button key="g" onClick={onGenerateBriefs} disabled={busy !== null}>
-          {busy === "briefs" ? (t ? "מייצר תסריטים…" : "Generating briefs…") : (t ? "צרו 100 תסריטים" : "Generate briefs")}
+          {busy === "briefs" ? (t ? "מייצר תקצירים…" : "Generating briefs…") : (t ? "צרו 100 תקצירים" : "Generate briefs")}
         </Button>
       );
     }
@@ -172,7 +172,7 @@ export function SprintDetailBoard({ initial, locale, storeName, storeCurrency }:
       );
       actions.push(
         <Button key="pub" variant="secondary" onClick={() => setShowPublishModal(true)} disabled={busy !== null}>
-          {t ? "הגדירו וקנפגו פרסום" : "Configure & publish"}
+          {t ? "הגדירו ופרסמו" : "Configure & publish"}
         </Button>
       );
     }
@@ -205,7 +205,7 @@ export function SprintDetailBoard({ initial, locale, storeName, storeCurrency }:
           }}
           disabled={busy !== null}
         >
-          {t ? "ביטול וכיבוי כל המודעות" : "Cancel & pause all"}
+          {t ? "ביטול ועצירת כל המודעות" : "Cancel & pause all"}
         </Button>
       );
     }
@@ -242,19 +242,19 @@ export function SprintDetailBoard({ initial, locale, storeName, storeCurrency }:
 
       {/* ── Stats strip ─────────────────────────────────────────── */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
-        <Stat label={t ? "מודעות בסך הכל" : "Total ads"} value={stats.total} tone="neutral" />
-        <Stat label={t ? "בחיים" : "Alive"} value={stats.alive} tone="sky" />
-        <Stat label={t ? "מתו" : "Killed"} value={stats.killed} tone="rose" />
+        <Stat label={t ? "סה״כ מודעות" : "Total ads"} value={stats.total} tone="neutral" />
+        <Stat label={t ? "פעילות" : "Alive"} value={stats.alive} tone="sky" />
+        <Stat label={t ? "נעצרו" : "Killed"} value={stats.killed} tone="rose" />
         <Stat label={t ? "מנצחות" : "Winners"} value={stats.winner} tone="emerald" />
-        <Stat label={t ? "מוכן לפרסום" : "Ready"} value={stats.ready} tone="amber" />
-        <Stat label={t ? "מייצר" : "Generating"} value={stats.generating} tone="neutral" />
-        <Stat label={t ? "כשלים" : "Failed"} value={stats.failed} tone="rose" />
+        <Stat label={t ? "מוכנות לפרסום" : "Ready"} value={stats.ready} tone="amber" />
+        <Stat label={t ? "בייצור" : "Generating"} value={stats.generating} tone="neutral" />
+        <Stat label={t ? "נכשלו" : "Failed"} value={stats.failed} tone="rose" />
       </div>
 
       {/* ── Matrix grid ─────────────────────────────────────────── */}
       {sprint.ads.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-border bg-card/30 p-12 text-center text-sm text-muted-foreground">
-          {t ? "תסריטים יופיעו כאן ברגע שתייצרו אותם." : "Briefs will appear here once you generate them."}
+          {t ? "תקצירים יופיעו כאן ברגע שתייצרו אותם." : "Briefs will appear here once you generate them."}
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-10">
@@ -390,7 +390,7 @@ function AdTile({
       type="button"
       onClick={onClick}
       className={`group block overflow-hidden rounded-xl border border-border bg-card text-start shadow-soft transition hover:border-foreground/30 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-primary ${statusTone(ad.status, ad.finalStatus)}`}
-      title={t ? "לחץ לצפייה / עריכה של התקציר" : "Click to view / edit brief"}
+      title={t ? "לחצו לצפייה ולעריכת התקציר" : "Click to view / edit brief"}
     >
       <div className="relative aspect-[9/16] w-full bg-muted">
         {thumbSrc ? (
@@ -413,7 +413,7 @@ function AdTile({
           </div>
         ) : ad.finalStatus === "killed" ? (
           <div className="absolute end-1 top-1 rounded bg-rose-600 px-1.5 py-0.5 text-[10px] font-bold text-white">
-            {t ? "מתה" : "KILL"}
+            {t ? "נעצרה" : "KILL"}
           </div>
         ) : null}
       </div>

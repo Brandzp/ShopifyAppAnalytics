@@ -75,7 +75,7 @@ export function AffiliateLinkBuilder({
         if (!response.ok || !payload.ok) {
           throw new Error(payload.error ?? "יצירת הקופון נכשלה");
         }
-        setMessage(`הקופון ${payload.code} נוצר ב-Shopify ומוכן לשיתוף.`);
+        setMessage(`הקופון ${payload.code} נוצר בShopify ומוכן לשיתוף.`);
         router.refresh();
       } catch (error) {
         setMessage(error instanceof Error ? error.message : "יצירת הקופון נכשלה");
@@ -144,16 +144,16 @@ export function AffiliateLinkBuilder({
       </div>
 
       <div className="space-y-2 text-sm">
-        <span className="text-muted-foreground">קישור עם apply אוטומטי של הקופון</span>
+        <span className="text-muted-foreground">קישור שמחיל את הקופון אוטומטית</span>
         <div className="rounded-xl border border-border bg-card px-4 py-3 text-xs leading-6 break-all">{generatedLink}</div>
       </div>
 
       <div className="flex flex-wrap gap-3">
         <Button type="button" onClick={handleCreateCoupon} disabled={isPending || !affiliate || !selected}>
-          {isPending ? "יוצר קופון..." : "צור קופון והפעל ב-Shopify"}
+          {isPending ? "יוצר קופון..." : "צרו קופון והפעילו בShopify"}
         </Button>
         <Button type="button" variant="secondary" onClick={handleCopyLink} disabled={!generatedLink}>
-          העתק קישור
+          העתקת קישור
         </Button>
       </div>
 

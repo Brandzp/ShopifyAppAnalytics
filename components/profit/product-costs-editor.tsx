@@ -308,7 +308,7 @@ export function ProductCostsEditor({
                         <div className="mt-0.5 text-[10px] text-muted-foreground">
                           {r.primarySku ? `${t("מק\"ט", "SKU")}: ${r.primarySku}` : r.handle}
                           {r.variantCount > 1
-                            ? ` · ${r.variantCount} ${t("וריאנטים", "variants")}`
+                            ? ` · ${r.variantCount} ${t("וריאציות", "variants")}`
                             : ""}
                         </div>
                       </td>

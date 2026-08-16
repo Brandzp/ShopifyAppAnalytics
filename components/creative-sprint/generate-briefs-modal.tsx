@@ -91,10 +91,10 @@ export function GenerateBriefsModal({ sprintId, storeName, locale, onClose, onGe
 
         <form onSubmit={submit} className="mt-6 space-y-5 text-sm">
           <div>
-            <span className="font-medium">{t ? "בחר מוצר" : "Pick a product"} *</span>
+            <span className="font-medium">{t ? "בחרו מוצר" : "Pick a product"} *</span>
             <p className="mt-0.5 text-[11px] text-muted-foreground">
               {t
-                ? "המידע המלא של המוצר (שם, תיאור, מחיר, תמונה) ייכנס לתקצירים. תמונת המוצר תשמש כרפרנס ל-Higgsfield בשלב הבא."
+                ? "פרטי המוצר המלאים (שם, תיאור, מחיר, תמונה) ישולבו בתקצירים. תמונת המוצר תשמש כרפרנס לHiggsfield בשלב הבא."
                 : "The full product info (title, description, price, image) feeds the briefs. The product image becomes the Higgsfield reference at the next stage."}
             </p>
             <div className="mt-2">
@@ -109,7 +109,7 @@ export function GenerateBriefsModal({ sprintId, storeName, locale, onClose, onGe
           </div>
 
           <label className="block">
-            <span className="font-medium">{t ? "אווירה של הקמפיין (אופציונלי)" : "Campaign vibe (optional)"}</span>
+            <span className="font-medium">{t ? "אווירת הקמפיין (אופציונלי)" : "Campaign vibe (optional)"}</span>
             <input
               type="text"
               value={vibe}
@@ -119,7 +119,7 @@ export function GenerateBriefsModal({ sprintId, storeName, locale, onClose, onGe
             />
             <span className="mt-1 block text-[11px] text-muted-foreground">
               {t
-                ? "השאירו ריק והסוכן יבחר אווירה לפי המוצר. ככל שתפרטו יותר — כך התקצירים יותר ממוקדים."
+                ? "השאירו ריק והסוכן יבחר אווירה לפי המוצר. ככל שתפרטו יותר, כך התקצירים יהיו ממוקדים יותר."
                 : "Leave blank for the agent to pick. The more specific you go, the more focused the briefs."}
             </span>
           </label>

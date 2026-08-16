@@ -46,9 +46,9 @@ function labels(locale: Locale) {
     totalsHeading: isHe ? "מצב עמלות" : "Commission state",
     approved: isHe ? "מאושר לתשלום" : "Approved (payout-ready)",
     unpaid: isHe ? "בהמתנה" : "Awaiting approval",
-    refresh: isHe ? "רענן" : "Refresh",
-    approveAll: isHe ? "אשר את כל ההמתנה" : "Approve all pending",
-    markPaid: isHe ? "סמן כשולם" : "Mark as paid",
+    refresh: isHe ? "רענון" : "Refresh",
+    approveAll: isHe ? "אשרו את כל ההמרות בהמתנה" : "Approve all pending",
+    markPaid: isHe ? "סמנו כשולם" : "Mark as paid",
     workingApprove: isHe ? "מאשר…" : "Approving…",
     workingPay: isHe ? "מסמן…" : "Marking…",
     tableHeadAffiliate: isHe ? "שותף/ה" : "Affiliate",
@@ -59,7 +59,7 @@ function labels(locale: Locale) {
     noData: isHe ? "אין כרגע עמלות בהמתנה או לתשלום." : "No commissions currently pending or approved.",
     approvedToast: (n: number) => (isHe ? `אושרו ${n} המרות` : `Approved ${n} conversions`),
     paidToast: (n: number, name: string) =>
-      isHe ? `סומנו ${n} המרות כשולמו ל־${name}` : `Marked ${n} conversions paid for ${name}`,
+      isHe ? `סומנו ${n} המרות כשולמו ל${name}` : `Marked ${n} conversions paid for ${name}`,
     noApproved: isHe ? "אין המרות מאושרות עבור השותף/ה" : "No approved conversions for this affiliate",
     errorFallback: isHe ? "הפעולה נכשלה" : "Action failed"
   };

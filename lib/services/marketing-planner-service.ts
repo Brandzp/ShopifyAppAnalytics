@@ -409,7 +409,7 @@ export async function buildPreviousMonthBaseline(
 function getMonthBounds(planningMonth: string) {
   const match = planningMonth.match(/^(\d{4})-(\d{2})$/);
   if (!match) {
-    throw new AppError("בחרי חודש בפורמט תקין לפני יצירת הגאנט.", 400);
+    throw new AppError("בחרו חודש בפורמט תקין לפני יצירת הגאנט.", 400);
   }
 
   const year = Number(match[1]);
@@ -550,7 +550,7 @@ const HEBREW_MONTH_NUMBER: Record<string, number> = {
 };
 
 function parseHebrewMonthDay(segment: string, monthStart: Date, monthEnd: Date) {
-  // Matches "ה-1 ביולי", "1 ביולי", "1-15 ביולי", "ה-1-15 ביולי"
+  // Matches "ה1 ביולי", "1 ביולי", "1-15 ביולי", "ה1-15 ביולי"
   const hebrewMonthNames = Object.keys(HEBREW_MONTH_NUMBER).join("|");
   const re = new RegExp(
     `(?:ה-?)?(\\d{1,2})\\s*(?:[-–]\\s*(\\d{1,2}))?\\s*ב?(${hebrewMonthNames})`,
@@ -603,7 +603,7 @@ function parseDateRange(segment: string, monthStart: Date, monthEnd: Date) {
   const isoResult = parseIsoDateRange(segment, monthStart, monthEnd);
   if (isoResult) return isoResult;
 
-  // 2. Hebrew month name with day(s): "1-15 ביולי", "ה-1 ביולי"
+  // 2. Hebrew month name with day(s): "1-15 ביולי", "ה1 ביולי"
   const hebrewMonthResult = parseHebrewMonthDay(segment, monthStart, monthEnd);
   if (hebrewMonthResult) return hebrewMonthResult;
 
@@ -653,7 +653,7 @@ function parseDateRange(segment: string, monthStart: Date, monthEnd: Date) {
     }
   }
 
-  // 6. Single short date: "ב-1.7", "1.7", "מ-01.07"
+  // 6. Single short date: "ב1.7", "1.7", "מ01.07"
   const shortDate = segment.match(/(?:ב-|בין |מ-)?(\d{1,2})[./](\d{1,2})(?:[./](\d{2,4}))?/);
   if (shortDate) {
     const year = shortDate[3] ? normalizeYear(Number(shortDate[3])) : monthStart.getFullYear();
@@ -1099,7 +1099,7 @@ function buildDiscountProposals(
     let createDisabledReason: string | null = null;
 
     if (activeRule) {
-      createDisabledReason = `הקוד כבר פעיל ב-Shopify (${activeRule.summary || activeRule.title}).`;
+      createDisabledReason = `הקוד כבר פעיל בShopify (${activeRule.summary || activeRule.title}).`;
     } else if (!proposal.valueType || !proposal.value || !Number.isFinite(proposal.value)) {
       createDisabledReason = "לא זוהה ערך הנחה ברור ליצירה אוטומטית.";
     }
@@ -1165,8 +1165,8 @@ function buildDiscountDiagnostics(
       if (!activeRule) continue;
       diagnostics.push({
         severity: "med",
-        title: "קוד כבר קיים ב-Shopify",
-        detail: `הקוד ${code} כבר פעיל ב-Shopify. ההגדרה הקיימת היא: ${activeRule.summary || activeRule.title}. חשוב לוודא שהבריף לא מניח מכניקה אחרת.`,
+        title: "קוד כבר קיים בShopify",
+        detail: `הקוד ${code} כבר פעיל בShopify. ההגדרה הקיימת היא: ${activeRule.summary || activeRule.title}. חשוב לוודא שהבריף לא מניח מכניקה אחרת.`,
         relatedCodes: [code],
         ganttPlacement: `${campaign.rowLabel} • ${formatCampaignWindow(campaign)}`
       });
@@ -1191,7 +1191,7 @@ function buildDiscountDiagnostics(
         severity: "high",
         title: "קודים חופפים באותם תאריכים",
         detail: blockingRule
-          ? `יש חפיפה בין ${left.couponCodes.join("/")} לבין ${right.couponCodes.join("/")} ו-Shopify כבר מחזיק לפחות אחד מהם כלא-נערם. בפועל הלקוחה לא תוכל ליהנות משני הקודים יחד.`
+          ? `יש חפיפה בין ${left.couponCodes.join("/")} לבין ${right.couponCodes.join("/")} וShopify כבר מחזיק לפחות אחד מהם כלא-נערם. בפועל הלקוחה לא תוכל ליהנות משני הקודים יחד.`
           : `יש חפיפה בין ${left.couponCodes.join("/")} לבין ${right.couponCodes.join("/")} באותם תאריכים. גם אם טכנית חלקם יעבדו, זה יוצר עומס החלטה ומבלבל את ההבטחה המסחרית.`,
         relatedCodes: Array.from(new Set([...left.couponCodes, ...right.couponCodes])),
         ganttPlacement: `${left.rowLabel} + ${right.rowLabel} • ${formatCampaignWindow(left)} / ${formatCampaignWindow(right)}`
@@ -1277,7 +1277,7 @@ function buildFocusIssues(
     }, new Map<string, number>());
     const busiest = Array.from(channelCounts.values()).sort((left, right) => right - left)[0] ?? 0;
     if (campaigns.length && busiest / campaigns.length > 0.45) {
-      issues.push("נבחר פוקוס Balanced, אבל רוב הפעילות יושבת על ערוץ אחד. שווה לאזן קצת יותר בין owned, paid, site ו-social כדי לא להישען רק על נקודת מגע אחת.");
+      issues.push("נבחר פוקוס Balanced, אבל רוב הפעילות יושבת על ערוץ אחד. שווה לאזן קצת יותר בין owned, paid, site וsocial כדי לא להישען רק על נקודת מגע אחת.");
     }
   }
 
@@ -1331,7 +1331,7 @@ function buildFocusRecommendations(
   if (focusMode === "site" && !campaigns.some((campaign) => campaign.rowLabel === "אתר")) {
     recommendations.push({
       impact: "High",
-      recommendation: "להוסיף לאותו מהלך hero באתר, popup ו-cart support כדי שההצעה לא תחיה רק מחוץ לחנות.",
+      recommendation: "להוסיף לאותו מהלך hero באתר, popup וcart support כדי שההצעה לא תחיה רק מחוץ לחנות.",
       why: "בחודש עם פוקוס Site, החנות עצמה צריכה להיות המנוע שסוגר את ההמרה ולא רק יעד סופי לתנועה.",
       ganttPlacement: "אתר, באותם התאריכים של המבצע המרכזי."
     });
@@ -1369,7 +1369,7 @@ function buildFocusRecommendations(
   if (focusMode === "balanced") {
     recommendations.push({
       impact: "Med",
-      recommendation: "לבחור offer hero אחד לחודש ולתת לו תמיכה מבוקרת בערוצי site, paid ו-owned במקום לפצל את המסר בין יותר מדי קודים.",
+      recommendation: "לבחור offer hero אחד לחודש ולתת לו תמיכה מבוקרת בערוצי site, paid וowned במקום לפצל את המסר בין יותר מדי קודים.",
       why: "איזון טוב לא אומר הרבה הצעות, אלא מעט הצעות עם תמיכה מלאה מסביב.",
       ganttPlacement: "סיפור ראשי + אתר + קידום ממומן + ניוזלטר."
     });
@@ -1477,17 +1477,17 @@ function buildSeasonalTrends(planningDate: Date, brand: MarketingBrand) {
   }
 
   if (month >= 10 || month <= 2) {
-    seasonalNotes.push("חזקי מסרי gifting ו-layering עם מארזים וניחוחות חמים - בחודשים הקרים עולה הנכונות לקנייה מתנהית ולרכישה בסטים.");
+    seasonalNotes.push("חזקי מסרי gifting וlayering עם מארזים וניחוחות חמים - בחודשים הקרים עולה הנכונות לקנייה מתנהית ולרכישה בסטים.");
   }
 
   if (month >= 5 && month <= 9) {
-    seasonalNotes.push("בנו וריאציה תוכנית ל-wedding season עם מסרי 'מתנה לאירוע' ו'ריח לחתונה' במיוחד אם המותג הוא אינסנס.");
+    seasonalNotes.push("בנו וריאציה תוכנית לwedding season עם מסרי 'מתנה לאירוע' ו'ריח לחתונה' במיוחד אם המותג הוא אינסנס.");
   }
 
   if (brand === "After") {
-    seasonalNotes.push("בדקי אם יש מקום למסרי lifestyle קלים ומהירים יותר - המותג אפטר יכול ליהנות מפורמטים קצרים, יומיומיים ופחות טקסיים.");
+    seasonalNotes.push("בדקו אם יש מקום למסרי lifestyle קלים ומהירים יותר - המותג אפטר יכול ליהנות מפורמטים קצרים, יומיומיים ופחות טקסיים.");
   } else {
-    seasonalNotes.push("שמרי על עוגן sensory ברור: חומרי גלם, שכבות ריח וטקס שימוש. זה בדרך כלל מחזק את בידול אינסנס בתוכן.");
+    seasonalNotes.push("שמרו על עוגן sensory ברור: חומרי גלם, שכבות ריח וטקס שימוש. זה בדרך כלל מחזק את בידול אינסנס בתוכן.");
   }
 
   return seasonalNotes.slice(0, 4);
@@ -1624,7 +1624,7 @@ function buildRecommendations(campaigns: MarketingCampaign[], calendarChecks: st
   if (!recommendations.length) {
     recommendations.push({
       impact: "Low",
-      recommendation: "להוסיף נקודת בדיקה שבועית אחת על assets ו-landing readiness לפני כל עלייה לאוויר.",
+      recommendation: "להוסיף נקודת בדיקה שבועית אחת על assets וlanding readiness לפני כל עלייה לאוויר.",
       why: "גם תוכנית טובה נופלת כשאין סגירה על קריאייטיב, דף נחיתה או זמינות מלאי.",
       ganttPlacement: "הפקות / צילומי סושיאל + אתר, 2-3 ימים לפני כל עלייה."
     });
@@ -1699,8 +1699,8 @@ function buildSeasonalTrendsV2(
   if (month >= 10 || month <= 2) {
     seasonalNotes.push(
       hasCampaignInRows(campaigns, ["הטבות אונליין", "אתר"])
-        ? "בחודשים הקרים מארזים, layering ו-gifting מתחזקים. כדאי לוודא שהאתר והמסרים הממומנים מדגישים ערך מתנה ולא רק את הקוד."
-        : "בחודשים הקרים מארזים, layering ו-gifting מתחזקים, אבל כרגע חסר תרגום מספיק ברור שלהם באתר או בשורת ההטבות אונליין."
+        ? "בחודשים הקרים מארזים, layering וgifting מתחזקים. כדאי לוודא שהאתר והמסרים הממומנים מדגישים ערך מתנה ולא רק את הקוד."
+        : "בחודשים הקרים מארזים, layering וgifting מתחזקים, אבל כרגע חסר תרגום מספיק ברור שלהם באתר או בשורת ההטבות אונליין."
     );
   }
 
@@ -1709,7 +1709,7 @@ function buildSeasonalTrendsV2(
   }
 
   if (campaigns.some((campaign) => campaign.couponCodes.length > 0) && !hasCampaignInRows(campaigns, commercialRows)) {
-    seasonalNotes.push("החודש נשען על קודי קופון, אבל חסר תרגום מספיק לאתר, לאימייל או ל-SMS. זה יוצר מסר מסחרי שלא נסגר עד הסוף בתוך החנות.");
+    seasonalNotes.push("החודש נשען על קודי קופון, אבל חסר תרגום מספיק לאתר, לאימייל או לSMS. זה יוצר מסר מסחרי שלא נסגר עד הסוף בתוך החנות.");
   }
 
   if (upcomingRetailMoment) {
@@ -1819,7 +1819,7 @@ function buildRecommendationsV2(
   if (!recommendations.length) {
     recommendations.push({
       impact: "Low",
-      recommendation: "להוסיף נקודת בדיקה שבועית אחת על assets ו-landing readiness לפני כל עליה לאוויר.",
+      recommendation: "להוסיף נקודת בדיקה שבועית אחת על assets וlanding readiness לפני כל עליה לאוויר.",
       why: "גם תוכנית טובה נופלת כשאין סגירה על קריאייטיב, דף נחיתה או זמינות מלאי.",
       ganttPlacement: "הפקות / צילומי סושיאל + אתר, 2-3 ימים לפני כל עליה."
     });
@@ -1883,7 +1883,7 @@ function buildCustomerVoiceRecommendations(
   if (hasPositiveTopic("compliments")) {
     recommendations.push({
       impact: focusMode === "influencers" || focusMode === "paid_ads" ? "High" : "Med",
-      recommendation: "להפוך עדויות לקוח ו-UGC סביב 'מחמאות' לזווית קריאייטיב מרכזית, במיוחד בערוצי משפיעניות ומודעות.",
+      recommendation: "להפוך עדויות לקוח וUGC סביב 'מחמאות' לזווית קריאייטיב מרכזית, במיוחד בערוצי משפיעניות ומודעות.",
       why: "זה social proof טבעי שכבר קיים בשוק ויכול להוריד חיכוך בלי עוד הנחה.",
       ganttPlacement: "משפיעניות / יוצרות תוכן + אפיליאציה + מטא ממומן."
     });
@@ -1892,7 +1892,7 @@ function buildCustomerVoiceRecommendations(
   if (hasPositiveTopic("packaging")) {
     recommendations.push({
       impact: "Med",
-      recommendation: "לחזק מסרים של gifting ו-unboxing אם האריזה נתפסת כנקודת חוזק אמיתית בביקורות.",
+      recommendation: "לחזק מסרים של gifting וunboxing אם האריזה נתפסת כנקודת חוזק אמיתית בביקורות.",
       why: "כשלקוחות כבר מזכירים את האריזה לטובה, זה יכול להפוך מסתם feature לזווית מסחרית שמצדיקה רכישה.",
       ganttPlacement: "פוסט / ריל - סושיאל אורגני + אתר + הטבות אונליין."
     });
@@ -2397,7 +2397,7 @@ async function buildWorkbook(
   }
 ) {
   const workbook = new ExcelJS.Workbook();
-  workbook.creator = "Shopify Profit Ops";
+  workbook.creator = "Hiloomy";
   workbook.created = new Date();
   const horizontal = getCellHorizontalAlignment(direction);
   const worksheet = workbook.addWorksheet(sheetName, {
@@ -2540,7 +2540,7 @@ async function extractTextFromFile(file: File) {
       const result = await pdfParseModule.pdf(buffer);
       return result.text ?? "";
     } catch {
-      throw new AppError("לא הצלחתי לקרוא את קובץ ה-PDF. אפשר להעלות DOCX או להדביק את הטקסט ידנית.", 400);
+      throw new AppError("לא הצלחתי לקרוא את קובץ הPDF. אפשר להעלות DOCX או להדביק את הטקסט ידנית.", 400);
     }
   }
 

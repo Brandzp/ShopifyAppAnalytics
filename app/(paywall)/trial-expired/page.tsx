@@ -21,13 +21,13 @@ export default async function TrialExpiredPage() {
     auth.locale === "he"
       ? {
           title: "תקופת הניסיון שלכם הסתיימה",
-          body: "כדי להמשיך להשתמש ב-Brandzp, בחרו מסלול שמתאים לכם. החל מ-49$ לחודש.",
+          body: "כדי להמשיך להשתמש בHiloomy, בחרו מסלול שמתאים לכם. החל מ49$ לחודש.",
           cta: "בחרו מסלול",
           signOut: "התנתקו"
         }
       : {
           title: "Your trial has ended",
-          body: "To keep using Brandzp, choose a plan. Starting at $49/month.",
+          body: "To keep using Hiloomy, choose a plan. Starting at $49/month.",
           cta: "Choose a plan",
           signOut: "Sign out"
         };

@@ -43,7 +43,7 @@ export default async function EditVideoPage({
       ? {
           eyebrow: "סטודיו קריאייטיב",
           title: `עריכת סרטון — ${asset.project?.name ?? ""}`,
-          description: "חתכו את הסרטון והוסיפו טקסט. השינויים ייצרבו על הסרטון כשתשמרו."
+          description: "חתכו את הסרטון והוסיפו טקסט. השינויים ייצרבו בסרטון בעת השמירה."
         }
       : {
           eyebrow: "Creative Studio",

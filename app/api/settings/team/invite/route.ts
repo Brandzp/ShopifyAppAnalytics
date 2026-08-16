@@ -82,7 +82,7 @@ export async function POST(request: Request) {
     const locale = inviter?.locale === "en" ? "en" : "he";
     const template = teamInvitationEmail({
       inviterName: inviter?.displayName ?? inviter?.email ?? "A teammate",
-      orgName: org?.name ?? "Brandzp",
+      orgName: org?.name ?? "Hiloomy",
       acceptUrl: `${appUrl}/accept-invite?token=${token}`,
       locale: locale as "he" | "en"
     });

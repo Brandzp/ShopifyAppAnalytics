@@ -41,7 +41,7 @@ export default function GlobalError({
               marginBottom: "0.75rem"
             }}
           >
-            משהו קרס בטעינה של הדף
+            משהו השתבש בטעינת הדף
           </h1>
           <p
             style={{
@@ -79,7 +79,7 @@ export default function GlobalError({
               cursor: "pointer"
             }}
           >
-            נסה שוב
+            נסו שוב
           </button>
         </div>
       </body>

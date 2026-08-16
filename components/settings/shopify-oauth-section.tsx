@@ -157,7 +157,7 @@ export function ShopifyOauthSection({ locale = "he" }: { locale?: UiLocale }) {
         <div className="rounded-md border border-rose-300 bg-rose-50 p-3 text-sm">
           <p className="flex items-center gap-1.5 font-semibold text-rose-900">
             <AlertTriangle className="h-4 w-4" aria-hidden />
-            {locale === "he" ? "החיבור ל־Shopify נכשל" : "Shopify install failed"}
+            {locale === "he" ? "החיבור לShopify נכשל" : "Shopify install failed"}
           </p>
           <p className="mt-1 text-xs text-rose-800">{oauthResult.message}</p>
         </div>

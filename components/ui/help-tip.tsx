@@ -61,7 +61,7 @@ export function HelpTip({
   const positionClass = side === "left" || side === "right"
     ? sideClasses[side]
     : cn(sideClasses[side], alignClasses[side][align]);
-  const defaultLabel = locale === "he" ? "הצג מידע נוסף" : "Show more info";
+  const defaultLabel = locale === "he" ? "הצגת מידע נוסף" : "Show more info";
 
   return (
     <span className={cn("group/tip relative inline-flex align-middle", className)}>

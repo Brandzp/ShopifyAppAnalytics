@@ -63,7 +63,7 @@ export function CookieBanner({ locale = "he" }: { locale?: "he" | "en" }) {
       ? {
           title: "אנחנו משתמשים בעוגיות",
           body: "אנחנו משתמשים בעוגיות חיוניות לאימות ובאנליטיקה אנונימית לשיפור המוצר. בלי מעקב אישי.",
-          accept: "אני מסכים",
+          accept: "אישור",
           essentialOnly: "רק חיוניות",
           learnMore: "למידע נוסף"
         }

@@ -24,7 +24,7 @@ function typeLabel(type: CreativeType, locale: AppLocale): string {
       PACKSHOT: "פאקשוט",
       INSTAGRAM_POST: "פוסט לאינסטגרם",
       UGC_VIDEO: "סרטון UGC",
-      META_AD: "מודעה ל־Meta"
+      META_AD: "מודעה לMeta"
     }[type];
   }
   return {
@@ -78,7 +78,7 @@ export function CreativeProjectsList({
     e.preventDefault();
     e.stopPropagation();
     const confirmMsg = isHe
-      ? `למחוק את "${projectName}"? הפעולה לא ניתנת לביטול.`
+      ? `למחוק את "${projectName}"? הפעולה אינה ניתנת לביטול.`
       : `Delete "${projectName}"? This can't be undone.`;
     if (!window.confirm(confirmMsg)) return;
     setDeletingId(projectId);
@@ -88,7 +88,7 @@ export function CreativeProjectsList({
       if (!response.ok || !body.ok) {
         const message =
           (typeof body.error === "string" ? body.error : null) ??
-          (isHe ? "המחיקה נכשלה — נסה שוב." : "Delete failed — try again.");
+          (isHe ? "המחיקה נכשלה — נסו שוב." : "Delete failed — try again.");
         window.alert(message);
         setDeletingId(null);
         return;
@@ -105,7 +105,7 @@ export function CreativeProjectsList({
     } catch (err) {
       window.alert(
         isHe
-          ? "תקלה ברשת. נסה שוב."
+          ? "תקלה ברשת. נסו שוב."
           : `Network error — try again. (${err instanceof Error ? err.message : String(err)})`
       );
       setDeletingId(null);
@@ -121,7 +121,7 @@ export function CreativeProjectsList({
           <h2 className="text-lg font-semibold">{isHe ? "הפרויקטים שלי" : "Your projects"}</h2>
           <p className="text-sm text-muted-foreground">
             {isHe
-              ? "כל פרויקט מקבץ קבצי מקור ונכסים שנוצרו."
+              ? "כל פרויקט מרכז את קבצי המקור ואת הנכסים שנוצרו מהם."
               : "Each project bundles your source uploads with the assets generated from them."}
           </p>
         </div>
@@ -145,13 +145,13 @@ export function CreativeProjectsList({
             </h3>
             <p className="max-w-md text-sm text-muted-foreground">
               {isHe
-                ? "התחילו עם פאקשוט: העלו תמונה של מוצר וקבלו תמונה מקצועית מוכנה לרשתות."
+                ? "התחילו עם פאקשוט: העלו תמונת מוצר וקבלו תמונה מקצועית מוכנה לרשתות."
                 : "Start with a packshot — upload a product photo and get a polished, ready-to-publish image back."}
             </p>
             <Link href={"/creative/new" as any}>
               <Button>
                 <Plus className={cn("h-4 w-4", isHe ? "ml-2" : "mr-2")} />
-                {isHe ? "צור פרויקט ראשון" : "Create your first project"}
+                {isHe ? "צרו פרויקט ראשון" : "Create your first project"}
               </Button>
             </Link>
           </CardContent>

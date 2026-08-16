@@ -139,7 +139,7 @@ export function BriefEditModal({ sprintId, ad, locale, editable, onClose, onSave
           </div>
 
           <label className="block">
-            <span className="font-medium">{t ? "פרומפט חזותי (נשלח ל-Higgsfield)" : "Visual prompt (sent to Higgsfield)"}</span>
+            <span className="font-medium">{t ? "פרומפט חזותי (נשלח לHiggsfield)" : "Visual prompt (sent to Higgsfield)"}</span>
             <textarea
               value={visualPrompt}
               onChange={(e) => setVisualPrompt(e.target.value)}
@@ -149,7 +149,7 @@ export function BriefEditModal({ sprintId, ad, locale, editable, onClose, onSave
             />
             <span className="mt-1 block text-[11px] text-muted-foreground">
               {t
-                ? "זה הטקסט שיתורגם לתמונה. ככל שיותר ספציפי — כך התמונה יוצאת קרובה יותר למה שדמיינתם."
+                ? "זהו הטקסט שממנו תיווצר התמונה. ככל שתדייקו יותר, כך התוצאה תהיה קרובה יותר למה שדמיינתם."
                 : "This is the text the image model sees. The more specific, the closer the output to what you imagined."}
             </span>
           </label>
@@ -161,11 +161,11 @@ export function BriefEditModal({ sprintId, ad, locale, editable, onClose, onSave
 
         <div className="mt-6 flex items-center justify-end gap-2">
           <Button type="button" variant="ghost" onClick={onClose} disabled={saving}>
-            {t ? "סגור" : "Close"}
+            {t ? "סגירה" : "Close"}
           </Button>
           {editable ? (
             <Button type="button" onClick={save} disabled={saving || !dirty}>
-              {saving ? (t ? "שומר…" : "Saving…") : t ? "שמור שינויים" : "Save changes"}
+              {saving ? (t ? "שומר…" : "Saving…") : t ? "שמרו שינויים" : "Save changes"}
             </Button>
           ) : null}
         </div>

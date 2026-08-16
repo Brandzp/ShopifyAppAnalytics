@@ -66,7 +66,7 @@ export default async function MarketingPlannerPage() {
         <SectionHeading
           eyebrow="Marketing Planner"
           title="גאנט שיווקי אינטראקטיבי"
-          description="העלאת גאנט חודשי, ניתוח אוטומטי ע״י סוכן BI, בריף PDF לכל תפקיד, ולחיצה על יום בלוח לראות את המשימות ולפתוח אותן בכלי המתאים (קופון, סטודיו קריאייטיב, ועוד)."
+          description="העלאת גאנט חודשי, ניתוח אוטומטי על ידי סוכן BI, בריף PDF לכל תפקיד, ולחיצה על יום בלוח כדי לראות את המשימות ולפתוח אותן בכלי המתאים (קופון, סטודיו קריאייטיב ועוד)."
         />
         <GanttStudio initialSheets={initialSheets} />
       </div>

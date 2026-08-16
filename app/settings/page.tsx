@@ -10,6 +10,7 @@ import { LanguageSwitcher } from "@/components/settings/language-switcher";
 import { CreatorConnectionsManager } from "@/components/settings/creator-connections-manager";
 import { MetaAdsConnectionManager } from "@/components/settings/meta-ads-connection-manager";
 import { WeeklyReportRecipientsManager } from "@/components/settings/weekly-report-recipients-manager";
+import { CompetitorSetManager } from "@/components/settings/competitor-set-manager";
 import { GscConnectionManager } from "@/components/settings/gsc-connection-manager";
 import { getAppChromeData } from "@/lib/services/analytics-service";
 import { getShopifyConnectionSummary } from "@/lib/services/shopify-connection-service";
@@ -111,7 +112,7 @@ export default async function SettingsPage({
       ? `Shopify מחובר — מושכים נתונים מ-${chrome.store.domain}.`
       : `Shopify connected — pulling data for ${chrome.store.domain}.`
     : locale === "he"
-      ? `חברו את חנות ה-Shopify כדי להתחיל לראות נתונים אמיתיים.`
+      ? `חברו את חנות הShopify כדי להתחיל לראות נתונים אמיתיים.`
       : `Connect your Shopify store to start surfacing real data.`;
 
   return (
@@ -128,7 +129,7 @@ export default async function SettingsPage({
           headline={headline}
           body={
             locale === "he"
-              ? "חיבור ה-Shopify בצד שמאל מזין את כל שאר העמודים. בלוק הדיווח בצד ימין קובע איך מחושבים הרווח וההשוואות."
+              ? "חיבור הShopify בצד שמאל מזין את כל שאר העמודים. בלוק הדיווח בצד ימין קובע איך מחושבים הרווח וההשוואות."
               : "The Shopify connection on the left feeds every other page. The reporting block on the right shapes how profit and comparisons are calculated."
           }
           tone={tone}
@@ -309,6 +310,12 @@ export default async function SettingsPage({
               </Card>
 
               <Card>
+                <CardContent className="pt-6">
+                  <CompetitorSetManager isHe={locale === "he"} />
+                </CardContent>
+              </Card>
+
+              <Card>
                 <CardHeader className="pb-2">
                   <div className="flex items-center gap-2">
                     <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-600">
@@ -317,7 +324,7 @@ export default async function SettingsPage({
                     <CardTitle className="text-base">{dictionary.settings.futureTitle}</CardTitle>
                     <HelpTip>
                       {locale === "he"
-                        ? "מה נחבר בהמשך. בכנות לגבי מה שעוד לא בנוי."
+                        ? "מה נחבר בהמשך, בשקיפות לגבי מה שעדיין לא בנוי."
                         : "What we'll wire up next. Honest about what's not built yet."}
                     </HelpTip>
                   </div>

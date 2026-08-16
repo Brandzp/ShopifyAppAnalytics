@@ -92,7 +92,7 @@ export function ProductPicker({ locale, selected, onChange, mode = "single", lim
           type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder={isHe ? "חפש מוצר…" : "Search products…"}
+          placeholder={isHe ? "חיפוש מוצר…" : "Search products…"}
           className={cn("w-full rounded-lg border border-border bg-background py-2 text-sm", isHe ? "pe-9 ps-3" : "ps-9 pe-3")}
         />
         {clearable && selected.length > 0 ? (
@@ -100,7 +100,7 @@ export function ProductPicker({ locale, selected, onChange, mode = "single", lim
             type="button"
             onClick={() => onChange([])}
             className={cn("absolute top-2.5 text-xs text-muted-foreground hover:text-foreground", isHe ? "left-3" : "right-3")}
-            title={isHe ? "נקה בחירה" : "Clear selection"}
+            title={isHe ? "ניקוי בחירה" : "Clear selection"}
           >
             <X className="h-4 w-4" />
           </button>

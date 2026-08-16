@@ -13,7 +13,7 @@ import { defaultGrowthAgentSettings, defaultPlatformConnections } from "@/lib/se
 
 const GROWTH_AGENT_PREVIEW_STORE: Store = {
   id: "local-preview-store",
-  name: "Shopify Profit Ops Preview",
+  name: "Hiloomy Preview",
   domain: "setup-required.local",
   currency: "USD",
   connected: false,

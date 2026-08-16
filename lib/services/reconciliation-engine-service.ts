@@ -102,10 +102,10 @@ function buildBlendedNarrative(input: {
   purchaseDeltaPct: number | null;
 }): string {
   if (input.metaSpend <= 0) {
-    return "אין הוצאת מדיה ב־Meta בטווח התאריכים שנבחר — לא ניתן לחשב ROAS משוקלל.";
+    return "אין הוצאת מדיה בMeta בטווח התאריכים שנבחר — לא ניתן לחשב ROAS משוקלל.";
   }
   if (input.shopifyOrders === 0) {
-    return "לא נמצאו הזמנות ב־Shopify בטווח התאריכים שנבחר. ROAS משוקלל אינו רלוונטי.";
+    return "לא נמצאו הזמנות בShopify בטווח התאריכים שנבחר. ROAS משוקלל אינו רלוונטי.";
   }
   const parts: string[] = [];
   if (input.roas != null) {
@@ -252,7 +252,7 @@ export async function buildReconciliationReport(
     warnings.push({
       severity: "warning",
       kind: "data",
-      messageHe: `אזהרת נתונים: טווח הדוח הוא ${daysInRange} ימים, אך ל־Meta יש נתונים מסונכרנים רק ל־${metaDaysWithData} מתוכם.`,
+      messageHe: `אזהרת נתונים: טווח הדוח הוא ${daysInRange} ימים, אך לMeta יש נתונים מסונכרנים רק ל${metaDaysWithData} מתוכם.`,
       messageEn: `Data warning: report range is ${daysInRange} days but Meta has synced data for only ${metaDaysWithData} of them.`
     });
   }
@@ -262,7 +262,7 @@ export async function buildReconciliationReport(
     warnings.push({
       severity: "info",
       kind: "data",
-      messageHe: `קיימות הזמנות ב־${orderDays.size} מתוך ${daysInRange} ימי הדוח. הימים ללא הזמנות עשויים להיות תקינים בחנות קטנה.`,
+      messageHe: `קיימות הזמנות ב${orderDays.size} מתוך ${daysInRange} ימי הדוח. הימים ללא הזמנות עשויים להיות תקינים בחנות קטנה.`,
       messageEn: `Orders exist on ${orderDays.size} of the ${daysInRange} report days. Zero-order days may be normal for a small store.`
     });
   }
@@ -271,7 +271,7 @@ export async function buildReconciliationReport(
     warnings.push({
       severity: "warning",
       kind: "business",
-      messageHe: `פער משמעותי בין רכישות Meta (${metaPurchases}) לבין הזמנות Shopify (${shopifyOrders}). הסיבות האפשריות: חלון ייחוס שונה, הזמנות שלא הגיעו מ־Meta, או רכישות שלא שויכו לקמפיין.`,
+      messageHe: `פער משמעותי בין רכישות Meta (${metaPurchases}) לבין הזמנות Shopify (${shopifyOrders}). הסיבות האפשריות: חלון ייחוס שונה, הזמנות שלא הגיעו מMeta, או רכישות שלא שויכו לקמפיין.`,
       messageEn: `Significant gap: Meta purchases (${metaPurchases}) vs Shopify orders (${shopifyOrders}). Likely causes: different attribution window, non-Meta orders, or unattributed purchases.`
     });
   }

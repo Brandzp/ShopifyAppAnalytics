@@ -24,10 +24,10 @@ export default async function ConversionsPage() {
     ? {
         eyebrow: "פורטל שותפים",
         title: "הזמנות שותפים ושיוכים",
-        description: "עקבו אילו הזמנות שויכו לשותפים, איך נמדדו, ומה העמלה שהן יצרו.",
+        description: "עקבו אחרי אילו הזמנות שויכו לשותפים, איך הן נמדדו ומה העמלה שהן יצרו.",
         exportCsv: "ייצוא CSV",
         sectionTitle: "הזמנות שותפים",
-        sectionDescription: "הזמנות ששויכו לשותפים ע\"פ שימוש בקופונים ב-Shopify וההתאמה מ-BixGrow."
+        sectionDescription: "הזמנות ששויכו לשותפים על פי שימוש בקופונים בShopify וההתאמה מBixGrow."
       }
     : {
         eyebrow: "Affiliate Portal",

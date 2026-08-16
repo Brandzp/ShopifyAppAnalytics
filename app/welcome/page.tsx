@@ -16,9 +16,9 @@ import {
 // live, this can become a redirect to the marketing domain.
 
 export const metadata = {
-  title: "Brandzp — ניתוח רווח לחנויות Shopify",
+  title: "Hiloomy — ניתוח רווח לחנויות Shopify",
   description:
-    "ניתוח רווח, התראות בזמן אמת, ודוחות שבועיים למותגי DTC ב-Shopify. ניסיון 14 ימים בחינם."
+    "ניתוח רווח, התראות בזמן אמת ודוחות שבועיים למותגי DTC בShopify. ניסיון 14 ימים בחינם."
 };
 
 export default async function WelcomePage() {
@@ -37,12 +37,12 @@ export default async function WelcomePage() {
         },
         hero: {
           eyebrow: "ניתוח רווח לבעלי מותגי Shopify",
-          title: "תראו מה באמת מכניס כסף, וקבלו פעולה לכל יום",
+          title: "תראו מה באמת מכניס כסף וקבלו פעולה לכל יום",
           subtitle:
-            "Brandzp מאחד את Shopify, Meta Ads, Instagram ושותפים תחת מקור אחד. במקום \"מה קרה\", מקבלים \"מה לעשות\".",
+            "Hiloomy מאחד את Shopify, Meta Ads, Instagram ושותפים תחת מקור אחד. במקום \"מה קרה\", מקבלים \"מה לעשות\".",
           ctaPrimary: "התחילו ניסיון 14 ימים",
           ctaSecondary: "ראו אבטחה ופרטיות",
-          noCC: "ללא כרטיס אשראי · מבוטל בכל רגע"
+          noCC: "ללא כרטיס אשראי · ביטול בכל רגע"
         },
         features: {
           title: "כלים לבעלי החלטות, לא רק לאנליסטים",
@@ -62,15 +62,15 @@ export default async function WelcomePage() {
             },
             {
               icon: TrendingUp,
-              title: "מעקב יצירתיים ב-Meta Ads",
+              title: "מעקב קריאייטיבים בMeta Ads",
               body:
-                "ראו אילו וידאו ותמונה מייצרים את ההזמנות. סטטיסטיקה ברמת הקריאייטיב."
+                "ראו אילו סרטונים ותמונות מייצרים את ההזמנות. סטטיסטיקה ברמת הקריאייטיב."
             },
             {
               icon: Sparkles,
-              title: "מעקב שותפים ב-BixGrow",
+              title: "מעקב שותפים בBixGrow",
               body:
-                "הזמנות, קופונים, ועמלות מ-BixGrow מסונכרנות אוטומטית. בלי גיליונות נפרדים."
+                "הזמנות, קופונים ועמלות מBixGrow מסונכרנים אוטומטית. בלי גיליונות נפרדים."
             },
             {
               icon: ShieldCheck,
@@ -82,7 +82,7 @@ export default async function WelcomePage() {
               icon: Check,
               title: "דוח שבועי PDF",
               body:
-                "מסכם את השבוע: מה עבד, מה לא, ומה לעשות בשבוע הבא. בעברית, מותאם."
+                "מסכם את השבוע: מה עבד, מה לא ומה לעשות בשבוע הבא. בעברית ומותאם אישית."
             }
           ]
         },
@@ -119,7 +119,7 @@ export default async function WelcomePage() {
           eyebrow: "Founder analytics for Shopify brands",
           title: "See what actually makes you money — and what to do today",
           subtitle:
-            "Brandzp unifies Shopify, Meta Ads, Instagram, and affiliates in one source of truth. Less \"what happened\", more \"what to do\".",
+            "Hiloomy unifies Shopify, Meta Ads, Instagram, and affiliates in one source of truth. Less \"what happened\", more \"what to do\".",
           ctaPrimary: "Start 14-day free trial",
           ctaSecondary: "See security & privacy",
           noCC: "No credit card · Cancel anytime"
@@ -197,7 +197,7 @@ export default async function WelcomePage() {
         <div className="mx-auto max-w-6xl px-4 sm:px-6 py-4 flex items-center justify-between">
           <a href="/welcome" className="inline-flex items-center gap-2">
             <span className="inline-block h-8 w-8 rounded-lg bg-gradient-to-br from-violet-600 to-indigo-600" />
-            <span className="text-base font-semibold tracking-tight">Brandzp</span>
+            <span className="text-base font-semibold tracking-tight">Hiloomy</span>
           </a>
           <nav className="hidden sm:flex items-center gap-6 text-sm">
             <a href="#features" className="text-muted-foreground hover:text-foreground">{t.nav.features}</a>

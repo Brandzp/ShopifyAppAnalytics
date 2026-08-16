@@ -40,7 +40,7 @@ function OfferCard({ offer, index }: { offer: BriefOffer; index?: number }) {
         {fmt(offer.validityStart)}
         {offer.validityEnd ? (
           <>
-            <strong>, עד ה- </strong>
+            <strong>, עד ה-</strong>
             {fmt(offer.validityEnd)}
             {offer.validityEndTime ? (
               <>
@@ -90,7 +90,7 @@ function OfferCard({ offer, index }: { offer: BriefOffer; index?: number }) {
         ? offer.callouts.map((c, i) => (
             <div key={i} className={`callout callout-${c.level}`}>
               <strong>
-                {c.level === "critical" ? "⚠ קריטי:" : c.level === "warning" ? "⚡ שים לב:" : "ℹ"}
+                {c.level === "critical" ? "⚠ קריטי:" : c.level === "warning" ? "⚡ שימו לב:" : "ℹ"}
               </strong>{" "}
               {c.text}
             </div>
@@ -472,7 +472,7 @@ export default async function MarketingBriefPrintPage({
             <section className="section">
               <div className="section-header">
                 <span className="section-num">3</span>
-                הנחה מובנת באתר
+                הנחה מובנית באתר
               </div>
               {brief.siteDiscounts.map((offer, i) => (
                 <OfferCard key={i} offer={offer} index={i + 1} />

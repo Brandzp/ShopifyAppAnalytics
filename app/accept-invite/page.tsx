@@ -26,7 +26,7 @@ export default async function AcceptInvitePage({
 
   const t = isHe
     ? {
-        invalid: "ההזמנה לא תקפה או פגה תוקפה.",
+        invalid: "ההזמנה אינה תקפה או שפג תוקפה.",
         backHome: "חזרה לדף הבית",
         emailMismatch: "ההזמנה נשלחה לכתובת אימייל אחרת. התחברו מחדש עם הכתובת הנכונה."
       }

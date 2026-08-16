@@ -18,7 +18,7 @@ export default async function NewSprintPage() {
           title={locale === "he" ? "ספרינט חדש" : "New sprint"}
           description={
             locale === "he"
-              ? "הגדירו את הספרינט: כמה מודעות, איזה מוצר, איזה תקציב לכל אחת, ואיך תרצו שמערכת הגזירה תהרוג את הגרועות."
+              ? "הגדירו את הספרינט: כמה מודעות, איזה מוצר, איזה תקציב לכל אחת, ואיך מנגנון הסינון יפסול את המודעות החלשות."
               : "Configure the sprint: how many ads, which product, daily budget per ad, and how the cascade should kill the losers."
           }
         />

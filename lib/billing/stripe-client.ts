@@ -18,7 +18,7 @@ export function getStripe(): Stripe {
     // type with each SDK bump; pinning to a string avoids churn.
     apiVersion: "2024-12-18.acacia" as never,
     typescript: true,
-    appInfo: { name: "Brandzp Analytics", version: "1.0.0" }
+    appInfo: { name: "Hiloomy", version: "1.0.0" }
   });
   return cached;
 }

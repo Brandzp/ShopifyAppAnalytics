@@ -36,13 +36,13 @@ const PROVIDER_INFO: Record<CreativeProvider, { labelEn: string; labelHe: string
     labelEn: "Nano Banana — Gemini",
     labelHe: "Nano Banana — Gemini",
     blurbEn: "Google's Gemini 2.5 Flash Image. Strong product fidelity, images only.",
-    blurbHe: "Gemini 2.5 Flash Image של גוגל. נאמנות גבוהה למוצר, רק תמונות."
+    blurbHe: "Gemini 2.5 Flash Image של גוגל. נאמנות גבוהה למוצר, תמונות בלבד."
   },
   openai: {
     labelEn: "OpenAI — gpt-image-1",
     labelHe: "OpenAI — gpt-image-1",
     blurbEn: "OpenAI's gpt-image-1. Edits when a reference is uploaded, otherwise text-to-image. Images only.",
-    blurbHe: "gpt-image-1 של OpenAI. עורך מתמונת ייחוס או יוצר מטקסט. רק תמונות."
+    blurbHe: "gpt-image-1 של OpenAI. עורך מתמונת ייחוס או יוצר מטקסט. תמונות בלבד."
   }
 };
 
@@ -62,7 +62,7 @@ const CHOICES: TypeChoice[] = [
     labelEn: "Packshot",
     labelHe: "פאקשוט",
     blurbEn: "Clean studio shot of the product on a polished background.",
-    blurbHe: "תמונת סטודיו נקייה של המוצר על רקע מהוקצע."
+    blurbHe: "תמונת סטודיו נקייה של המוצר על רקע מלוטש."
   },
   {
     id: "INSTAGRAM_POST",
@@ -70,7 +70,7 @@ const CHOICES: TypeChoice[] = [
     labelEn: "Instagram post",
     labelHe: "פוסט אינסטגרם",
     blurbEn: "Lifestyle composition with space for a headline overlay.",
-    blurbHe: "הרכב לייפסטייל עם מקום לכותרת בעריכה."
+    blurbHe: "קומפוזיציית לייפסטייל עם מקום לכותרת בעריכה."
   },
   {
     id: "UGC_VIDEO",
@@ -78,15 +78,15 @@ const CHOICES: TypeChoice[] = [
     labelEn: "UGC content",
     labelHe: "תוכן UGC",
     blurbEn: "Authentic, handheld-style frame. Video generation arrives in M3.",
-    blurbHe: "פריים אותנטי בסגנון יד. ייצור וידאו יתווסף ב־M3."
+    blurbHe: "פריים אותנטי בסגנון צילום ידני. ייצור וידאו יתווסף בM3."
   },
   {
     id: "META_AD",
     icon: Megaphone,
     labelEn: "Meta ad",
-    labelHe: "מודעה ל־Meta",
+    labelHe: "מודעה לMeta",
     blurbEn: "High-contrast, scroll-stopping creative.",
-    blurbHe: "קריאייטיב עם ניגוד גבוה שבולט בפיד."
+    blurbHe: "קריאייטיב בניגודיות גבוהה שבולט בפיד."
   }
 ];
 
@@ -340,7 +340,7 @@ export function NewProjectWizard({
         typeof window !== "undefined"
           ? window.confirm(
               isHe
-                ? `הפרומפט המעודכן של הסוכן יישלח כמו שהוא:\n\n${previewAgentText.slice(0, 400)}${previewAgentText.length > 400 ? "…" : ""}\n\nלהמשיך?`
+                ? `הפרומפט המעודכן של הסוכן יישלח כפי שהוא:\n\n${previewAgentText.slice(0, 400)}${previewAgentText.length > 400 ? "…" : ""}\n\nלהמשיך?`
                 : `The agent prompt you previewed will be sent as-is:\n\n${previewAgentText.slice(0, 400)}${previewAgentText.length > 400 ? "…" : ""}\n\nContinue?`
             )
           : true;
@@ -450,7 +450,7 @@ export function NewProjectWizard({
 
       <Card>
         <CardHeader>
-          <CardTitle>{isHe ? "מקור" : "Source images"}</CardTitle>
+          <CardTitle>{isHe ? "תמונות מקור" : "Source images"}</CardTitle>
           <CardDescription>
             {isHe
               ? "העלו תמונה אחת או יותר של המוצר. ככל שהאיכות גבוהה יותר, התוצאה תהיה טובה יותר."
@@ -479,7 +479,7 @@ export function NewProjectWizard({
             <div className="space-y-3">
               <p className="text-[11px] leading-4 text-muted-foreground">
                 {isHe
-                  ? "סמנו תמונה אחת כ\"מוצר\" — היא תועבר למודל כתמונת ייחוס. השאר ישמשו כהשראה בלבד; כתבו תווית קצרה כדי שהפרומפט יידע למה כל אחת מייצגת (לדוגמה: \"דוגמן/דוגמנית\", \"תאורה\", \"רקע\")."
+                  ? "סמנו תמונה אחת כ\"מוצר\" — היא תועבר למודל כתמונת ייחוס. השאר ישמשו כהשראה בלבד; כתבו תווית קצרה כדי שהפרומפט יידע מה כל אחת מייצגת (לדוגמה: \"דוגמן/דוגמנית\", \"תאורה\", \"רקע\")."
                   : "Mark one image as the Product — that's what's passed to the model as the visual reference. The rest are inspiration only; add a short label so the prompt knows what they represent (e.g. \"model\", \"lighting\", \"background\")."}
               </p>
               <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -532,7 +532,7 @@ export function NewProjectWizard({
                             className={cn(
                               "ms-auto inline-flex h-7 w-7 items-center justify-center rounded-full border border-border text-muted-foreground hover:border-rose-300 hover:bg-rose-50 hover:text-rose-700"
                             )}
-                            title={isHe ? "הסר" : "Remove"}
+                            title={isHe ? "הסרה" : "Remove"}
                           >
                             <X className="h-3.5 w-3.5" aria-hidden />
                           </button>
@@ -568,7 +568,7 @@ export function NewProjectWizard({
           <CardTitle>{isHe ? "תקציר" : "Creative brief"}</CardTitle>
           <CardDescription>
             {isHe
-              ? "השדות אופציונליים. מה שתכתבו ייכלל בפרומפט."
+              ? "כל השדות אופציונליים. מה שתכתבו ישולב בפרומפט."
               : "All fields optional — what you write here is folded into the AI prompt."}
           </CardDescription>
         </CardHeader>
@@ -580,7 +580,7 @@ export function NewProjectWizard({
               once Phase B (custom uploads) lands. */}
           <div className="rounded-xl border border-dashed border-border bg-muted/20 p-3">
             <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              {isHe ? "בחר מוצר מהחנות (מילוי אוטומטי)" : "Pick a product from your store (auto-fill)"}
+              {isHe ? "בחרו מוצר מהחנות (מילוי אוטומטי)" : "Pick a product from your store (auto-fill)"}
             </p>
             <ProductPicker
               locale={locale}
@@ -618,7 +618,7 @@ export function NewProjectWizard({
             onChange={setProductDescription}
             placeholder={
               isHe
-                ? "מתאר חומרים, גודל וכל מה שכדאי שיופיע בקומפוזיציה"
+                ? "חומרים, גודל וכל מה שכדאי שיופיע בקומפוזיציה"
                 : "Materials, size, anything that should show up in the composition"
             }
             textarea
@@ -655,14 +655,14 @@ export function NewProjectWizard({
                     labelEn: "Ultra — photorealistic",
                     labelHe: "מקסימלי — מציאותי",
                     descEn: "Pushes real skin texture, natural lighting, anti-AI-artifact guards. Best for product + model shots.",
-                    descHe: "טקסטורת עור אמיתית, תאורה טבעית, מניעת ארטיפקטים של AI. הכי טוב לתמונות מוצר+דוגמנית."
+                    descHe: "טקסטורת עור אמיתית, תאורה טבעית, מניעת ארטיפקטים של AI. מומלץ לתמונות מוצר+דוגמנית."
                   },
                   {
                     value: "balanced",
                     labelEn: "Balanced",
                     labelHe: "מאוזן",
                     descEn: "Lets the style template lead. Best when you want a stylised editorial look.",
-                    descHe: "התבנית הסגנונית מובילה. עדיף לסגנון אדיטוריאלי מעוצב."
+                    descHe: "התבנית הסגנונית מובילה. מתאים לסגנון אדיטוריאלי מעוצב."
                   }
                 ] as const
               ).map((opt) => {
@@ -702,11 +702,11 @@ export function NewProjectWizard({
             />
             <div>
               <p className="font-semibold">
-                {isHe ? "תן לסוכן הקריאייטיב לכתוב את הפרומפט" : "Let the Creative agent write the prompt"}
+                {isHe ? "תנו לסוכן הקריאייטיב לכתוב את הפרומפט" : "Let the Creative agent write the prompt"}
               </p>
               <p className="mt-0.5 text-[11px] text-muted-foreground">
                 {isHe
-                  ? "ברירת מחדל: דלוק. הסוכן יקבל את שדות הטופס (מוצר, תיאור, טון, הערות) ויחבר פרומפט מותאם ל-Higgsfield. כבו כדי להשתמש בתבנית הברירת-מחדל בלבד."
+                  ? "ברירת מחדל: פעיל. הסוכן יקבל את שדות הטופס (מוצר, תיאור, טון, הערות) ויחבר פרומפט מותאם לHiggsfield. כבו כדי להשתמש בתבנית ברירת המחדל בלבד."
                   : "Default: on. The agent receives the form fields (product, description, tone, notes) and writes a Higgsfield-optimised prompt. Turn off to use only the deterministic template."}
               </p>
             </div>
@@ -722,8 +722,8 @@ export function NewProjectWizard({
                 <span>{previewOpen ? "▾" : "▸"}</span>
                 {isHe
                   ? previewOpen
-                    ? "הסתר את הפרומפט הסופי"
-                    : "הצג את הפרומפט הסופי לפני יצירה"
+                    ? "הסתרת הפרומפט הסופי"
+                    : "הצגת הפרומפט הסופי לפני היצירה"
                   : previewOpen
                     ? "Hide final prompt"
                     : "Preview the final prompt that will be sent to the AI"}
@@ -744,7 +744,7 @@ export function NewProjectWizard({
                 ) : (
                   <>
                     <Sparkles className="h-3 w-3" aria-hidden />
-                    {isHe ? "צור פרומפט עם הסוכן" : "Generate prompt with agent"}
+                    {isHe ? "צרו פרומפט עם הסוכן" : "Generate prompt with agent"}
                   </>
                 )}
               </Button>
@@ -753,9 +753,9 @@ export function NewProjectWizard({
                   type="button"
                   onClick={loadTemplatePreview}
                   className="text-[11px] font-semibold text-muted-foreground hover:text-foreground"
-                  title={isHe ? "טען מחדש את הטקסט מהטופס" : "Reload from current form fields"}
+                  title={isHe ? "טעינה מחדש של הטקסט מהטופס" : "Reload from current form fields"}
                 >
-                  {isHe ? "רענן" : "Refresh"}
+                  {isHe ? "רענון" : "Refresh"}
                 </button>
               ) : null}
             </div>
@@ -779,7 +779,7 @@ export function NewProjectWizard({
                       <p className="flex items-center gap-2 text-[11px] text-muted-foreground">
                         <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
                         {isHe
-                          ? "הסוכן עובד… זה יכול לקחת 5-30 שניות."
+                          ? "הסוכן עובד… זה עשוי להימשך 5-30 שניות."
                           : "Agent thinking… 5–30 seconds."}
                       </p>
                     ) : previewAgentText ? (
@@ -789,7 +789,7 @@ export function NewProjectWizard({
                         </pre>
                         <p className="mt-2 text-[10px] leading-4 text-emerald-800">
                           {isHe
-                            ? "כשתלחצו ״צור עכשיו״ הטקסט הזה יישלח בדיוק כמו שהוא — הסוכן לא ירוץ שוב בצד השרת. רענן כדי לקבל ניסוח חדש."
+                            ? "כשתלחצו ״צרו עכשיו״ הטקסט הזה יישלח בדיוק כפי שהוא — הסוכן לא ירוץ שוב בצד השרת. לחצו ״צרו פרומפט עם הסוכן״ שוב לקבלת ניסוח חדש."
                             : "When you click \"Generate now\", this exact text will be sent — the server will not re-run the agent. Click \"Generate prompt with agent\" again to get a new draft."}
                         </p>
                       </>
@@ -805,8 +805,8 @@ export function NewProjectWizard({
                   <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-indigo-800">
                     {isHe
                       ? previewAgentText
-                        ? "הטקסט המלא שיישלח לדגם (כולל פלט הסוכן):"
-                        : "הטקסט המלא שיישלח לדגם (תבנית בלבד):"
+                        ? "הטקסט המלא שיישלח למודל (כולל פלט הסוכן):"
+                        : "הטקסט המלא שיישלח למודל (תבנית בלבד):"
                       : previewAgentText
                         ? "Full text sent to the model (template + agent output):"
                         : "Full text sent to the model (template only):"}
@@ -823,13 +823,13 @@ export function NewProjectWizard({
                   ) : (
                     <p className="text-[11px] text-rose-700">
                       {isHe
-                        ? "נכשל בטעינת התצוגה המקדימה. נסו שוב."
+                        ? "טעינת התצוגה המקדימה נכשלה. נסו שוב."
                         : "Couldn't build a preview. Try again."}
                     </p>
                   )}
                   <p className="mt-2 text-[10px] leading-4 text-muted-foreground">
                     {isHe
-                      ? "כל שינוי בשדות מעלה — הקליקו \"רענן\" או \"צור פרומפט עם הסוכן\" כדי לראות את הטקסט המעודכן."
+                      ? "אחרי שינוי בשדות למעלה, לחצו \"רענון\" או \"צרו פרומפט עם הסוכן\" כדי לראות את הטקסט המעודכן."
                       : "Edit fields above and click \"Refresh\" or \"Generate prompt with agent\" to see the updated text."}
                   </p>
                 </div>
@@ -936,7 +936,7 @@ export function NewProjectWizard({
             {!(providerStatusByName[provider]?.configured ?? false) ? (
               <p className="text-[11px] leading-4 text-amber-700">
                 {isHe
-                  ? `הספק שבחרת לא מוגדר. הוסיפו את משתנה הסביבה ${providerStatusByName[provider]?.envVar ?? ""} ל־.env והפעילו מחדש את השרת.`
+                  ? `הספק שבחרתם אינו מוגדר. הוסיפו את משתנה הסביבה ${providerStatusByName[provider]?.envVar ?? ""} ל.env והפעילו מחדש את השרת.`
                   : `The selected provider isn't configured. Set ${providerStatusByName[provider]?.envVar ?? ""} in .env and restart the server.`}
               </p>
             ) : null}
@@ -951,10 +951,10 @@ export function NewProjectWizard({
                 <p className="text-[11px] leading-4 text-muted-foreground">
                   {targetCount === 1
                     ? isHe
-                      ? "תוצאה אחת באיכות גבוהה. נשמרת סינכרונית."
+                      ? "תוצאה אחת באיכות גבוהה. רצה באופן סינכרוני."
                       : "One high-quality result. Runs synchronously."
                     : isHe
-                      ? `${targetCount} גרסאות שיירוצו ברקע. תופיע התקדמות בעמוד הפרויקט.`
+                      ? `${targetCount} גרסאות שירוצו ברקע. ההתקדמות תוצג בעמוד הפרויקט.`
                       : `${targetCount} versions, queued and run in the background with live progress.`}
                 </p>
               </div>
@@ -993,7 +993,7 @@ export function NewProjectWizard({
             {isVideoProject ? (
               <p className="text-[11px] leading-4 text-muted-foreground">
                 {isHe
-                  ? `מגבלת אצוות וידאו: ${videoSettings.maxBatch} סרטונים. אפשר לשנות עם CREATIVE_MAX_VIDEO_BATCH.`
+                  ? `מגבלת אצוות וידאו: ${videoSettings.maxBatch} סרטונים. ניתן לשנות באמצעות CREATIVE_MAX_VIDEO_BATCH.`
                   : `Video batches are capped at ${videoSettings.maxBatch} clips (override via CREATIVE_MAX_VIDEO_BATCH).`}
               </p>
             ) : null}
@@ -1004,23 +1004,23 @@ export function NewProjectWizard({
               <div className="rounded-2xl border border-amber-200 bg-amber-50/60 p-4 text-sm text-amber-900">
                 <p className="font-semibold">
                   {isHe
-                    ? `הערכת עלות: כ־$${(targetCount * 0.4).toFixed(2)} ל־${targetCount} סרטונים`
+                    ? `הערכת עלות: כ$${(targetCount * 0.4).toFixed(2)} ל${targetCount} סרטונים`
                     : `Cost estimate: ≈ $${(targetCount * 0.4).toFixed(2)} for ${targetCount} clip${targetCount === 1 ? "" : "s"}`}
                 </p>
                 <p className="text-[12px] leading-5">
                   {isHe
-                    ? "ייצור וידאו איטי ויקר ביחס לתמונות. כל סרטון אורך ~60 שניות אצל הספק."
+                    ? "ייצור וידאו איטי ויקר ביחס לתמונות. ייצור כל סרטון נמשך כ60 שניות אצל הספק."
                     : "Video generation is slow and expensive vs images. Each clip takes ~60 seconds at the provider."}
                 </p>
               </div>
             ) : (
               <div className="rounded-2xl border border-rose-200 bg-rose-50/60 p-4 text-sm text-rose-900">
                 <p className="font-semibold">
-                  {isHe ? "ייצור וידאו כבוי" : "Video generation is disabled"}
+                  {isHe ? "ייצור וידאו מושבת" : "Video generation is disabled"}
                 </p>
                 <p className="text-[12px] leading-5">
                   {isHe
-                    ? "הגדירו CREATIVE_VIDEO_ENABLED=1 ב־.env והפעילו מחדש את השרת כדי לייצר UGC."
+                    ? "הגדירו CREATIVE_VIDEO_ENABLED=1 ב.env והפעילו מחדש את השרת כדי לייצר UGC."
                     : "Set CREATIVE_VIDEO_ENABLED=1 in .env and restart the server to enable UGC video."}
                 </p>
               </div>
@@ -1042,7 +1042,7 @@ export function NewProjectWizard({
               ? "כמות 1 רצה סינכרונית; כל ערך גבוה יותר נכנס לתור ורץ ברקע."
               : "Count 1 runs synchronously; anything higher is queued and runs in the background."
             : isHe
-              ? "האצווה תתחיל ברגע שלוחצים, ותתקדם ברקע (ניתן לראות התקדמות בעמוד הפרויקט)."
+              ? "האצווה תתחיל ברגע שתלחצו ותתקדם ברקע (ניתן לעקוב אחר ההתקדמות בעמוד הפרויקט)."
               : "The batch starts immediately and progresses in the background (you'll watch it on the project page)."}
         </p>
         <Button type="submit" disabled={submitting || files.length === 0}>
@@ -1056,10 +1056,10 @@ export function NewProjectWizard({
               <Sparkles className={cn("h-4 w-4", isHe ? "ms-2" : "me-2")} />
               {targetCount === 1
                 ? isHe
-                  ? "צור עכשיו"
+                  ? "צרו עכשיו"
                   : "Generate now"
                 : isHe
-                  ? `שלח ${targetCount} לתור`
+                  ? `שלחו ${targetCount} לתור`
                   : `Queue ${targetCount} generations`}
             </>
           )}

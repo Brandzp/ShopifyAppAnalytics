@@ -130,7 +130,7 @@ export function CreativeProjectDetailView({
             <a href={`/api/creative/projects/${project.id}/export`} download>
               <Button variant="secondary" size="sm">
                 <Archive className={cn("h-3.5 w-3.5", isHe ? "ml-1.5" : "mr-1.5")} />
-                {isHe ? `הורד הכל (${project.readyCount})` : `Download all (${project.readyCount})`}
+                {isHe ? `הורדת הכל (${project.readyCount})` : `Download all (${project.readyCount})`}
               </Button>
             </a>
           ) : null}
@@ -160,7 +160,7 @@ export function CreativeProjectDetailView({
             <CardTitle>{isHe ? "תמונות מקור" : "Source images"}</CardTitle>
             <CardDescription>
               {isHe
-                ? "התמונות שהעליתם — הן משמשות כקלט ל־AI."
+                ? "התמונות שהעליתם — הן משמשות כקלט לAI."
                 : "What you uploaded — used as the AI conditioning input."}
             </CardDescription>
           </CardHeader>
@@ -256,7 +256,7 @@ export function CreativeProjectDetailView({
             {project.brief?.customPrompt ? (
               <div className="space-y-1.5 rounded-xl border border-indigo-200 bg-indigo-50/60 p-3">
                 <p className="text-[10px] font-semibold uppercase tracking-wide text-indigo-700">
-                  {isHe ? "הפרומפט שלך" : "Your prompt"}
+                  {isHe ? "הפרומפט שלכם" : "Your prompt"}
                 </p>
                 <p className="whitespace-pre-wrap text-xs leading-5 text-slate-900">
                   {project.brief.customPrompt}
@@ -299,10 +299,10 @@ export function CreativeProjectDetailView({
                 <p className="text-sm">
                   {activeJob
                     ? isHe
-                      ? "האצווה התחילה. הנכסים יופיעו כאן ברגע שהם מוכנים."
+                      ? "האצווה התחילה. הנכסים יופיעו כאן ברגע שיהיו מוכנים."
                       : "The batch has started. Assets will appear here as they finish."
                     : isHe
-                      ? "צרו את הפרויקט שוב כדי להפעיל ייצור."
+                      ? "צרו פרויקט חדש כדי להתחיל בייצור."
                       : "Create a new project to start generating."}
                 </p>
               </div>
@@ -352,7 +352,7 @@ export function CreativeProjectDetailView({
                             ) : (
                               <RotateCcw className={cn("h-3.5 w-3.5", isHe ? "ml-1.5" : "mr-1.5")} />
                             )}
-                            {isHe ? "נסה שוב" : "Retry"}
+                            {isHe ? "נסו שוב" : "Retry"}
                           </Button>
                         </div>
                       ) : (
@@ -394,7 +394,7 @@ export function CreativeProjectDetailView({
                           >
                             <Button variant="secondary" size="sm">
                               <Pencil className={cn("h-3.5 w-3.5", isHe ? "ml-1.5" : "mr-1.5")} />
-                              {isHe ? "ערוך" : "Edit"}
+                              {isHe ? "עריכה" : "Edit"}
                             </Button>
                           </Link>
                         ) : null}
@@ -405,7 +405,7 @@ export function CreativeProjectDetailView({
                             onClick={() => setPublishingAssetId(asset.id)}
                           >
                             <Send className={cn("h-3.5 w-3.5", isHe ? "ml-1.5" : "mr-1.5")} />
-                            {isHe ? "פרסם" : "Publish"}
+                            {isHe ? "פרסום" : "Publish"}
                           </Button>
                         ) : null}
                         {asset.status === "ready" ? (
@@ -420,7 +420,7 @@ export function CreativeProjectDetailView({
                             ) : (
                               <RotateCcw className={cn("h-3.5 w-3.5", isHe ? "ml-1.5" : "mr-1.5")} />
                             )}
-                            {isHe ? "צור מחדש" : "Regenerate"}
+                            {isHe ? "יצירה מחדש" : "Regenerate"}
                           </Button>
                         ) : null}
                         {asset.fileUrl ? (
@@ -432,7 +432,7 @@ export function CreativeProjectDetailView({
                           <a href={`/api/creative/projects/${project.id}/assets/${asset.id}/download`} download>
                             <Button variant="secondary" size="sm">
                               <Download className={cn("h-3.5 w-3.5", isHe ? "ml-1.5" : "mr-1.5")} />
-                              {isHe ? "הורד" : "Download"}
+                              {isHe ? "הורדה" : "Download"}
                             </Button>
                           </a>
                         ) : null}
@@ -506,7 +506,7 @@ export function CreativeProjectDetailView({
                       ) : (
                         <RotateCcw className={cn("h-3.5 w-3.5", isHe ? "ml-1.5" : "mr-1.5")} />
                       )}
-                      {isHe ? "נסה שוב" : "Retry"}
+                      {isHe ? "נסו שוב" : "Retry"}
                     </Button>
                   </div>
                 </div>
@@ -566,7 +566,7 @@ function FailureBanner({ job, locale }: { job: JobProgress; locale: AppLocale })
       <CardContent className="flex items-center gap-3 py-4 text-sm text-rose-900">
         <AlertTriangle className="h-4 w-4" aria-hidden />
         {isHe
-          ? `הייצור הסתיים עם ${job.failedCount} כשלונות (${job.succeededCount} הצליחו).`
+          ? `הייצור הסתיים עם ${job.failedCount} כישלונות (${job.succeededCount} הצליחו).`
           : `Generation finished with ${job.failedCount} failures (${job.succeededCount} succeeded).`}
         {job.errorMessage ? <span className="opacity-80"> — {job.errorMessage}</span> : null}
       </CardContent>

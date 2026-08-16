@@ -201,12 +201,12 @@ export function VideoEditor({
           {saving ? (
             <>
               <Loader2 className={cn("h-4 w-4 animate-spin", isHe ? "ms-2" : "me-2")} />
-              {isHe ? "מרנדר…" : "Rendering…"}
+              {isHe ? "מעבד…" : "Rendering…"}
             </>
           ) : (
             <>
               <Save className={cn("h-4 w-4", isHe ? "ms-2" : "me-2")} />
-              {isHe ? "שמור" : "Save"}
+              {isHe ? "שמירה" : "Save"}
             </>
           )}
         </Button>
@@ -224,7 +224,7 @@ export function VideoEditor({
             <CardTitle>{isHe ? "תצוגה מקדימה" : "Preview"}</CardTitle>
             <CardDescription>
               {isHe
-                ? "הסרטון מציג את הקובץ המקורי. הטקסט והחיתוך מצויירים מעל הפריים — הם ייצרבו על הפלט."
+                ? "הנגן מציג את הקובץ המקורי. הטקסט והחיתוך מוצגים מעל הפריים — והם יוטמעו בפלט הסופי."
                 : "Player shows the source clip. Trim and text overlay render above; they're burned into the output."}
             </CardDescription>
           </CardHeader>
@@ -279,7 +279,7 @@ export function VideoEditor({
                     if (v) setTrimStart(Math.min(trimEnd - 0.1, v.currentTime));
                   }}
                 >
-                  {isHe ? "התחל כאן" : "Set start here"}
+                  {isHe ? "קבעו התחלה כאן" : "Set start here"}
                 </Button>
                 <Button
                   type="button"
@@ -290,7 +290,7 @@ export function VideoEditor({
                     if (v) setTrimEnd(Math.max(trimStart + 0.1, v.currentTime));
                   }}
                 >
-                  {isHe ? "סיים כאן" : "Set end here"}
+                  {isHe ? "קבעו סוף כאן" : "Set end here"}
                 </Button>
                 <Button
                   type="button"
@@ -303,7 +303,7 @@ export function VideoEditor({
                     void v.play();
                   }}
                 >
-                  <Play className="h-3 w-3 me-1" /> {isHe ? "נגן חיתוך" : "Preview trim"}
+                  <Play className="h-3 w-3 me-1" /> {isHe ? "צפייה בחיתוך" : "Preview trim"}
                 </Button>
               </div>
             </div>
@@ -349,7 +349,7 @@ export function VideoEditor({
             <CardTitle>{isHe ? "טקסט" : "Text overlay"}</CardTitle>
             <CardDescription>
               {isHe
-                ? "הוסיפו שכבת טקסט. ייצרב על כל פריים בסרטון."
+                ? "הוסיפו שכבת טקסט. היא תוטמע בכל פריים בסרטון."
                 : "Add a text layer. It's burned onto every frame of the output clip."}
             </CardDescription>
           </CardHeader>
@@ -357,12 +357,12 @@ export function VideoEditor({
             <div className="flex items-center gap-2">
               <Button variant="secondary" size="sm" onClick={addOverlay}>
                 <Plus className={cn("h-3.5 w-3.5", isHe ? "ms-1.5" : "me-1.5")} />
-                {isHe ? "הוסף שכבה" : "Add text"}
+                {isHe ? "הוספת שכבה" : "Add text"}
               </Button>
               {selectedOverlay ? (
                 <Button variant="ghost" size="sm" onClick={deleteSelected}>
                   <Trash2 className={cn("h-3.5 w-3.5", isHe ? "ms-1.5" : "me-1.5")} />
-                  {isHe ? "מחק" : "Delete"}
+                  {isHe ? "מחיקה" : "Delete"}
                 </Button>
               ) : null}
             </div>

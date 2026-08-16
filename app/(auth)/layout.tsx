@@ -10,7 +10,7 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
       <header className="px-6 py-5">
         <a href="/" className="inline-flex items-center gap-2">
           <span className="inline-block h-8 w-8 rounded-lg bg-gradient-to-br from-violet-600 to-indigo-600" />
-          <span className="text-base font-semibold tracking-tight">Brandzp</span>
+          <span className="text-base font-semibold tracking-tight">Hiloomy</span>
         </a>
       </header>
       <main className="flex-1 flex items-center justify-center px-4 py-12">

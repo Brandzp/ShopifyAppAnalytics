@@ -31,11 +31,11 @@ export async function POST(request: Request) {
     const file = formData.get("file");
 
     if (!isBrand(brand)) {
-      throw new AppError("בחרי מותג לפני יצירת הגאנט.", 400);
+      throw new AppError("בחרו מותג לפני יצירת הגאנט.", 400);
     }
 
     if (typeof planningMonth !== "string" || !planningMonth) {
-      throw new AppError("בחרי חודש תכנון לפני יצירת הגאנט.", 400);
+      throw new AppError("בחרו חודש תכנון לפני יצירת הגאנט.", 400);
     }
 
     const result = await generateMarketingPlannerWorkbook(

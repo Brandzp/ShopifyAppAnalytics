@@ -42,7 +42,7 @@ const EMPTY: FormState = {
 function labels(locale: Locale) {
   const isHe = locale === "he";
   return {
-    trigger: isHe ? "הוסף המרה ידנית" : "Add conversion manually",
+    trigger: isHe ? "הוספת המרה ידנית" : "Add conversion manually",
     dialogTitle: isHe ? "הוספת המרה ידנית" : "Add a conversion manually",
     dialogHint: isHe
       ? "השתמשו בזה כשעסקה מיוחסת לשותף/ה אבל לא הגיעה דרך הסנכרון האוטומטי (BixGrow / Shopify)."
@@ -67,9 +67,9 @@ function labels(locale: Locale) {
     occurredAt: isHe ? "מועד העסקה" : "When it happened",
     occurredAtHint: isHe ? "אם ריק — עכשיו" : "Blank = now",
     note: isHe ? "הערה פנימית" : "Internal note",
-    cancel: isHe ? "בטל" : "Cancel",
-    submit: isHe ? "צור המרה" : "Add conversion",
-    submitting: isHe ? "יוצר…" : "Adding…",
+    cancel: isHe ? "ביטול" : "Cancel",
+    submit: isHe ? "הוספת המרה" : "Add conversion",
+    submitting: isHe ? "מוסיף…" : "Adding…",
     successToast: (num: string) =>
       isHe ? `נוספה המרה להזמנה ${num}` : `Added conversion for order ${num}`,
     errorFallback: isHe ? "ההוספה נכשלה" : "Add failed"

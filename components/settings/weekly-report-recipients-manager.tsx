@@ -110,7 +110,7 @@ export function WeeklyReportRecipientsManager({
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            placeholder={isHe ? "כתובת דוא״ל" : "Email"}
+            placeholder={isHe ? "כתובת אימייל" : "Email"}
             className="h-9 rounded-lg border border-border bg-background px-2.5 text-sm"
           />
           <input
@@ -128,7 +128,7 @@ export function WeeklyReportRecipientsManager({
             className="inline-flex items-center gap-1.5"
           >
             {submitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
-            {isHe ? "הוסף" : "Add"}
+            {isHe ? "הוסיפו" : "Add"}
           </Button>
         </div>
         {error ? <p className="text-[11px] text-rose-600">{error}</p> : null}
@@ -169,7 +169,7 @@ export function WeeklyReportRecipientsManager({
                 type="button"
                 onClick={() => remove(r.id)}
                 className="rounded-md p-1 text-muted-foreground hover:bg-rose-50 hover:text-rose-700"
-                title={isHe ? "הסר" : "Remove"}
+                title={isHe ? "הסרה" : "Remove"}
               >
                 <Trash2 className="h-3.5 w-3.5" aria-hidden />
               </button>

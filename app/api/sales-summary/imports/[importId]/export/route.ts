@@ -70,7 +70,7 @@ export async function GET(
 
     const wb = new ExcelJS.Workbook();
     wb.created = new Date();
-    wb.creator = "Shopify Profit Ops";
+    wb.creator = "Hiloomy";
     const currency = summary.import.currency ?? "";
     const period = periodLabel(summary.import.periodYear, summary.import.periodMonth, locale);
 

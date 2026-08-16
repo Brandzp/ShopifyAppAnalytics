@@ -18,7 +18,7 @@ export default async function AuditLogPage() {
   const t = locale === "he"
     ? {
         title: "יומן ביקורת",
-        subtitle: "כל הפעולות הקריטיות בארגון, ב-100 הרשומות האחרונות",
+        subtitle: "כל הפעולות הקריטיות בארגון — 100 הרשומות האחרונות",
         denied: "רק בעלים ומנהלים יכולים לצפות ביומן הביקורת.",
         empty: "אין רשומות עדיין.",
         system: "מערכת"

@@ -7,7 +7,7 @@ const LOCALE_COOKIE = "app-locale";
 const dictionaries = {
   en: {
     common: {
-      appName: "Shopify Profit Ops",
+      appName: "Hiloomy",
       menu: "Menu",
       connectedStore: "Connected store",
       storeSetup: "Store setup",
@@ -335,7 +335,7 @@ const dictionaries = {
   },
   he: {
     common: {
-      appName: "Shopify Profit Ops",
+      appName: "Hiloomy",
       menu: "תפריט",
       connectedStore: "חנות מחוברת",
       storeSetup: "הגדרת חנות",
@@ -387,14 +387,14 @@ const dictionaries = {
       changeLabel: "לעומת התקופה הקודמת",
       priorLabel: "קודם",
       tips: {
-        page: "כל המספרים בעמוד הזה משווים את חלון הדיווח שבחרת לחלון זהה לפניו.",
+        page: "כל המספרים בעמוד הזה משווים את חלון הדיווח שבחרתם לחלון זהה לפניו.",
         kpis: "מדדי המפתח של החנות. הצ'יפ מציג שינוי באחוזים מול התקופה הקודמת — ירוק עלייה, אדום ירידה.",
         comparison: "ערכי מדד ליד התקופה הקודמת, כדי לוודא שהצמיחה אכן משפרת רווחיות ולא רק הכנסות.",
         revenueChart: "הכנסות יומיות (ברוטו) על גבי רווח משוער (הכנסות בניכוי הנחות, החזרים ועלות מוצר).",
         retentionChart: "אחוז ההזמנות היומיות שמגיעות מלקוחות חוזרים. גבוה = שימור לקוחות בריא.",
         insights: "תקצירים בסגנון AI שמתרגמים מספרים לאמירה אחת שאפשר לפעול עליה.",
         actions: "משימות תפעוליות לפי נושא — תמחור, שימור לקוחות, מלאי, תוכן.",
-        topProducts: "5 המוצרים המובילים בתקופה לפי הכנסות. שדה 'רווח משוער' משתמש במודל העלות שהגדרת בהגדרות.",
+        topProducts: "5 המוצרים המובילים בתקופה לפי הכנסות. שדה 'רווח משוער' משתמש במודל העלות שהגדרתם בהגדרות.",
         alerts: "ההתראות העדכניות ביותר. לחיצה תוביל למסך ההתראות המלא."
       },
       colTips: {
@@ -409,12 +409,12 @@ const dictionaries = {
       description:
         "הרווח המשוער מחושב כהכנסות פחות הנחות, החזרים ועלות משוערת, כך שניתן יהיה לחבר בעתיד עלות מוצר אמיתית בלי לשכתב את החוויה.",
       salesByProduct: "מכירות לפי מוצר",
-      salesByProductDescription: "ה־SKU (יחידת מלאי / Stock Keeping Unit) המובילים לפי תרומת הכנסות.",
+      salesByProductDescription: "הSKU (יחידת מלאי / Stock Keeping Unit) המובילים לפי תרומת הכנסות.",
       profitByCollection: "רווח משוער לפי קטגוריה",
       profitByCollectionDescription: "אילו קטגוריות מחזיקות את מרווח התרומה.",
       productTable: "טבלת רווחיות ברמת מוצר",
       productTableDescription:
-        "בנוי כך שיוכל לקלוט בהמשך נתוני עלות אמיתיים מ־Shopify או מ־ERP.",
+        "בנוי כך שיוכל לקלוט בהמשך נתוני עלות אמיתיים מShopify או מERP.",
       salesByCollection: "מכירות לפי קטגוריה",
       discountImpact: "השפעת הנחות",
       topProducts: "המוצרים החזקים ביותר",
@@ -425,7 +425,7 @@ const dictionaries = {
       bundleDescription:
         "אזור שמור לניתוח תרומת באנדלים כאשר יתחבר ייחוס קיטים.",
       bundleTodo:
-        "TODO: להוסיף קליטה של הרכב באנדלים, מטא־דאטה של שורות הזמנה והעשרת הזמנות לפני שמדליקים דיווח תרומת באנדלים.",
+        "TODO: להוסיף קליטה של הרכב באנדלים, מטא דאטה של שורות הזמנה והעשרת הזמנות לפני שמדליקים דיווח תרומת באנדלים.",
       refundImpact: "השפעת החזרים והחזרות",
       refundDescription:
         "אזור שמור לניתוח סיבות החזרה וערך נטו שנשמר.",
@@ -452,7 +452,7 @@ const dictionaries = {
         profitByCollection: "רווח משוער בקיבוץ לפי קטגוריה. רואים איזו קטגוריה מחזיקה את המרווח.",
         productTable: "פירוט ברמת מוצר: יחידות, הכנסה, פגיעת הנחה, פגיעת החזר ורווח משוער.",
         watchlist: "מוצרים עם הרווח הנמוך ביותר או פגיעת הנחה גבוהה. מועמדים לתמחור מחדש או הסרת הנחות.",
-        bundleImpact: "יציג תרומת באנדלים כשתחובר מטא־דאטה של line items מ־Shopify.",
+        bundleImpact: "יציג תרומת באנדלים כשתחובר מטא דאטה של line items מShopify.",
         refundImpact: "יציג סיבות להחזר וערך נשמר נטו כשנתוני ההחזרות יחוברו.",
         discountCol: "סכום ההנחה שניתנה למוצר בחלון הזמן — ערכים גבוהים שוחקים את המרווח.",
         refundsCol: "סכום ההחזר שיוחס למוצר. עלייה כאן בדרך כלל מצביעה על בעיית התאמה, איכות או שילוח."
@@ -486,11 +486,11 @@ const dictionaries = {
       newLabel: "חדשים",
       returningLabel: "חוזרים",
       tips: {
-        page: "שימור לקוחות זה מה שמצטבר — הזמנה שנייה, רכישה חוזרת וזמן עד הזמנה שנייה מספרים אם לחנות יש אורך חיים לקוח אמיתי.",
+        page: "שימור לקוחות הוא מה שמצטבר — הזמנה שנייה, רכישה חוזרת וזמן עד הזמנה שנייה מספרים אם לחנות יש אורך חיים לקוח אמיתי.",
         newCustomers: "לקוחות שביצעו את ההזמנה הראשונה שלהם בחלון הזמן הזה.",
         returningCustomers: "לקוחות שכבר הייתה להם הזמנה אחת קודמת לפחות.",
         repeatRate: "אחוז הלקוחות עם יותר מהזמנה אחת אי פעם. גבוה = מותג דביק.",
-        secondOrderRate: "מתוך מי שהזמין לראשונה בחלון, כמה חזר להזמנה שנייה.",
+        secondOrderRate: "מתוך מי שהזמינו לראשונה בחלון, כמה חזרו להזמנה שנייה.",
         avgDaysToSecond: "ממוצע ימים בין הזמנה ראשונה לשנייה. קצר יותר = מחזור חיים מהיר יותר.",
         repeatRateChart: "אחוז יומי של לקוחות חוזרים. ירידות כאן בדרך כלל מקדימות בעיות אורך חיים לקוח.",
         newVsReturning: "התמהיל בין לקוחות חדשים לחוזרים בחלון הנוכחי. מותג DTC (מכירה ישירה לצרכן / Direct to Consumer) בריא בדרך כלל מציג 30%-50% חוזרים.",
@@ -504,7 +504,7 @@ const dictionaries = {
       eyebrow: "סיכום שבועי למייסד",
       title: "קריאה ניהולית מהירה שמיועדת להחלטות",
       description:
-        "נרטיב שבועי קצר ומנהלי, בנוי כך שבהמשך יוכל להגיע מ־LLM אבל כבר עכשיו נשען על מבנה סיכום יציב.",
+        "נרטיב שבועי קצר ומנהלי, בנוי כך שבהמשך יוכל להגיע מLLM אבל כבר עכשיו נשען על מבנה סיכום יציב.",
       regenerate: "יצירת סיכום מחדש",
       copy: "העתקת סיכום",
       share: "אימייל / שיתוף",
@@ -569,11 +569,11 @@ const dictionaries = {
         token: "טוקן גישה של Admin API",
         tokenPlaceholder: "shpat_...",
         testConnection: "בדיקת חיבור",
-        testing: "בודק...",
+        testing: "בודק…",
         saveCredentials: "שמירת פרטי גישה",
-        saving: "שומר...",
+        saving: "שומר…",
         testSuccess: "בדיקת החיבור הצליחה עבור",
-        saveSuccess: "פרטי הגישה ל־Shopify נשמרו בהצלחה.",
+        saveSuccess: "פרטי הגישה לShopify נשמרו בהצלחה.",
         connectionFailed: "בדיקת החיבור נכשלה.",
         saveFailed: "שמירת החיבור נכשלה.",
         unexpectedError: "משהו השתבש.",
@@ -587,9 +587,9 @@ const dictionaries = {
         syncControlsDescription:
           "סנכרון ראשוני טוען היסטוריה רחבה. סנכרון אינקרמנטלי מושך רק רשומות שעודכנו מאז הריצה האחרונה.",
         runInitialSync: "הרצת סנכרון ראשוני",
-        runningInitialSync: "מריץ סנכרון ראשוני...",
+        runningInitialSync: "מריץ סנכרון ראשוני…",
         runIncrementalSync: "הרצת סנכרון אינקרמנטלי",
-        runningIncrementalSync: "מריץ סנכרון אינקרמנטלי...",
+        runningIncrementalSync: "מריץ סנכרון אינקרמנטלי…",
         initialSyncDone: "הסנכרון הראשוני הושלם.",
         incrementalSyncDone: "הסנכרון האינקרמנטלי הושלם.",
         initialSyncFailed: "הסנכרון הראשוני נכשל.",
@@ -640,9 +640,9 @@ const dictionaries = {
       instagramToken: "טוקן גישה לאינסטגרם",
       connectInstagram: "חיבור באמצעות טוקן",
       connectInstagramOauth: "חיבור עם Instagram",
-      connecting: "מתחבר...",
+      connecting: "מתחבר…",
       syncLatestPosts: "סנכרון פוסטים אחרונים",
-      syncing: "מסנכרן...",
+      syncing: "מסנכרן…",
       instagramConnected: "חשבון האינסטגרם חובר.",
       instagramSynced: "פוסטים מאינסטגרם סונכרנו.",
       attributionTitle: "הגדרות ייחוס מכירות ליוצרים",
@@ -653,7 +653,7 @@ const dictionaries = {
       attributionKey: "מפתח API של סביבת הייחוס",
       optionalForNow: "אופציונלי כרגע",
       saveAttribution: "שמירת הגדרות ייחוס",
-      saving: "שומר...",
+      saving: "שומר…",
       attributionSaved: "הגדרות ייחוס המכירות נשמרו.",
       requestFailed: "הבקשה נכשלה.",
       oauthHelp: "השתמשו בכפתור Instagram לתהליך התחברות מודרך, או הדביקו טוקן ידנית אם כבר יש לכם אחד."

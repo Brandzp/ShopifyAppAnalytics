@@ -64,7 +64,7 @@ export default async function AlertsPage() {
           <Card>
             <CardContent className="p-8 text-center text-sm text-muted-foreground">
               {locale === "he"
-                ? "אין התראות בחלון הזמן הזה. כאן יופיעו חריגות ברגע שיתעוררו."
+                ? "אין התראות בחלון הזמן הזה. כאן יופיעו חריגות ברגע שיזוהו."
                 : "No alerts in this window. We'll surface anomalies here as they trigger."}
             </CardContent>
           </Card>
@@ -77,7 +77,7 @@ export default async function AlertsPage() {
               title={locale === "he" ? "ההתראות הדחופות להיום" : "Today's must-do alerts"}
               hint={
                 locale === "he"
-                  ? "משהו מהותי זז. קראו את הפעולה המומלצת ובצעו אם אפשר עוד היום."
+                  ? "משהו מהותי השתנה. קראו את הפעולה המומלצת ובצעו אותה עוד היום אם אפשר."
                   : "Something material moved. Read the suggested action and execute today if possible."
               }
             />
@@ -100,7 +100,7 @@ export default async function AlertsPage() {
               title={locale === "he" ? "תור הסקירה של השבוע" : "This week's review queue"}
               hint={
                 locale === "he"
-                  ? "שווה לבדוק בתכנון השבועי. לא יתפוצץ בן לילה."
+                  ? "שווה לבדוק בתכנון השבועי. לא דורש טיפול מיידי."
                   : "Worth investigating during weekly planning. Won't blow up overnight."
               }
             />
@@ -120,7 +120,7 @@ export default async function AlertsPage() {
           <section className="space-y-3">
             <SectionHead
               eyebrow={locale === "he" ? "עדיפות — נמוכה" : "Priority — low"}
-              title={locale === "he" ? "לידיעה — אינפורמטיבי" : "FYI — informational"}
+              title={locale === "he" ? "לידיעה בלבד" : "FYI — informational"}
               hint={
                 locale === "he"
                   ? "רקע כללי. קראו כשיש זמן, או דלגו בשבוע עמוס."

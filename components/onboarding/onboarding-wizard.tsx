@@ -44,18 +44,18 @@ export function OnboardingWizard({
             ttwc: "מה צריך כדי להתחבר?",
             ttwc1: "כתובת החנות (לדוגמה: yourstore.myshopify.com)",
             ttwc2: "הרשאת בעלים בחשבון Shopify",
-            ttwc3: "כ-30 שניות"
+            ttwc3: "כ30 שניות"
           },
           connect: {
             kicker: "חיבור Shopify",
             title: "כתובת החנות שלכם",
-            body: "הזינו את הדומיין המלא של החנות. נפנה אתכם ל-Shopify לאישור.",
+            body: "הזינו את הדומיין המלא של החנות. נפנה אתכם לShopify לאישור.",
             shopLabel: "כתובת Shopify",
             shopPlaceholder: "yourstore.myshopify.com",
             cta: "התקינו דרך Shopify",
-            ctaLoading: "ממתינים ל-Shopify…",
+            ctaLoading: "ממתינים לShopify…",
             back: "חזרה",
-            note: "אנחנו לא נראה את הסיסמה שלכם — Shopify מנהלת את האימות."
+            note: "אנחנו לא רואים את הסיסמה שלכם — Shopify מנהלת את האימות."
           }
         }
       : {

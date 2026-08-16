@@ -94,11 +94,11 @@ export function PublishToShopifyDialog({
         <div className="flex items-start justify-between gap-3">
           <div>
             <h3 className="text-base font-semibold">
-              {isHe ? "פרסום ל־Shopify" : "Publish to Shopify"}
+              {isHe ? "פרסום לShopify" : "Publish to Shopify"}
             </h3>
             <p className="text-xs text-muted-foreground">
               {isHe
-                ? "הקובץ יועלה לגלריה של המוצר שתבחרו דרך Shopify Files."
+                ? "הקובץ יועלה דרך Shopify Files לגלריית המדיה של המוצר שתבחרו."
                 : "Pushes this asset into the chosen product's media gallery via Shopify Files."}
             </p>
           </div>
@@ -129,7 +129,7 @@ export function PublishToShopifyDialog({
                 rel="noreferrer"
                 className="inline-block text-[11px] font-medium underline"
               >
-                {isHe ? "צפייה בקובץ ב־Shopify" : "View on Shopify"}
+                {isHe ? "צפייה בקובץ בShopify" : "View on Shopify"}
               </a>
             ) : null}
             <div className="pt-1">
@@ -153,7 +153,7 @@ export function PublishToShopifyDialog({
               />
               <p className="text-[11px] leading-4 text-muted-foreground">
                 {isHe
-                  ? "מספר, GID, או כתובת admin: כולם תקפים."
+                  ? "ניתן להזין מזהה מספרי, GID או כתובת admin מלאה."
                   : "Accepts a numeric id, GID, or full /admin/products/… URL."}
               </p>
             </label>
@@ -166,7 +166,7 @@ export function PublishToShopifyDialog({
                 type="text"
                 value={altText}
                 onChange={(event) => setAltText(event.target.value)}
-                placeholder={isHe ? "תיאור תמונה ל־SEO" : "Image description for SEO"}
+                placeholder={isHe ? "תיאור תמונה לSEO" : "Image description for SEO"}
                 className="h-10 w-full rounded-xl border border-border bg-background px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               />
             </label>
@@ -190,7 +190,7 @@ export function PublishToShopifyDialog({
                 ) : (
                   <>
                     <Send className={cn("h-3.5 w-3.5", isHe ? "ml-1.5" : "mr-1.5")} />
-                    {isHe ? "פרסם" : "Publish"}
+                    {isHe ? "פרסום" : "Publish"}
                   </>
                 )}
               </Button>

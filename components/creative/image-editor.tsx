@@ -167,7 +167,7 @@ export function ImageEditor({
       if (file.size > MAX_IMAGE_OVERLAY_BYTES) {
         setError(
           isHe
-            ? `הקובץ גדול מ־${Math.round(MAX_IMAGE_OVERLAY_BYTES / 1024)}KB. השתמשו בלוגו קטן יותר.`
+            ? `הקובץ גדול מ${Math.round(MAX_IMAGE_OVERLAY_BYTES / 1024)}KB. השתמשו בלוגו קטן יותר.`
             : `File is bigger than ${Math.round(MAX_IMAGE_OVERLAY_BYTES / 1024)}KB — please pick a smaller logo or badge.`
         );
         return;
@@ -231,7 +231,7 @@ export function ImageEditor({
           ) : (
             <>
               <Save className={cn("h-4 w-4", isHe ? "ml-2" : "mr-2")} />
-              {isHe ? "שמור" : "Save"}
+              {isHe ? "שמירה" : "Save"}
             </>
           )}
         </Button>
@@ -282,7 +282,7 @@ export function ImageEditor({
             <CardTitle>{isHe ? "שכבות" : "Overlays"}</CardTitle>
             <CardDescription>
               {isHe
-                ? "טקסט ותמונות יוטמעו על התמונה כשתשמרו."
+                ? "טקסט ותמונות יוטמעו על גבי התמונה בעת השמירה."
                 : "Text and images are burned into the saved file."}
             </CardDescription>
           </CardHeader>
@@ -306,7 +306,7 @@ export function ImageEditor({
               {selectedOverlay ? (
                 <Button variant="ghost" size="sm" onClick={deleteSelected}>
                   <Trash2 className={cn("h-3.5 w-3.5", isHe ? "ml-1.5" : "mr-1.5")} />
-                  {isHe ? "מחק" : "Delete"}
+                  {isHe ? "מחיקה" : "Delete"}
                 </Button>
               ) : null}
             </div>
@@ -394,7 +394,7 @@ function TextOverlayControls({
         />
         <p className="mt-1 text-[11px] leading-4 text-muted-foreground">
           {isHe
-            ? "התמונה תוטמע עם קו תחתון לטקסט המקושר. הכתובת תישמר ותהיה זמינה בעת פרסום."
+            ? "טקסט מקושר יוצג עם קו תחתון. הכתובת תישמר ותשמש בעת הפרסום."
             : "Text is underlined when a link is set. The URL is stored and used by the publish flow."}
         </p>
       </div>

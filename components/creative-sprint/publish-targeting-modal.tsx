@@ -89,10 +89,10 @@ export function PublishTargetingModal({ sprintId, locale, onClose, onPublished }
         className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-border bg-card p-6 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-lg font-semibold">{t ? "הגדירו פרסום ל-Meta" : "Configure Meta publish"}</h2>
+        <h2 className="text-lg font-semibold">{t ? "הגדירו פרסום לMeta" : "Configure Meta publish"}</h2>
         <p className="mt-1 text-sm text-muted-foreground">
           {t
-            ? "בחרו דף Facebook, פיקסל, וקישור מטרה. כל המודעות בספרינט ישתפו את הקהל הזה."
+            ? "בחרו דף Facebook, פיקסל וכתובת יעד. כל המודעות בספרינט ישתמשו באותו קהל."
             : "Pick a Page, Pixel and destination URL. Every ad in the sprint shares this audience."}
         </p>
 
@@ -101,7 +101,7 @@ export function PublishTargetingModal({ sprintId, locale, onClose, onPublished }
         ) : !config.connected ? (
           <p className="mt-6 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
             {t
-              ? "החנות לא מחוברת ל-Meta Ads. חברו דרך הגדרות תחילה."
+              ? "החנות אינה מחוברת לMeta Ads. חברו אותה תחילה דרך ההגדרות."
               : "Store is not connected to Meta Ads. Connect it via Settings first."}
           </p>
         ) : (
@@ -165,7 +165,7 @@ export function PublishTargetingModal({ sprintId, locale, onClose, onPublished }
                 />
               </label>
               <label className="block">
-                <span className="font-medium">{t ? "גיל מ-" : "Age min"}</span>
+                <span className="font-medium">{t ? "גיל מינימלי" : "Age min"}</span>
                 <input
                   type="number"
                   min={13}
@@ -176,7 +176,7 @@ export function PublishTargetingModal({ sprintId, locale, onClose, onPublished }
                 />
               </label>
               <label className="block">
-                <span className="font-medium">{t ? "גיל עד-" : "Age max"}</span>
+                <span className="font-medium">{t ? "גיל מקסימלי" : "Age max"}</span>
                 <input
                   type="number"
                   min={14}

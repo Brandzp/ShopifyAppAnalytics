@@ -45,7 +45,7 @@ export default async function EditAssetPage({
       ? {
           eyebrow: "סטודיו קריאייטיב",
           title: `עריכת נכס — ${asset.project?.name ?? ""}`,
-          description: "הוסיפו כותרת או טקסט לקריאה לפעולה. הסידור הזה ייצרב על התמונה כשתשמרו."
+          description: "הוסיפו כותרת או טקסט לקריאה לפעולה. הפריסה תיצרב על התמונה בעת השמירה."
         }
       : {
           eyebrow: "Creative Studio",

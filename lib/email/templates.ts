@@ -7,7 +7,7 @@
 
 export type EmailLocale = "he" | "en";
 
-const BRAND = "Brandzp";
+const BRAND = "Hiloomy";
 const BRAND_COLOR = "#5E6AD2";
 
 interface EmailShell {
@@ -86,11 +86,11 @@ export function welcomeEmail(data: { displayName: string | null; appUrl: string;
   const greeting = data.displayName ? data.displayName : data.locale === "he" ? "שלום" : "Hi there";
   if (data.locale === "he") {
     return {
-      subject: "ברוכים הבאים ל-Brandzp 👋",
+      subject: "ברוכים הבאים לHiloomy 👋",
       html: renderShell({
         title: `${greeting}, ברוכים הבאים!`,
         intro:
-          "תודה שנרשמתם ל-Brandzp. אתם 14 ימי ניסיון בחינם משימוש מלא בלוח הבקרה.",
+          "תודה שנרשמתם לHiloomy. אתם 14 ימי ניסיון בחינם משימוש מלא בלוח הבקרה.",
         body: [
           "כדי להתחיל, חברו את חנות Shopify שלכם. תוך פחות מדקה תראו את הנתונים — הכנסות, רווח, קמפיינים, חזרת לקוחות, ושותפים.",
           "אם תקועים, אנחנו זמינים: השיבו לאימייל הזה ונחזור אליכם."
@@ -102,11 +102,11 @@ export function welcomeEmail(data: { displayName: string | null; appUrl: string;
     };
   }
   return {
-    subject: "Welcome to Brandzp 👋",
+    subject: "Welcome to Hiloomy 👋",
     html: renderShell({
       title: `${greeting}, welcome!`,
       intro:
-        "Thanks for signing up to Brandzp. You're 14 days into a free trial with full access to the dashboard.",
+        "Thanks for signing up to Hiloomy. You're 14 days into a free trial with full access to the dashboard.",
       body: [
         "To get started, connect your Shopify store. In under a minute you'll see your numbers — revenue, profit, campaigns, retention, and affiliates.",
         "Stuck? Reply to this email — a real human reads them."
@@ -133,7 +133,7 @@ export function trialEndingEmail(data: {
         intro:
           "כדי להמשיך לקבל גישה לניתוחים, להתראות ולדוחות, בחרו במסלול שמתאים לכם.",
         body: [
-          "המסלולים מתחילים ב-179 ש\"ח לחודש. אפשר לבטל בכל רגע. ללא התחייבות.",
+          "המסלולים מתחילים ב179 ש\"ח לחודש. אפשר לבטל בכל רגע. ללא התחייבות.",
           "אם יש שאלות לפני שתחליטו — השיבו לאימייל הזה."
         ],
         cta: { label: "בחרו מסלול", url: `${data.appUrl}/billing` },
@@ -171,7 +171,7 @@ export function subscriptionStartedEmail(data: {
         intro: `אתם רשומים למסלול ${data.planName}. הנה מה שעכשיו זמין לכם:`,
         body: [
           "כל הלוחות, ההתראות, והדוחות פתוחים ללא הגבלה.",
-          "החיוב הראשון יישלח אליכם מ-Stripe — חיפשו אימייל מהם.",
+          "החיוב הראשון יישלח אליכם מStripe — חיפשו אימייל מהם.",
           "לניהול אמצעי תשלום, הורדת חשבוניות, או שינוי מסלול — כנסו לעמוד הביצוע."
         ],
         cta: { label: "פתחו את הדשבורד", url: data.appUrl },
@@ -204,12 +204,12 @@ export function teamInvitationEmail(data: {
 }) {
   if (data.locale === "he") {
     return {
-      subject: `${data.inviterName} הזמין/ה אתכם להצטרף ל-${data.orgName} ב-Brandzp`,
+      subject: `${data.inviterName} הזמין/ה אתכם להצטרף ל-${data.orgName} בHiloomy`,
       html: renderShell({
         title: `הוזמנתם להצטרף ל-${data.orgName}`,
-        intro: `${data.inviterName} הזמין/ה אתכם להיות חברים בארגון ${data.orgName} ב-Brandzp.`,
+        intro: `${data.inviterName} הזמין/ה אתכם להיות חברים בארגון ${data.orgName} בHiloomy.`,
         body: [
-          "ההזמנה תקפה ל-14 ימים. אחרי קבלת ההזמנה תוכלו לראות ולנהל את הנתונים של הארגון.",
+          "ההזמנה תקפה ל14 ימים. אחרי קבלת ההזמנה תוכלו לראות ולנהל את הנתונים של הארגון.",
           "אם אין לכם עדיין חשבון, נצור לכם אחד אוטומטית."
         ],
         cta: { label: "קבלו את ההזמנה", url: data.acceptUrl },
@@ -218,13 +218,13 @@ export function teamInvitationEmail(data: {
     };
   }
   return {
-    subject: `${data.inviterName} invited you to join ${data.orgName} on Brandzp`,
+    subject: `${data.inviterName} invited you to join ${data.orgName} on Hiloomy`,
     html: renderShell({
       title: `You've been invited to ${data.orgName}`,
-      intro: `${data.inviterName} invited you to join the ${data.orgName} organization on Brandzp.`,
+      intro: `${data.inviterName} invited you to join the ${data.orgName} organization on Hiloomy.`,
       body: [
         "This invitation is valid for 14 days. Once you accept, you'll see and manage the organization's data.",
-        "If you don't have a Brandzp account yet, we'll create one for you."
+        "If you don't have a Hiloomy account yet, we'll create one for you."
       ],
       cta: { label: "Accept invitation", url: data.acceptUrl },
       locale: "en"

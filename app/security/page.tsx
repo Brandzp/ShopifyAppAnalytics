@@ -8,9 +8,9 @@ import { ShieldCheck, Lock, KeyRound, Database, Server, FileCheck2 } from "lucid
 // Bilingual. RTL-safe.
 
 export const metadata = {
-  title: "Security & Data Handling — Brandzp",
+  title: "Security & Data Handling — Hiloomy",
   description:
-    "How Brandzp protects your Shopify, Meta Ads, and affiliate data: encryption, isolation, deletion."
+    "How Hiloomy protects your Shopify, Meta Ads, and affiliate data: encryption, isolation, deletion."
 };
 
 export default async function SecurityPage() {
@@ -26,9 +26,9 @@ export default async function SecurityPage() {
         sections: [
           {
             icon: Lock,
-            title: "הצפנה במנוחה ובתעבורה",
+            title: "הצפנה באחסון ובתעבורה",
             body:
-              "כל הסודות (טוקני Shopify, Meta Ads, ו-Instagram) מוצפנים בבסיס הנתונים עם AES-GCM 256-bit. כל התעבורה מוצפנת ב-HTTPS (TLS 1.3)."
+              "כל הסודות (טוקני Shopify, Meta Ads וInstagram) מוצפנים בבסיס הנתונים עם AES-GCM 256-bit. כל התעבורה מוצפנת בHTTPS (TLS 1.3)."
           },
           {
             icon: Database,
@@ -40,29 +40,29 @@ export default async function SecurityPage() {
             icon: KeyRound,
             title: "אימות וגישה",
             body:
-              "האימות מתבצע ב-Supabase Auth (תואם SOC 2). סיסמאות מוגנות עם bcrypt. תמיכה ב-OAuth (התחברות מאובטחת דרך ספק חיצוני) מ-Google, GitHub, ועוד מגיעה בקרוב."
+              "האימות מתבצע בSupabase Auth (תואם SOC 2). סיסמאות מוגנות עם bcrypt. תמיכה בOAuth (התחברות מאובטחת דרך ספק חיצוני) מGoogle, GitHub ועוד תגיע בקרוב."
           },
           {
             icon: Server,
             title: "תשתית",
             body:
-              "הנתונים נשמרים בענן של Supabase ב-eu-central-1 (פרנקפורט). השרת רץ ב-Render ב-Frankfurt. עדכוני אבטחה מתבצעים אוטומטית."
+              "הנתונים נשמרים בענן של Supabase בeu-central-1 (פרנקפורט). השרת רץ בRender בפרנקפורט. עדכוני אבטחה מתבצעים אוטומטית."
           },
           {
             icon: FileCheck2,
             title: "מחיקת נתונים",
             body:
-              "בכל רגע תוכלו לבקש מחיקה של כל הנתונים שלכם — נמחק תוך 7 ימים. Meta data deletion callback מטופל אוטומטית."
+              "בכל רגע תוכלו לבקש מחיקה מלאה של הנתונים שלכם — המחיקה מתבצעת תוך 7 ימים. Meta data deletion callback מטופל אוטומטית."
           },
           {
             icon: ShieldCheck,
             title: "ביקורת ועדכון",
             body:
-              "אנחנו ממשיכים להוסיף שכבות אבטחה — SAML SSO, IP whitelisting, ו-DPA למתעניינים — לבקשה ב-yohad@brandzp.co.il."
+              "אנחנו ממשיכים להוסיף שכבות אבטחה — SAML SSO, IP whitelisting וDPA זמינים לפי בקשה בכתובת yohad@brandzp.co.il."
           }
         ],
         contact:
-          "שאלות אבטחה? כתבו לנו ל-yohad@brandzp.co.il. אנחנו נחזור תוך יום עסקים."
+          "שאלות אבטחה? כתבו לנו לyohad@brandzp.co.il ונחזור אליכם תוך יום עסקים."
       }
     : {
         kicker: "Security",

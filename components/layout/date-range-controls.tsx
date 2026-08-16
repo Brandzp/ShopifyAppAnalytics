@@ -23,9 +23,9 @@ export function DateRangeControls({
   const t = {
     from: isHe ? "מתאריך" : "From",
     to: isHe ? "עד תאריך" : "To",
-    apply: isHe ? "החל" : "Apply",
+    apply: isHe ? "החילו" : "Apply",
     applying: isHe ? "מחיל..." : "Applying...",
-    reset: isHe ? "אפס" : "Reset"
+    reset: isHe ? "איפוס" : "Reset"
   };
   const router = useRouter();
   const [startDate, setStartDate] = useState(initialStart);

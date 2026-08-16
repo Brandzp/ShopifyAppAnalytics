@@ -16,7 +16,7 @@ export default async function ConnectBrandPage() {
 
   const locale = await getAppLocale();
   const t = locale === "he"
-    ? { title: "חיברו מותג נוסף", back: "← חזרה לדשבורד" }
+    ? { title: "חיבור מותג נוסף", back: "← חזרה לדשבורד" }
     : { title: "Connect a new brand", back: "← Back to dashboard" };
 
   return (

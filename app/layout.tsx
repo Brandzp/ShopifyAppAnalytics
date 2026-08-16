@@ -7,7 +7,7 @@ import { PlausibleScript } from "@/components/compliance/plausible-script";
 import { Toaster } from "@/components/ui/toast";
 
 export const metadata: Metadata = {
-  title: "Brandzp — Founder Analytics for Shopify",
+  title: "Hiloomy — Founder Analytics for Shopify",
   description:
     "Founder-friendly Shopify analytics focused on profit visibility, retention insight, and weekly reporting.",
   icons: {

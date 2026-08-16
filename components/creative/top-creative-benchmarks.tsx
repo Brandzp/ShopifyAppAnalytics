@@ -17,7 +17,7 @@ function typeLabel(type: CreativeType, locale: AppLocale): string {
       PACKSHOT: "פאקשוט",
       INSTAGRAM_POST: "פוסט לאינסטגרם",
       UGC_VIDEO: "סרטון UGC",
-      META_AD: "מודעה ל־Meta"
+      META_AD: "מודעה לMeta"
     }[type];
   }
   return {
@@ -50,7 +50,7 @@ export function TopCreativeBenchmarks({
           </div>
           <div>
             <CardTitle className="text-base">
-              {isHe ? "הקריאייטיבים שעבדו הכי טוב — השתמשו כהשראה" : "Your best-performing creatives — use as inspiration"}
+              {isHe ? "הקריאייטיבים המצליחים ביותר — השתמשו בהם כהשראה" : "Your best-performing creatives — use as inspiration"}
             </CardTitle>
             <CardDescription>
               {isHe

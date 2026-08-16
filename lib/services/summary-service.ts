@@ -179,7 +179,7 @@ function buildHeadlineFromDeltas(
   const rev = deltas.revenueChange;
   const prof = deltas.profitChange;
   if (locale === "he") {
-    return `הכנסות השתנו ב־${rev != null ? Math.abs(rev).toFixed(1) : "0.0"}% מול התקופה הקודמת, והרווח המשוער ב־${prof != null ? Math.abs(prof).toFixed(1) : "0.0"}%.`;
+    return `הכנסות השתנו ב${rev != null ? Math.abs(rev).toFixed(1) : "0.0"}% מול התקופה הקודמת, והרווח המשוער ב${prof != null ? Math.abs(prof).toFixed(1) : "0.0"}%.`;
   }
   return `Revenue is ${rev != null ? rev.toFixed(1) : "0.0"}% versus the prior period, with estimated profit at ${prof != null ? prof.toFixed(1) : "0.0"}%.`;
 }

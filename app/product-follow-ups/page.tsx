@@ -65,7 +65,7 @@ export default async function ProductFollowUpsPage() {
   const headline =
     critical.length > 0
       ? locale === "he"
-        ? `${formatNumber(critical.length)} מוצרים במצב חירום — פחות מ־5 יחידות. לחדש מלאי עכשיו.`
+        ? `${formatNumber(critical.length)} מוצרים במצב חירום — פחות מ5 יחידות. לחדש מלאי עכשיו.`
         : `${critical.length} product${critical.length === 1 ? "" : "s"} in emergency — below 5 units. Restock now.`
       : red.length > 0
         ? locale === "he"
@@ -120,7 +120,7 @@ export default async function ProductFollowUpsPage() {
                   ? "לעקוב מקרוב"
                   : "Watch closely"
                 : locale === "he"
-                  ? "הכול תקין"
+                  ? "הכל תקין"
                   : "All good"
           }
         />

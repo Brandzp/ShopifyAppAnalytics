@@ -372,7 +372,7 @@ export function ReportingPicker(props: ReportingPickerProps) {
   const isLoading = isPending || syncing;
   const loadingLabel = syncing
     ? isHe
-      ? "מסנכרן את Shopify, Meta ו־Instagram…"
+      ? "מסנכרן את Shopify, Meta וInstagram…"
       : "Syncing Shopify, Meta & Instagram…"
     : isPending
       ? isHe
@@ -420,7 +420,7 @@ export function ReportingPicker(props: ReportingPickerProps) {
           className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3.5 py-2 text-sm font-medium text-muted-foreground shadow-sm"
         >
           <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-          {isHe ? "מסנכרן את Shopify, Meta ו־Instagram…" : "Syncing Shopify, Meta & Instagram…"}
+          {isHe ? "מסנכרן את Shopify, Meta וInstagram…" : "Syncing Shopify, Meta & Instagram…"}
         </span>
       ) : null}
 
@@ -553,7 +553,7 @@ export function ReportingPicker(props: ReportingPickerProps) {
                         ? "מחיל…"
                         : "Applying…"
                       : isHe
-                        ? "החל"
+                        ? "החילו"
                         : "Apply"}
                 </Button>
               </div>

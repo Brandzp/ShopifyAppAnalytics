@@ -86,7 +86,7 @@ function buildSystemPrompt(locale: "he" | "en"): string {
   // Meta Ads / Instagram insights services).
   const languageHeader =
     locale === "he"
-      ? 'ענה אך ורק בעברית. ערך ה־summary ב־JSON חייב להיות בעברית טבעית של מקצוען. אסור להחזיר אנגלית מלבד שמות מוצרים, מספרים ויחידות מידה (₪, %).'
+      ? 'ענה אך ורק בעברית. ערך הsummary בJSON חייב להיות בעברית טבעית של מקצוען. אסור להחזיר אנגלית מלבד שמות מוצרים, מספרים ויחידות מידה (₪, %).'
       : "Respond exclusively in English. The summary string in the JSON must be in clear, founder-readable English.";
 
   return [

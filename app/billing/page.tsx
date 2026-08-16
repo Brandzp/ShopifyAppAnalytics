@@ -31,7 +31,7 @@ export default async function BillingPage() {
     const disabledCopy =
       locale === "he"
         ? {
-            title: "תשלומים כרגע מנוטרלים",
+            title: "התשלומים מושבתים כרגע",
             body: "המערכת רצה במצב פיתוח. כשתפעילו חיוב (BILLING_ENABLED=true) תופיע כאן בחירת מסלולים."
           }
         : {
