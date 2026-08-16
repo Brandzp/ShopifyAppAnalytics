@@ -9,6 +9,7 @@ import {
   FileText,
   LayoutDashboard,
   Loader2,
+  Lock,
   Megaphone,
   Menu,
   PackageSearch,
@@ -35,18 +36,33 @@ type NavItem = {
   href: string;
   label: string;
   icon: LucideIcon;
+  // Module slug matched against DISABLED_MODULES (lib/server/module-flags.ts).
+  // Items without a slug (Command Center, Settings) are core — never hidden.
+  module?: string;
 };
+
+// A nav item plus its resolved visibility state. `locked` items stay in the
+// nav greyed-out with a padlock (LOCKED_MODULES) — visible-but-gated, the
+// upsell surface. Disabled items (DISABLED_MODULES) are filtered out.
+type ResolvedNavItem = NavItem & { locked: boolean };
 
 function getNavigation(
   locale: AppLocale,
-  showPortfolio: boolean
+  showPortfolio: boolean,
+  disabledModules: readonly string[],
+  lockedModules: readonly string[]
 ): {
-  primary: readonly NavItem[];
-  dashboards: readonly NavItem[];
+  primary: readonly ResolvedNavItem[];
+  dashboards: readonly ResolvedNavItem[];
   dashboardsHeading: string;
 } {
   const isHe = locale === "he";
-  return {
+  const enabled = (item: NavItem) => !item.module || !disabledModules.includes(item.module);
+  const resolve = (item: NavItem): ResolvedNavItem => ({
+    ...item,
+    locked: Boolean(item.module && lockedModules.includes(item.module))
+  });
+  const nav = {
     primary: [
       // Organization dashboard — only rendered for orgs with 2+ connected
       // stores (app-shell passes showPortfolio). A single-brand operator
@@ -58,7 +74,8 @@ function getNavigation(
             {
               href: "/portfolio",
               label: isHe ? "כל המותגים" : "All brands",
-              icon: Building2
+              icon: Building2,
+              module: "portfolio"
             }
           ]
         : []),
@@ -70,17 +87,20 @@ function getNavigation(
       {
         href: "/marketing-planner",
         label: isHe ? "תכנון החודש" : "Plan the month",
-        icon: CalendarRange
+        icon: CalendarRange,
+        module: "marketing-planner"
       },
       {
         href: "/creative",
         label: isHe ? "סטודיו קריאייטיב" : "Creative Studio",
-        icon: Sparkles
+        icon: Sparkles,
+        module: "creative"
       },
       {
         href: "/affiliate-portal",
         label: isHe ? "שותפים" : "Affiliates",
-        icon: Megaphone
+        icon: Megaphone,
+        module: "affiliate-portal"
       },
       {
         href: "/settings",
@@ -92,30 +112,40 @@ function getNavigation(
       {
         href: "/weekly-summary",
         label: isHe ? "סיכום שבועי" : "Weekly summary",
-        icon: FileText
+        icon: FileText,
+        module: "weekly-summary"
       },
       {
         href: "/creator-flow",
         label: isHe ? "יוצרים ומכירות" : "Creators & sales",
-        icon: UserRound
+        icon: UserRound,
+        module: "creator-flow"
       },
       {
         href: "/sales-summary",
         label: isHe ? "מצב אופליין" : "Offline status",
-        icon: StoreIcon
+        icon: StoreIcon,
+        module: "sales-summary"
       },
       {
         href: "/product-follow-ups",
         label: isHe ? "מעקב מוצרים" : "Product follow-ups",
-        icon: PackageSearch
+        icon: PackageSearch,
+        module: "product-follow-ups"
       },
       {
         href: "/alerts",
         label: isHe ? "התראות" : "Alerts",
-        icon: Bell
+        icon: Bell,
+        module: "alerts"
       }
     ],
     dashboardsHeading: isHe ? "דשבורדים נוספים" : "More dashboards"
+  };
+  return {
+    primary: nav.primary.filter(enabled).map(resolve),
+    dashboards: nav.dashboards.filter(enabled).map(resolve),
+    dashboardsHeading: nav.dashboardsHeading
   };
 }
 
@@ -142,7 +172,9 @@ function NavContent({
   storeName,
   locale,
   labels,
-  showPortfolio
+  showPortfolio,
+  disabledModules,
+  lockedModules
 }: {
   pathname: string;
   storeName: string;
@@ -152,11 +184,36 @@ function NavContent({
     nav: Record<string, string>;
   };
   showPortfolio: boolean;
+  disabledModules: readonly string[];
+  lockedModules: readonly string[];
 }) {
-  const navigation = useMemo(() => getNavigation(locale, showPortfolio), [locale, showPortfolio]);
+  const navigation = useMemo(
+    () => getNavigation(locale, showPortfolio, disabledModules, lockedModules),
+    [locale, showPortfolio, disabledModules, lockedModules]
+  );
 
-  const renderNavLink = (item: NavItem) => {
+  const lockedHint =
+    locale === "he" ? "נעול בתוכנית הנוכחית — שדרגו כדי לפתוח" : "Locked on your current plan — upgrade to unlock";
+
+  const renderNavLink = (item: ResolvedNavItem) => {
     const Icon = item.icon;
+    if (item.locked) {
+      // Visible-but-gated: not a link, greyed, padlock at the end. The row
+      // deliberately keeps its place in the nav so the module's existence
+      // stays discoverable (the whole point of LOCKED_MODULES).
+      return (
+        <div
+          key={item.href}
+          title={lockedHint}
+          aria-disabled
+          className="relative flex cursor-not-allowed items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-muted-foreground/50 select-none"
+        >
+          <Icon className="h-4 w-4 shrink-0 text-muted-foreground/40" aria-hidden />
+          <span className="truncate">{item.label}</span>
+          <Lock className="ms-auto h-3.5 w-3.5 shrink-0 text-muted-foreground/40" aria-label={lockedHint} />
+        </div>
+      );
+    }
     const isActive = pathname === item.href || (item.href !== "/" && pathname.startsWith(`${item.href}/`));
     return (
       <Link
@@ -199,12 +256,14 @@ function NavContent({
       </div>
       <nav className="flex-1 space-y-4 px-3" aria-label="Primary">
         <div className="space-y-1">{navigation.primary.map(renderNavLink)}</div>
-        <div className="space-y-1">
-          <p className="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-            {navigation.dashboardsHeading}
-          </p>
-          {navigation.dashboards.map(renderNavLink)}
-        </div>
+        {navigation.dashboards.length > 0 ? (
+          <div className="space-y-1">
+            <p className="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+              {navigation.dashboardsHeading}
+            </p>
+            {navigation.dashboards.map(renderNavLink)}
+          </div>
+        ) : null}
       </nav>
       <div className="px-4 pb-4 pt-6">
         <div className="rounded-2xl border border-border bg-card/80 p-4">
@@ -222,7 +281,9 @@ export function Sidebar({
   storeName,
   locale,
   labels,
-  showPortfolio = false
+  showPortfolio = false,
+  disabledModules = [],
+  lockedModules = []
 }: {
   storeName: string;
   locale: AppLocale;
@@ -234,6 +295,12 @@ export function Sidebar({
   // Surfaces "All brands" (/portfolio) as the first nav item — the
   // organization-level rollup dashboard for multi-store operators.
   showPortfolio?: boolean;
+  // Module slugs hidden from the nav (DISABLED_MODULES env — app-shell
+  // resolves it server-side via lib/server/module-flags.ts).
+  disabledModules?: readonly string[];
+  // Module slugs shown greyed-out with a padlock (LOCKED_MODULES env) —
+  // visible-but-gated upsell rows rather than removed.
+  lockedModules?: readonly string[];
 }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
@@ -259,6 +326,8 @@ export function Sidebar({
           locale={locale}
           labels={labels}
           showPortfolio={showPortfolio}
+          disabledModules={disabledModules}
+          lockedModules={lockedModules}
         />
       </aside>
       {open ? (
@@ -270,6 +339,8 @@ export function Sidebar({
               locale={locale}
               labels={labels}
               showPortfolio={showPortfolio}
+              disabledModules={disabledModules}
+              lockedModules={lockedModules}
             />
           </div>
         </div>

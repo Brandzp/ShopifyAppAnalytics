@@ -7,6 +7,8 @@ import { getAppLocale, getDictionary, type AppLocale } from "@/lib/i18n";
 import { listAllStoresForSwitcher } from "@/lib/services/offline-sales-service";
 import { getSubscriptionStatus } from "@/lib/billing/subscription-status";
 import { gateTrialAccess } from "@/lib/billing/trial-gate";
+import { getDisabledModules, getLockedModules } from "@/lib/server/module-flags";
+import { ChatWidget } from "@/components/chat/chat-widget";
 
 export async function AppShell({
   children,
@@ -45,6 +47,8 @@ export async function AppShell({
         locale={locale}
         labels={dictionary}
         showPortfolio={allStores.length >= 2}
+        disabledModules={getDisabledModules()}
+        lockedModules={getLockedModules()}
       />
       <main className="flex-1">
         {sub ? <TrialBanner info={sub} locale={locale === "he" ? "he" : "en"} /> : null}
@@ -59,6 +63,8 @@ export async function AppShell({
           {children}
         </div>
       </main>
+      {/* Floating chat launcher — BI analyst + customer support, all pages. */}
+      <ChatWidget locale={locale === "he" ? "he" : "en"} />
     </div>
   );
 }
