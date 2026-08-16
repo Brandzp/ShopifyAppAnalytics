@@ -302,6 +302,29 @@ services:
       - key: TELEGRAM_CHAT_ID
         sync: false
 
+      # ─── RivalSweeper (competitor intelligence) ───────────────────────
+      # Real API (apilayer.rivalsweeper.com, OAuth2 client-credentials).
+      # Set RIVALSWEEPER_KEY_ID (rsk_...) + RIVALSWEEPER_KEY_SECRET (rss_...)
+      # in the dashboard, then REMOVE RIVALSWEEPER_MOCK (or set "false") to
+      # go live. With mock on, deterministic demo signals keep the pipeline
+      # exercisable without spending API quota.
+      - key: RIVALSWEEPER_MOCK
+        value: "true"
+      - key: RIVALSWEEPER_API_URL
+        sync: false
+      - key: RIVALSWEEPER_KEY_ID
+        sync: false
+      - key: RIVALSWEEPER_KEY_SECRET
+        sync: false
+
+      # ─── Module visibility (MVP packaging) ────────────────────────────
+      # Comma-separated sidebar modules to hide (disable, don't delete).
+      # Valid slugs: portfolio, marketing-planner, creative, affiliate-portal,
+      # weekly-summary, creator-flow, sales-summary, product-follow-ups, alerts.
+      # Unset = full nav. See lib/server/module-flags.ts.
+      # - key: DISABLED_MODULES
+      #   value: "creative,creator-flow,product-follow-ups"
+
       # ─── Optional cron / provider tuning overrides ─────────────────────
       # All of the following have safe in-code defaults — set only to override.
       # Cron intervals (ms) and self-ping URLs: SHOPIFY_SYNC_CRON_MS,

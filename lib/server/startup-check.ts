@@ -85,6 +85,12 @@ const OPTIONAL_ENV: Array<EnvRequirement & { feature: string }> = [
     label: "Telegram chat ID",
     names: ["TELEGRAM_CHAT_ID"],
     feature: "daily morning PDF digest to owner Telegram"
+  },
+  {
+    label: "RivalSweeper API credentials",
+    names: ["RIVALSWEEPER_KEY_ID", "RIVALSWEEPER_KEY_SECRET"],
+    feature:
+      "competitor intelligence in the weekly report (runs in deterministic mock mode until configured)"
   }
 ];
 

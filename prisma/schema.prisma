@@ -176,6 +176,10 @@ model Store {
   timezone                   String
   planName                   String?
   connected                  Boolean                       @default(false)
+  // Demo store — synthetic data for prospect walkthroughs. Drives the
+  // "Demo data" badge in the chrome; excluded from crons that cost money
+  // (report emails etc. still work so the demo is complete).
+  isDemo                     Boolean                       @default(false)
   dateRangePreset            String                        @default("30d")
   estimatedCostMode          String                        @default("margin_profile")
   defaultCostRatio           Decimal                       @default(0.35) @db.Decimal(5, 4)
@@ -231,6 +235,8 @@ model Store {
   searchConsoleQueries       SearchConsoleQuery[]
   ganttSheets                GanttSheet[]
   ganttRows                  GanttRow[]
+  competitors                Competitor[]
+  competitorSnapshots        CompetitorSnapshot[]
   createdAt                  DateTime                      @default(now())
   updatedAt                  DateTime                      @updatedAt
 
@@ -383,6 +389,37 @@ model MetaAdsCampaignInsight {
 // Example: the Shopify Partner app credentials (Client ID + Client Secret)
 // that authorize the OAuth install flow across every tenant.
 // Encrypted values use the same encryptSecret() helper as other secrets.
+// GDPR/privacy compliance ledger — one row per mandatory-webhook event
+// (customers/data_request, customers/redact, shop/redact, app/uninstalled).
+// Deliberately NO foreign key to Store: shop/redact deletes the store row,
+// and this ledger must outlive it as proof of compliance.
+model GdprRequest {
+  id          String    @id @default(cuid())
+  shopDomain  String
+  topic       String
+  payloadJson Json?
+  status      String    @default("received") // received | completed | failed
+  detail      String?
+  createdAt   DateTime  @default(now())
+  completedAt DateTime?
+
+  @@index([shopDomain, createdAt])
+}
+
+// Support-chat messages from the floating chat widget. Append-only inbox —
+// replies happen over email; `status` tracks triage (new / answered).
+model SupportMessage {
+  id        String   @id @default(cuid())
+  storeId   String?
+  userId    String?
+  email     String?
+  message   String
+  status    String   @default("new")
+  createdAt DateTime @default(now())
+
+  @@index([status, createdAt])
+}
+
 model SystemConfig {
   key       String   @id
   value     String
@@ -697,6 +734,49 @@ model WeeklyReportRecipient {
 
   @@unique([storeId, email])
   @@index([storeId, active])
+}
+
+// Competitor set for the weekly report's "what did competitors do this week"
+// section. Max 5 active per store, enforced in competitor-intel-service.ts.
+// String columns instead of enums to match the rest of the schema.
+model Competitor {
+  id        String               @id @default(cuid())
+  storeId   String
+  name      String
+  // Normalized: lowercase host only, no protocol/www/trailing slash.
+  domain    String
+  igHandle  String?
+  status    String               @default("active") // "active" | "archived"
+  createdAt DateTime             @default(now())
+  updatedAt DateTime             @updatedAt
+  store     Store                @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  snapshots CompetitorSnapshot[]
+
+  @@unique([storeId, domain])
+  @@index([storeId, status])
+}
+
+// Daily promo/pricing snapshot per competitor (RivalSweeper Feed A, or the
+// deterministic mock while RIVALSWEEPER_MOCK is on). One row per competitor
+// per day — the upsert key doubles as the sync idempotency key.
+model CompetitorSnapshot {
+  id                    String     @id @default(cuid())
+  storeId               String
+  competitorId          String
+  snapshotDate          DateTime   @db.Date
+  source                String     @default("mock") // "rivalsweeper" | "mock"
+  activePromoCount      Int        @default(0)
+  maxDiscountPct        Decimal?   @db.Decimal(5, 2)
+  freeShippingThreshold Decimal?   @db.Decimal(12, 2)
+  homepageMessage       String?
+  signalsJson           Json?
+  createdAt             DateTime   @default(now())
+  updatedAt             DateTime   @updatedAt
+  store                 Store      @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  competitor            Competitor @relation(fields: [competitorId], references: [id], onDelete: Cascade)
+
+  @@unique([storeId, competitorId, snapshotDate])
+  @@index([storeId, snapshotDate(sort: Desc)])
 }
 
 // Normalized alert table. Every detection engine in the app (restock-hero,

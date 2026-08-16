@@ -6,6 +6,10 @@ import { syncInstagramPostsForStore } from "@/lib/services/instagram-service";
 import { refreshMetaTokensNearExpiry } from "@/lib/services/meta-token-refresh-service";
 import { reconcileAffiliateAttributionOrphans } from "@/lib/services/affiliate-attribution-reconciler";
 import { syncGscData, GSC_PLATFORM } from "@/lib/services/gsc-service";
+import {
+  syncCompetitorSignals,
+  upsertCompetitorResponseAlerts
+} from "@/lib/services/competitor-intel-service";
 
 // Multi-source data refresh — the unified 2-hour cron tick.
 //
@@ -87,6 +91,13 @@ interface PerStoreResult {
   instagram: { ok: boolean; skipped?: boolean; error?: string };
   bixgrow: { ok: boolean; skipped: boolean };
   gsc: { ok: boolean; skipped?: boolean; pagesUpserted?: number; queriesUpserted?: number; error?: string };
+  competitors: {
+    ok: boolean;
+    skipped?: boolean;
+    snapshotsUpserted?: number;
+    alertsUpserted?: number;
+    error?: string;
+  };
   affiliateReconcile?: { linked: number; deletedDuplicates: number; stillOrphan: number };
   affiliateSync?: { syncedOrders: number; error?: string };
 }
@@ -149,7 +160,8 @@ async function handler(request: Request) {
         metaAds: { ok: false },
         instagram: { ok: false },
         bixgrow: { ok: true, skipped: true },
-        gsc: { ok: true, skipped: true }
+        gsc: { ok: true, skipped: true },
+        competitors: { ok: true, skipped: true }
       };
 
       // ── Shopify (mandatory if connected) ──────────────────────────
@@ -286,6 +298,44 @@ async function handler(request: Request) {
           // the site may not be verified, or the env vars may be missing.
           console.error(`[refresh-all] GSC sync failed for ${store.id}:`, err);
           result.gsc = {
+            ok: false,
+            error: err instanceof Error ? err.message : String(err)
+          };
+        }
+      }
+
+      // ── Competitor signals (optional) ─────────────────────────────
+      // Runs only for stores that defined a competitor set (max 5 active,
+      // settings page). Pulls RivalSweeper Feed A — or the deterministic
+      // mock until real credentials arrive — and upserts one snapshot per
+      // competitor per day, feeding the weekly report's competitors section.
+      const hasCompetitors = await db.competitor
+        .findFirst({ where: { storeId: store.id, status: "active" }, select: { id: true } })
+        .catch(() => null);
+      if (!hasCompetitors) {
+        result.competitors = { ok: true, skipped: true };
+      } else {
+        try {
+          const compResult = await syncCompetitorSignals(store.id);
+          // Fresh snapshots in hand — turn actionable competitor moves
+          // (opened promo / deepened discount) into open alerts so they
+          // land in the Command Center approve/resolve queue.
+          const alertResult = await upsertCompetitorResponseAlerts({
+            storeId: store.id,
+            start: new Date(Date.now() - 7 * 86_400_000),
+            end: new Date()
+          }).catch((err) => {
+            console.error(`[refresh-all] competitor alert engine failed for ${store.id}:`, err);
+            return { alertsUpserted: 0 };
+          });
+          result.competitors = {
+            ok: true,
+            snapshotsUpserted: compResult.snapshotsUpserted,
+            alertsUpserted: alertResult.alertsUpserted
+          };
+        } catch (err) {
+          console.error(`[refresh-all] competitor sync failed for ${store.id}:`, err);
+          result.competitors = {
             ok: false,
             error: err instanceof Error ? err.message : String(err)
           };
