@@ -16,10 +16,12 @@
 // unconfigured OR throws. Never blocks PDF generation.
 
 import { askCreativeAgentJson, askBiAgentJson, isBiAgentConfigured } from "@/lib/clients/bi-agent-client";
+import { COMPETITOR_INTEL_LATEST } from "@/lib/data/competitor-intel-latest";
 import type { MetaAdsWeeklyReport } from "@/lib/services/meta-ads-report-service";
 import type { AffiliateDeepDiveReport } from "@/lib/services/affiliate-deep-dive-service";
 import type { RestockHeroAlertReport } from "@/lib/services/restock-hero-alert-service";
 import type { RoasCollapseReport } from "@/lib/services/roas-collapse-service";
+import type { CompetitorWeekSection } from "@/lib/services/competitor-intel-service";
 
 export interface BiWeeklyCommentary {
   // 1-sentence headline, e.g. "Strong ROAS week, but stockout risk on hero #2."
@@ -42,6 +44,12 @@ export interface BiWeeklyCommentaryInput {
   affiliateDeepDive: AffiliateDeepDiveReport | null;
   restockAlerts: RestockHeroAlertReport | null;
   roasCollapseAlerts: RoasCollapseReport | null;
+  // Competitor promo/pricing context (RivalSweeper Feed A). Required (not
+  // optional) on purpose: both call sites — weekly-report-service AND the
+  // print page — must pass it, so the two render paths can't drift.
+  competitorWeek: CompetitorWeekSection | null;
+  // Live RivalSweeper activity (ads volume/themes, press, homepage pushes).
+  competitorActivity?: import("@/lib/clients/rivalsweeper-client").CompetitorActivityEntry[] | null;
 }
 
 // Build a compact, structured digest the agent can reason over. We DON'T
@@ -110,13 +118,66 @@ function buildDigest(input: BiWeeklyCommentaryInput): string {
     lines.push("");
   }
 
+  // ── Competitive landscape (RivalSweeper) ──────────────────────────
+  // Gives the agent external context so a soft week can be explained by
+  // the market ("3 rivals at 40% off"), not just described.
+  const cwHasSignals =
+    input.competitorWeek != null &&
+    input.competitorWeek.competitors.some((entry) => entry.change.kind !== "no_data");
+  if (input.competitorWeek && cwHasSignals) {
+    const cw = input.competitorWeek;
+    const maxOff =
+      cw.totals.maxDiscountPct !== null ? `, deepest discount ${Math.round(cw.totals.maxDiscountPct)}%` : "";
+    lines.push(
+      `Competitors (${cw.totals.tracked} tracked): ${cw.totals.openedPromo} opened promos this week${maxOff}.`
+    );
+    for (const entry of cw.competitors.slice(0, 5)) {
+      lines.push(`  - ${entry.name} (${entry.domain}): ${entry.change.summary.en}`);
+    }
+    lines.push(
+      "  When our KPIs dipped and a competitor opened/deepened a promo, connect the two explicitly."
+    );
+    lines.push("");
+  } else {
+    // Automated competitor snapshots are not flowing yet (fresh monitoring) —
+    // fall back to the latest manual intel sweep so the executive summary
+    // still has competitive context instead of silence.
+    lines.push(
+      `Competitor intel (manual sweep, ${COMPETITOR_INTEL_LATEST.generatedAt} — automated tracking still filling):`
+    );
+    for (const c of COMPETITOR_INTEL_LATEST.competitors) {
+      lines.push(`  - ${c.name}: ${c.move}`);
+    }
+    lines.push("");
+  }
+
+  // Live tracked activity (RivalSweeper) — real numbers the summary may cite.
+  const activity = (input.competitorActivity ?? []).filter(
+    (a) => (a.adsActive ?? 0) > 0 || a.news.length > 0 || a.homepageLinks.length > 0
+  );
+  if (activity.length > 0) {
+    lines.push("Live competitor tracking (RivalSweeper, current):");
+    for (const a of activity) {
+      const bits: string[] = [];
+      if ((a.adsActive ?? 0) > 0) {
+        bits.push(
+          `${a.adsActive} active Meta ads${a.adHeadlines.length ? ` (themes: ${a.adHeadlines.slice(0, 2).join(" / ")})` : ""}`
+        );
+      }
+      if (a.homepageLinks.length > 0) bits.push(`homepage pushes: ${a.homepageLinks.slice(0, 3).join(", ")}`);
+      if (a.news.length > 0) bits.push(`press: ${a.news.slice(0, 1).map((n) => n.title).join("")}`);
+      lines.push(`  - ${a.name}: ${bits.join(" · ")}`);
+    }
+    lines.push("");
+  }
+
   return lines.join("\n");
 }
 
 function buildPrompt(input: BiWeeklyCommentaryInput, digest: string): string {
   const lang = input.locale === "he" ? "Hebrew" : "English";
   return [
-    `You are the Brandzp BI agent writing the executive summary for this week's report.`,
+    `You are the Hiloomy BI agent writing the executive summary for this week's report.`,
     "",
     `Period: ${input.periodStart} → ${input.periodEnd}`,
     `Output language: ${lang}`,
@@ -131,11 +192,29 @@ function buildPrompt(input: BiWeeklyCommentaryInput, digest: string): string {
     `     must add new info (e.g. "Boost +20% budget by Tuesday"), not repeat it.`,
     `  3. Wrap KPI numbers, campaign/product names, percentages in **bold** Markdown.`,
     `     Example: "**RECETTE 702** drove **₪184,067** at **ROAS 7.5×**."`,
-    `  4. Actions MUST start with a specific verb from this set ONLY:`,
-    `     Scale / Pause / Test / Restock / Email / Launch / Duplicate / Kill / Shift.`,
-    `     FORBIDDEN: "Consider", "Explore", "Look into", "Continue to", "Maintain".`,
+    `  4. Actions MUST start with a specific decisive verb.`,
+    input.locale === "he"
+      ? `     In Hebrew output use HEBREW verbs ONLY: הגדילו / עצרו / בדקו / חדשו מלאי / שלחו / השיקו / שכפלו / הסיטו.` +
+        ` FORBIDDEN in Hebrew text: Scale, Pause, Kill, Test and any other English verb.`
+      : `     Allowed: Scale / Pause / Test / Restock / Email / Launch / Duplicate / Kill / Shift.`,
+    `     FORBIDDEN: "Consider", "Explore", "Look into", "Continue to", "Maintain", "שקלו", "בחנו אפשרות".`,
     `  5. Headline: ≤ 18 words, one sentence, captures THE story. Use bold for the biggest number.`,
     `  6. Be scannable. Founder reads this in 15 seconds, not 60.`,
+    ...(input.locale === "he"
+      ? [
+          `  7. Hebrew style (RTL-safe): no +/- signs before numbers — write "עלה 17.8%" / "ירד 50%".`,
+          `     Date ranges in words ("בין 4 ל8 באוגוסט"), never "04-06/08". No connector hyphen between`,
+          `     Hebrew prefix letters and numbers/foreign words: write "ב31", "הROAS", "לShopify".`,
+          `  8. Explain a professional term the first time it appears: "ROAS 5.3 (כל שקל פרסום החזיר 5.3 שקל)".`
+        ]
+      : []),
+    `  9. ACTION AUTHORITY — act only where the founder has a direct lever:`,
+    `     the STORE itself (pages, offers, product pages, checkout), CAMPAIGNS (budget,`,
+    `     creative, pause/scale), INVENTORY, and EMAIL/notifications.`,
+    `     You are a data analyst, NOT a manager of people. NEVER instruct hiring, firing,`,
+    `     removing partners/affiliates, or setting ultimatums to people ("אחרת תוסרנה" is`,
+    `     forbidden). About people you may at most suggest a CHECK ("שווה לבדוק מול X את Y")`,
+    `     — one such suggestion maximum, and only when the data justifies it.`,
     "",
     `Output JSON object with these fields:`,
     `{`,

@@ -1,7 +1,6 @@
-import { ClipboardCopy, Send, Sparkles } from "lucide-react";
+import { Sparkles } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { HelpTip } from "@/components/ui/help-tip";
 import { NarrativeBanner } from "@/components/dashboard-v2/narrative-banner";
@@ -48,7 +47,7 @@ function InfluencerWeeklyEvidence({
         </CardTitle>
         <p className="text-sm text-muted-foreground">
           {locale === "he"
-            ? "מכירות אפיליאציה, קליקים ותוכן יוצרים, מסוננים לחלון התאריכים של הסיכום השבועי."
+            ? "מכירות שותפים, קליקים ותוכן יוצרים, מסוננים לחלון התאריכים של הסיכום השבועי."
             : "Affiliate sales, clicks, and creator content filtered to the current weekly-summary date window."}
         </p>
       </CardHeader>
@@ -174,7 +173,7 @@ function InfluencerWeeklyEvidence({
         ) : (
           <p className="text-sm text-muted-foreground">
             {locale === "he"
-              ? "אין עדיין נתוני משפיענים לחנות הזו. הוסיפו אפיליאטים, ידיות אינסטגרם והריצו את הקראולר/סנכרון כדי לאכלס את שכבת ההוכחה."
+              ? "אין עדיין נתוני משפיענים לחנות הזו. הוסיפו שותפים וחשבונות אינסטגרם, והריצו את הקראולר/סנכרון כדי למלא את שכבת ההוכחה."
               : "Influencer data is not available for this store yet. Add affiliates, Instagram handles, and run the crawler/sync to populate this proof layer."}
           </p>
         )}
@@ -220,7 +219,7 @@ function WeeklyAgentInsightsPanel({
           </CardTitle>
           <p className="text-sm text-muted-foreground">
             {locale === "he"
-              ? "אלה לא רק מספרים גולמיים. הסוכן משווה את האיתותים הנוכחיים מ־Meta ומאינסטגרם לממצאים היסטוריים, ושומר את המסקנות של השבוע לקראת הקריאה הבאה."
+              ? "אלה לא רק מספרים גולמיים. הסוכן משווה את האיתותים הנוכחיים מMeta ומאינסטגרם לממצאים היסטוריים, ושומר את המסקנות של השבוע לקראת הקריאה הבאה."
               : "These are not just raw metrics. The agent compares current Meta/Instagram signals with historical findings and stores this week's conclusions for the next readout."}
           </p>
         </CardHeader>
@@ -267,7 +266,7 @@ function WeeklyAgentInsightsPanel({
               <Badge>
                 {payload.memorySaved
                   ? (locale === "he" ? "נשמר בזיכרון" : "Saved to memory")
-                  : (locale === "he" ? "שמירת זיכרון דולגה" : "Memory save skipped")}
+                  : (locale === "he" ? "שמירת הזיכרון דולגה" : "Memory save skipped")}
               </Badge>
             </div>
             <ul className="mt-2 space-y-1 leading-6 text-muted-foreground">
@@ -327,12 +326,11 @@ export default async function WeeklySummaryPage() {
             title={dictionary.weeklySummary.title}
             description={dictionary.weeklySummary.description}
           />
+          {/* Dead Copy/Share no-op buttons removed — a button that does
+              nothing erodes trust in the ones that work. Two real exports:
+              the concise executive PDF (default) and the extended one with
+              the diagnostic appendix. */}
           <div className="flex flex-wrap gap-2">
-            {/* Regenerate intentionally omitted until the summary-generation
-                pipeline is wired — having it here as a no-op was misleading. */}
-            <Button variant="secondary" className="inline-flex items-center gap-1.5">
-              <ClipboardCopy className="h-3.5 w-3.5" /> {dictionary.weeklySummary.copy}
-            </Button>
             <ExportMetaAdsPdfButton
               from={range.startInput}
               to={range.endInput}
@@ -340,9 +338,14 @@ export default async function WeeklySummaryPage() {
               labelDownload={locale === "he" ? "ייצוא PDF" : "Export PDF"}
               labelGenerating={locale === "he" ? "מייצר…" : "Generating…"}
             />
-            <Button className="inline-flex items-center gap-1.5">
-              <Send className="h-3.5 w-3.5" /> {dictionary.weeklySummary.share}
-            </Button>
+            <ExportMetaAdsPdfButton
+              from={range.startInput}
+              to={range.endInput}
+              storeId={chrome.store.id}
+              appendix
+              labelDownload={locale === "he" ? "ייצוא מורחב" : "Extended export"}
+              labelGenerating={locale === "he" ? "מייצר…" : "Generating…"}
+            />
           </div>
         </div>
 
@@ -350,7 +353,7 @@ export default async function WeeklySummaryPage() {
           eyebrow={locale === "he" ? "קריאה שבועית" : "Weekly readout"}
           headline={summary.headline}
           body={locale === "he"
-            ? `נוצר ב־${new Date(summary.generatedAt).toLocaleString()} — שתפו עם הצוות או העתיקו לסלאק.`
+            ? `נוצר ב${new Date(summary.generatedAt).toLocaleString()} — שתפו עם הצוות או העתיקו לסלאק.`
             : `Generated ${new Date(summary.generatedAt).toLocaleString()} — share this with your team or copy it into Slack.`}
           tone="up"
           toneLabel={locale === "he" ? "מוכן לשיתוף" : "Ready to share"}
@@ -358,37 +361,14 @@ export default async function WeeklySummaryPage() {
 
         <WeeklyAgentInsightsPanel payload={weeklyAgentInsights} direction={direction} locale={locale} />
 
+        {/* The money — Meta Ads gets its own prominent section. */}
         <section className="space-y-3">
           <SectionHead
-            eyebrow={locale === "he" ? "הוכחה מנתונים חיים" : "Live data proof"}
-            title={locale === "he" ? "אינסטגרם, משפיענים ו־Meta Ads" : "Instagram, influencers, and Meta Ads"}
+            eyebrow={locale === "he" ? "הכסף" : "The money"}
+            title={locale === "he" ? "ביצועי Meta Ads בחלון" : "Meta Ads performance"}
             hint={locale === "he"
-              ? `בלוקי הראיות האלה קוראים נתונים שמורים רק בתוך ${dateRangeLabel}, כך שהסיכום השבועי תואם לתאריכים שבחרתם.`
-              : `These evidence blocks read stored data only inside ${dateRangeLabel}, so the weekly summary matches the selected dates.`}
-          />
-          {influencerIntelligence?.instagramCrawl ? (
-            <InstagramCrawlEvidencePanel
-              instagram={influencerIntelligence.instagramCrawl}
-              direction={direction}
-              dateRangeLabel={dateRangeLabel}
-              description={locale === "he"
-                ? "שכבת הוכחה סטטית לעמוד המותג ולידיות האינסטגרם של האפיליאטים. הפוסטים האחרונים מטה תואמים לחלון התאריכים של הסיכום השבועי."
-                : "Static proof layer for the brand page and affiliate Instagram handles. Recent posts below follow the weekly-summary date range."}
-            />
-          ) : (
-            <Card>
-              <CardContent className="pt-6 text-sm text-muted-foreground">
-                {locale === "he"
-                  ? "אין עדיין ראיות מקראול אינסטגרם לחנות הזו. הוסיפו ידיות אינסטגרם של אפיליאטים והריצו את הקראולר הציבורי כדי לאכלס את הקטע הזה."
-                  : "Instagram crawl evidence is not available yet for this store. Add affiliate Instagram handles and run the public crawler to populate this section."}
-              </CardContent>
-            </Card>
-          )}
-          <InfluencerWeeklyEvidence
-            influencer={influencerIntelligence}
-            direction={direction}
-            currency={chrome.store.currency}
-            locale={locale}
+              ? `הנתונים נקראים מהמסד עבור ${dateRangeLabel} — אותו חלון של הסיכום והייצוא.`
+              : `Read from the DB for ${dateRangeLabel} — the same window as the summary and the export.`}
           />
           <MetaAdsIntelligencePanel
             metaAds={metaAds}
@@ -397,9 +377,51 @@ export default async function WeeklySummaryPage() {
           />
         </section>
 
+        {/* Deep evidence (Instagram crawl + influencer breakdown) — moved
+            behind progressive disclosure. It's verification material, not
+            the weekly story; keeping it expanded was the page's main
+            overload. */}
+        <details className="group rounded-2xl border border-border bg-card/40 open:bg-card">
+          <summary className="cursor-pointer list-none rounded-2xl px-5 py-4 text-sm font-semibold text-foreground hover:bg-muted/40">
+            <span className="inline-flex w-full items-center gap-2">
+              <span className="text-muted-foreground transition-transform group-open:rotate-90">▸</span>
+              {locale === "he" ? "נתוני עומק: אינסטגרם ומשפיענים" : "Deep data: Instagram & influencers"}
+              <span className="ms-auto text-xs font-normal text-muted-foreground">
+                {locale === "he" ? "לחצו לפתיחה" : "click to expand"}
+              </span>
+            </span>
+          </summary>
+          <div className="space-y-3 border-t border-border px-5 py-4">
+            {influencerIntelligence?.instagramCrawl ? (
+              <InstagramCrawlEvidencePanel
+                instagram={influencerIntelligence.instagramCrawl}
+                direction={direction}
+                dateRangeLabel={dateRangeLabel}
+                description={locale === "he"
+                  ? "שכבת הוכחה לעמוד המותג ולחשבונות האינסטגרם של השותפים, בתוך חלון התאריכים של הסיכום."
+                  : "Proof layer for the brand page and affiliate Instagram handles, within the summary's date range."}
+              />
+            ) : (
+              <Card>
+                <CardContent className="pt-6 text-sm text-muted-foreground">
+                  {locale === "he"
+                    ? "אין עדיין נתוני סריקת אינסטגרם לחנות הזו. הוסיפו חשבונות אינסטגרם של שותפים והריצו את הסורק כדי למלא את הקטע."
+                    : "Instagram crawl evidence is not available yet for this store. Add affiliate Instagram handles and run the crawler to populate this section."}
+                </CardContent>
+              </Card>
+            )}
+            <InfluencerWeeklyEvidence
+              influencer={influencerIntelligence}
+              direction={direction}
+              currency={chrome.store.currency}
+              locale={locale}
+            />
+          </div>
+        </details>
+
         <section className="space-y-3">
           <SectionHead
-            eyebrow={locale === "he" ? "שלב 1" : "Step 1"}
+            eyebrow={locale === "he" ? "לשיתוף" : "To share"}
             title={locale === "he" ? "הנרטיב של השבוע" : "The week's narrative"}
             hint={locale === "he"
               ? "כל בלוק הוא קטע עצמאי שאפשר להעתיק לסטנדאפ השבועי."

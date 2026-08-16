@@ -24,6 +24,9 @@ interface ExportBody {
   to?: string;
   storeId?: string;
   locale?: "he" | "en";
+  // true → the extended report with the diagnostic/deep-dive appendix
+  // (reconciliation, product rollup, brand deep dives, Instagram, affiliates).
+  appendix?: boolean;
 }
 
 function buildPrintUrl(baseUrl: string, body: ExportBody): string {
@@ -31,6 +34,7 @@ function buildPrintUrl(baseUrl: string, body: ExportBody): string {
   if (body.from) url.searchParams.set("from", body.from);
   if (body.to) url.searchParams.set("to", body.to);
   if (body.storeId) url.searchParams.set("storeId", body.storeId);
+  if (body.appendix) url.searchParams.set("appendix", "1");
   // Force Hebrew for the printable report regardless of the caller's session.
   // The report is built for an Israeli founder; English was only ever the
   // default for sessions that hadn't picked a locale yet.

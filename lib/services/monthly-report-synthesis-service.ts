@@ -44,7 +44,7 @@ function fallback(weeks: WeeklyDigest[], isHe: boolean): MonthlyMetaSynthesis {
       observations: weeks.map(
         (w) => `${w.periodStart} → ${w.periodEnd}: ${w.metaHook ?? "אין סיכום שבועי"}`
       ),
-      actions: ["הוסיפו OPENAI_API_KEY ל־.env כדי לקבל ניתוח חודשי."],
+      actions: ["הוסיפו OPENAI_API_KEY ל.env כדי לקבל ניתוח חודשי."],
       weeksUsed: weeks.length
     };
   }
@@ -100,7 +100,7 @@ async function loadRecentWeeklies(
 function buildSystemPrompt(locale: "he" | "en"): string {
   const languageHeader =
     locale === "he"
-      ? "ענה אך ורק בעברית. כל המחרוזות ב־JSON (hookLine, observations, actions) חייבות להיות בעברית טבעית."
+      ? "ענה אך ורק בעברית. כל המחרוזות בJSON (hookLine, observations, actions) חייבות להיות בעברית טבעית."
       : "Respond exclusively in English.";
 
   return [

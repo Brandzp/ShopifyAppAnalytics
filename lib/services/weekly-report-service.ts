@@ -30,6 +30,11 @@ import {
   type InstagramAffiliateSummary
 } from "@/lib/services/instagram-report-insights-service";
 import { buildMarketingPlannerInfluencerIntelligence } from "@/lib/services/marketing-planner-influencer-service";
+import { listOpenAlerts } from "@/lib/services/alert-writer-service";
+import {
+  fetchCompetitorActivity,
+  type CompetitorActivityEntry
+} from "@/lib/clients/rivalsweeper-client";
 import {
   buildAffiliateDeepDive,
   type AffiliateDeepDiveReport
@@ -52,6 +57,10 @@ import {
   generateWeeklyBiCommentary,
   type BiWeeklyCommentary
 } from "@/lib/services/weekly-report-bi-commentary-service";
+import {
+  buildCompetitorWeekSection,
+  type CompetitorWeekSection
+} from "@/lib/services/competitor-intel-service";
 
 export interface WeeklyReportBundle {
   storeId: string;
@@ -95,6 +104,25 @@ export interface WeeklyReportBundle {
   restockAlerts: RestockHeroAlertReport | null;
   stockoutAlerts: StockoutImminentReport | null;
   roasCollapseAlerts: RoasCollapseReport | null;
+  // Competitor promo/pricing week section (RivalSweeper Feed A). Mirrored
+  // here AND fetched in the print page's own data pass — keep both wired
+  // when the shape changes (the print page is what the PDF renders from).
+  competitorWeek: CompetitorWeekSection | null;
+  // Live competitor activity (RivalSweeper ads/news/homepage links) —
+  // mirrored here AND fetched in the print page's own data pass.
+  competitorActivity: CompetitorActivityEntry[] | null;
+  // Open action queue — alerts still awaiting a decision at build time.
+  // Mirrored here AND fetched in the print page's own data pass (same
+  // contract as competitorWeek above).
+  openActions: Array<{
+    id: string;
+    type: string;
+    severity: "critical" | "high" | "medium" | "low";
+    title: string;
+    description: string | null;
+    recommendedAction: string | null;
+    periodLabel: string | null;
+  }>;
   // BI agent's executive summary (3 insights + 3 actions) — rendered at
   // the top of the print page. Null when the BI agent is unconfigured or
   // fails; the section just hides. See weekly-report-bi-commentary-service.
@@ -188,22 +216,41 @@ export async function buildWeeklyReportBundle(
 
   // Affiliate deep-dive + restock-hero alerts + stockout-imminent — run in
   // parallel with the Instagram build below so report build time doesn't grow.
-  const [affiliateDeepDive, restockAlerts, stockoutAlerts] = await Promise.all([
-    buildAffiliateDeepDive({
-      storeId: input.storeId,
-      start: input.start,
-      end: input.end
-    }).catch(() => null),
-    buildRestockHeroAlerts({
-      storeId: input.storeId,
-      start: input.start,
-      end: input.end
-    }).catch(() => null),
-    buildStockoutImminentReport({
-      storeId: input.storeId,
-      asOf: input.end
-    }).catch(() => null)
-  ]);
+  const [affiliateDeepDive, restockAlerts, stockoutAlerts, competitorWeek, openAlertRows] =
+    await Promise.all([
+      buildAffiliateDeepDive({
+        storeId: input.storeId,
+        start: input.start,
+        end: input.end
+      }).catch(() => null),
+      buildRestockHeroAlerts({
+        storeId: input.storeId,
+        start: input.start,
+        end: input.end
+      }).catch(() => null),
+      buildStockoutImminentReport({
+        storeId: input.storeId,
+        asOf: input.end
+      }).catch(() => null),
+      buildCompetitorWeekSection({
+        storeId: input.storeId,
+        start: input.start,
+        end: input.end
+      }).catch(() => null),
+      listOpenAlerts({ storeId: input.storeId, limit: 10 }).catch(() => [])
+    ]);
+
+  const competitorActivity = await fetchCompetitorActivity({ timeoutMs: 15_000 }).catch(() => null);
+
+  const openActions: WeeklyReportBundle["openActions"] = (openAlertRows as any[]).map((a) => ({
+    id: a.id,
+    type: a.type,
+    severity: a.severity,
+    title: a.title,
+    description: a.description ?? null,
+    recommendedAction: a.recommendedAction ?? null,
+    periodLabel: a.periodLabel ?? null
+  }));
 
   // Instagram payload — wider post window (30 days) for engagement context.
   let instagram: WeeklyReportBundle["instagram"] = null;
@@ -293,7 +340,9 @@ export async function buildWeeklyReportBundle(
     metaAds,
     affiliateDeepDive,
     restockAlerts,
-    roasCollapseAlerts
+    roasCollapseAlerts,
+    competitorWeek,
+    competitorActivity
   });
 
   return {
@@ -311,6 +360,9 @@ export async function buildWeeklyReportBundle(
     restockAlerts,
     stockoutAlerts,
     roasCollapseAlerts,
+    competitorWeek,
+    competitorActivity,
+    openActions,
     biAgentCommentary
   };
 }

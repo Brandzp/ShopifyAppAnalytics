@@ -42,6 +42,16 @@ import {
   getRecentlyResolvedWithOutcomes,
   type ResolvedAlertWithOutcome
 } from "@/lib/services/alert-outcome-service";
+import { listOpenAlerts } from "@/lib/services/alert-writer-service";
+import {
+  buildCompetitorWeekSection,
+  type CompetitorWeekSection
+} from "@/lib/services/competitor-intel-service";
+import { COMPETITOR_INTEL_LATEST } from "@/lib/data/competitor-intel-latest";
+import {
+  fetchCompetitorActivity,
+  type CompetitorActivityEntry
+} from "@/lib/clients/rivalsweeper-client";
 import {
   buildRecommendation,
   DEFAULT_TARGETS,
@@ -84,6 +94,8 @@ interface SearchParams {
   to?: string;
   storeId?: string;
   locale?: string;
+  // "1" → extended report with the diagnostic/deep-dive appendix sections.
+  appendix?: string;
 }
 
 // Date-window resolution moved to store-timezone-aware helpers in
@@ -152,6 +164,13 @@ export default async function MetaAdsWeeklyPrintPage({
 
   const storeId = params.storeId?.trim() || (await resolveActiveStoreId());
 
+  // Report depth. The DEFAULT is the concise executive report — summary,
+  // insights, actions, competitors and the money tables. `appendix=1` adds
+  // the deep/diagnostic sections (data reconciliation, product rollup,
+  // per-brand raw tables, Instagram roster, affiliate breakdown) that made
+  // the default export feel overloaded.
+  const includeAppendix = params.appendix === "1";
+
   // Resolve the store's timezone BEFORE computing day boundaries — the
   // window must line up with Shopify Analytics, which reports in store
   // time (Asia/Jerusalem for the current tenants), not UTC.
@@ -175,18 +194,20 @@ export default async function MetaAdsWeeklyPrintPage({
   let campaignAttribution: CampaignShopifyAttributionReport | null = null;
   let affiliateDeepDive: AffiliateDeepDiveReport | null = null;
   let restockAlerts: RestockHeroAlertReport | null = null;
+  let competitorWeek: CompetitorWeekSection | null = null;
   if (!storeId) {
     diagnostic = "no_store";
   } else {
-    // Run all six data builds in parallel so the cumulative cost is the
+    // Run all the data builds in parallel so the cumulative cost is the
     // slowest single query, not the sum of them all.
-    [report, reconciliation, channels, campaignAttribution, affiliateDeepDive, restockAlerts] = await Promise.all([
+    [report, reconciliation, channels, campaignAttribution, affiliateDeepDive, restockAlerts, competitorWeek] = await Promise.all([
       buildMetaAdsWeeklyReport({ storeId, start, end }),
       buildReconciliationReport({ storeId, start, end }).catch(() => null),
       buildChannelPerformanceReport({ storeId, start, end }).catch(() => null),
       buildCampaignShopifyAttribution({ storeId, start, end }).catch(() => null),
       buildAffiliateDeepDive({ storeId, start, end }).catch(() => null),
-      buildRestockHeroAlerts({ storeId, start, end }).catch(() => null)
+      buildRestockHeroAlerts({ storeId, start, end }).catch(() => null),
+      buildCompetitorWeekSection({ storeId, start, end }).catch(() => null)
     ]);
     if (!report) diagnostic = "no_meta_connection";
     // Closed-loop: refresh outcome measurements + read for the report. Lives
@@ -198,6 +219,29 @@ export default async function MetaAdsWeeklyPrintPage({
     ? await getRecentlyResolvedWithOutcomes({ storeId, lookbackDays: 14, limit: 8 }).catch(() => [])
     : [];
 
+  // Live competitor activity from RivalSweeper (ads / news / homepage links).
+  // The provider caches identical requests for a day, so this is cheap.
+  // Null in mock mode or on failure — the block simply doesn't render.
+  const competitorActivity = storeId
+    ? await fetchCompetitorActivity({ timeoutMs: 15_000 }).catch(() => null)
+    : null;
+
+  // Open action queue — every alert still awaiting a decision. The report
+  // doesn't just describe the week; it hands the founder the same
+  // approve/resolve queue the Command Center shows, so the PDF/email is
+  // actionable on its own.
+  const openActions: OpenActionItem[] = storeId
+    ? ((await listOpenAlerts({ storeId, limit: 10 }).catch(() => [])) as unknown as Array<{
+        id: string;
+        type: string;
+        severity: "critical" | "high" | "medium" | "low";
+        title: string;
+        description: string | null;
+        recommendedAction: string | null;
+        periodLabel: string | null;
+      }>)
+    : [];
+
   // Try the WeeklyReport insight cache first — reads the scheduled cron's
   // stored biCommentary / brandInsights / igInsights when they're < 24h
   // old. Turns a 60-90s PDF render into a 3-5s one when the operator
@@ -206,24 +250,30 @@ export default async function MetaAdsWeeklyPrintPage({
     ? await readCachedInsights(storeId, start, end).catch(() => null)
     : null;
 
-  // BI agent executive commentary. Best-effort: returns null if the agent
-  // is unconfigured or throws — the section just won't render. Wrapped in
-  // a try/catch so a tunnel hiccup never blocks the rest of the PDF.
+  // BI agent executive commentary. Best-effort: null if the agent is
+  // unconfigured or throws — the section just won't render.
+  // KICKED OFF here but AWAITED only after the brand/IG insight stages:
+  // with the live local gateway each generation is a real agent turn
+  // (30-120s), and running them sequentially blew past the PDF renderer's
+  // navigation timeout. Concurrent = wall time of the slowest stage, not
+  // the sum.
   let biCommentary: BiWeeklyCommentary | null = null;
-  if (cachedInsights?.biCommentary) {
-    biCommentary = cachedInsights.biCommentary;
-  } else if (storeId && report) {
-    biCommentary = await generateWeeklyBiCommentary({
-      storeName: null, // print page doesn't load the store name; agent infers from data
-      periodStart: start.toISOString().slice(0, 10),
-      periodEnd: end.toISOString().slice(0, 10),
-      locale,
-      metaAds: report,
-      affiliateDeepDive,
-      restockAlerts,
-      roasCollapseAlerts: null
-    }).catch(() => null);
-  }
+  const biCommentaryPromise: Promise<BiWeeklyCommentary | null> = cachedInsights?.biCommentary
+    ? Promise.resolve(cachedInsights.biCommentary)
+    : storeId && report
+      ? generateWeeklyBiCommentary({
+          storeName: null, // print page doesn't load the store name; agent infers from data
+          periodStart: start.toISOString().slice(0, 10),
+          periodEnd: end.toISOString().slice(0, 10),
+          locale,
+          metaAds: report,
+          affiliateDeepDive,
+          restockAlerts,
+          roasCollapseAlerts: null,
+          competitorWeek,
+          competitorActivity
+        }).catch(() => null)
+      : Promise.resolve(null);
 
   // Build a prior-week snapshot per brand so the insights service can frame
   // observations as trends, not snapshots. The prior window is the same
@@ -356,6 +406,10 @@ export default async function MetaAdsWeeklyPrintPage({
       isHe ? "he" : "en"
     ).catch(() => null);
   }
+
+  // Join the commentary generation that ran concurrently with the brand/IG
+  // stages above.
+  biCommentary = await biCommentaryPromise;
 
   // Write freshly-generated insights back into the cache so subsequent
   // renders (email cron re-send, second PDF download) skip the expensive
@@ -981,7 +1035,7 @@ export default async function MetaAdsWeeklyPrintPage({
                 <BoldedText text={biCommentary.headline} />
               </h2>
               <p className="pwr-exec-page-sub" style={{ marginBottom: 14, fontStyle: "italic", color: "#64748b" }}>
-                {isHe ? "נכתב על-ידי סוכן ה-BI של Brandzp" : "Written by the Brandzp BI agent"}
+                {isHe ? "נכתב על-ידי סוכן הBI של Hiloomy" : "Written by the Hiloomy BI agent"}
                 {" · "}
                 {new Date(biCommentary.generatedAt).toLocaleString(isHe ? "he-IL" : "en-US", {
                   dateStyle: "medium",
@@ -1041,6 +1095,21 @@ export default async function MetaAdsWeeklyPrintPage({
             <ClosedLoopPage items={closedLoop} isHe={isHe} />
           ) : null}
 
+          {/* Action queue — open alerts still awaiting a decision. Directly
+              after the closed loop: first "what happened when you acted",
+              then "here's what's waiting for you now". Mirrors the
+              Command Center queue so the PDF is actionable standalone. */}
+          {openActions.length > 0 ? (
+            <ActionQueuePage items={openActions} isHe={isHe} />
+          ) : null}
+
+          {/* Competitors — what the tracked comp set did this week. Sits
+              right after the closed loop so the founder reads "what worked"
+              and then "what the market did" before this week's asks. */}
+          {competitorWeek && competitorWeek.competitors.length > 0 ? (
+            <CompetitorsPage data={competitorWeek} activity={competitorActivity} isHe={isHe} />
+          ) : null}
+
           {/* Hot Restocks — dedicated action page right after the closed loop. */}
           {restockAlerts && restockAlerts.flags.length > 0 ? (
             <RestockHeroActionPage alerts={restockAlerts} isHe={isHe} />
@@ -1059,8 +1128,8 @@ export default async function MetaAdsWeeklyPrintPage({
             />
           ) : null}
 
-          {/* PAGE 3 — Data Reconciliation (sources side-by-side + warnings) */}
-          {reconciliation ? (
+          {/* PAGE 3 — Data Reconciliation. Diagnostic material — appendix only. */}
+          {includeAppendix && reconciliation ? (
             <DataReconciliationPage recon={reconciliation} isHe={isHe} />
           ) : null}
 
@@ -1073,10 +1142,8 @@ export default async function MetaAdsWeeklyPrintPage({
           ) : null}
 
           {/* PAGE 6b — Product-level rollup grouped from ad-name prefix.
-              This is the view the founder writes by hand ("Second Skin
-              5.34x on ₪367"). Without it they have to reconstruct it from
-              the raw ad table on every campaign page. */}
-          {report ? <ProductPerformancePage report={report} isHe={isHe} /> : null}
+              Deep-dive material — appendix only. */}
+          {includeAppendix && report ? <ProductPerformancePage report={report} isHe={isHe} /> : null}
 
           {/* Account-wide totals — only meaningful with 2+ brands. For a
               single-brand account these tiles are an exact re-render of
@@ -1116,12 +1183,10 @@ export default async function MetaAdsWeeklyPrintPage({
           ) : null}
 
           {/* Brand deep-dive blocks — pure data (KPIs / funnel / daily /
-              campaigns / ads). The AI insight bullets render on the
-              Executive Growth page (page 2); repeating them verbatim here
-              was the biggest source of "the PDF is full of duplicates".
-              They're passed only when the exec pages did NOT render (no
-              reconciliation data) so the insights still appear SOMEWHERE. */}
-          {report
+              campaigns / ads). Appendix material — EXCEPT when the exec
+              pages did not render (no reconciliation data): then this is
+              the only place the per-brand insights appear, so it stays. */}
+          {report && (includeAppendix || !reconciliation)
             ? report.brands.map((brand) => (
                 <BrandBlock
                   key={brand.name}
@@ -1133,10 +1198,9 @@ export default async function MetaAdsWeeklyPrintPage({
               ))
             : null}
 
-          {/* Same de-dup rule for Instagram: insights live on page 2's
-              "מצד המשפיענים" block; this section keeps the roster + posts
-              tables only. */}
-          {influencer ? (
+          {/* Instagram roster + posts tables — appendix only (the influencer
+              insights already render on page 2). */}
+          {includeAppendix && influencer ? (
             <InstagramSection
               influencer={influencer}
               widePosts={widePosts}
@@ -1145,9 +1209,17 @@ export default async function MetaAdsWeeklyPrintPage({
             />
           ) : null}
 
-          {/* Affiliate Performance — detailed breakdown per affiliate */}
-          {affiliateDeepDive && affiliateDeepDive.affiliates.length > 0 ? (
+          {/* Affiliate Performance — detailed breakdown per affiliate. Appendix only. */}
+          {includeAppendix && affiliateDeepDive && affiliateDeepDive.affiliates.length > 0 ? (
             <AffiliatePerformancePage deepDive={affiliateDeepDive} isHe={isHe} />
+          ) : null}
+
+          {!includeAppendix ? (
+            <p style={{ margin: "10px 0 0 0", fontSize: 10, color: "#94a3b8" }}>
+              {isHe
+                ? "דוח תקציר. הגרסה המלאה (התאמת נתונים, פירוט מוצרים, צלילת מותג, אינסטגרם ושותפים) זמינה בייצוא המורחב."
+                : "Concise report. The full version (reconciliation, product rollup, brand deep dives, Instagram, affiliates) is available via the extended export."}
+            </p>
           ) : null}
 
           <p className="pwr-footer">
@@ -1349,7 +1421,7 @@ function pickMainRisk(
   if (businessWarn) return isHe ? businessWarn.messageHe : businessWarn.messageEn;
   if (recon.blended.roas != null && recon.blended.roas < 2) {
     return isHe
-      ? `ROAS המשוקלל נמוך מ־2x (${recon.blended.roas.toFixed(2)}x). יש לבחון את הקמפיינים החזקים והחלשים בפירוט.`
+      ? `ROAS המשוקלל נמוך מ2x (${recon.blended.roas.toFixed(2)}x). יש לבחון את הקמפיינים החזקים והחלשים בפירוט.`
       : `Blended ROAS is below 2x (${recon.blended.roas.toFixed(2)}x). Drill into top + worst campaigns.`;
   }
   // Fall back to a data-error only if there's genuinely nothing else — e.g.,
@@ -1415,7 +1487,7 @@ function ExecutiveSummaryPage(props: ExecPageProps) {
   // blended ratio, which is mathematically fine but conversationally
   // misleading when affiliates drive a big chunk of revenue.
   const summarySentence = lang(
-    `השבוע הושקעו ₪${Math.round(recon.meta.spend).toLocaleString("he-IL")} ב־Meta עם ${report.totals.purchases} רכישות מיוחסות ל־Meta ו־ROAS ${metaRoas != null ? metaRoas.toFixed(2) + "x" : "n/a"}. סה״כ Shopify: ₪${Math.round(recon.shopify.netRevenue).toLocaleString("he-IL")} ב־${recon.shopify.orders} הזמנות (כולל אורגני ואפיליאייטס). ${bestCampaign ? `הקמפיין החזק היה "${bestCampaign.name}".` : ""}${mainAction ? " פעולה מומלצת: " + mainAction : ""}`,
+    `השבוע הושקעו ₪${Math.round(recon.meta.spend).toLocaleString("he-IL")} בMeta עם ${report.totals.purchases} רכישות מיוחסות לMeta וROAS ${metaRoas != null ? metaRoas.toFixed(2) + "x" : "n/a"}. סה״כ Shopify: ₪${Math.round(recon.shopify.netRevenue).toLocaleString("he-IL")} ב${recon.shopify.orders} הזמנות (כולל אורגני ואפיליאייטס). ${bestCampaign ? `הקמפיין החזק היה "${bestCampaign.name}".` : ""}${mainAction ? " פעולה מומלצת: " + mainAction : ""}`,
     `This week we spent ₪${Math.round(recon.meta.spend).toLocaleString()} on Meta with ${report.totals.purchases} Meta-attributed purchases and ROAS ${metaRoas != null ? metaRoas.toFixed(2) + "x" : "n/a"}. Total Shopify: ₪${Math.round(recon.shopify.netRevenue).toLocaleString()} across ${recon.shopify.orders} orders (including organic + affiliates). ${bestCampaign ? `Top campaign: "${bestCampaign.name}".` : ""}${mainAction ? " Recommended: " + mainAction : ""}`
   );
 
@@ -1521,7 +1593,7 @@ function ExecutiveSummaryPage(props: ExecPageProps) {
           {bestAds.byRoas ? (
             <>
               <p className="pwr-highlight-value" style={{ fontSize: 12, marginTop: bestAds.byPurchases ? 6 : 0 }}>
-                {lang("ב־ROAS", "By ROAS")}: {bestAds.byRoas.name}
+                {lang("בROAS", "By ROAS")}: {bestAds.byRoas.name}
               </p>
               <p className="pwr-highlight-detail">
                 ROAS {bestAds.byRoas.roas!.toFixed(2)}x · {bestAds.byRoas.purchases} {lang("רכישות", "purchases")} · ₪{Math.round(bestAds.byRoas.spend).toLocaleString("en-US")}
@@ -1596,13 +1668,13 @@ function ExecutiveGrowthInsightsPage(props: ExecPageProps & { igInsights: Instag
       <div className="pwr-insights">
         {metaIns ? (
           <>
-            <p className="pwr-insights-hook">{metaIns.hookLine}</p>
+            <p className="pwr-insights-hook"><BoldedText text={metaIns.hookLine} /></p>
             {metaIns.observations.length > 0 ? (
               <>
                 <p className="pwr-insights-label">{lang("מה קרה", "What happened")}</p>
                 <ul className="pwr-insights-list">
                   {metaIns.observations.slice(0, 3).map((o, i) => (
-                    <li key={i}>{o}</li>
+                    <li key={i}><BoldedText text={o} /></li>
                   ))}
                 </ul>
               </>
@@ -1632,7 +1704,7 @@ function ExecutiveGrowthInsightsPage(props: ExecPageProps & { igInsights: Instag
             <p className="pwr-insights-label">{lang("מצד המשפיענים", "On the influencer side")}</p>
             <ul className="pwr-insights-list">
               {igInsights.observations.slice(0, 2).map((o, i) => (
-                <li key={i}>{o}</li>
+                <li key={i}><BoldedText text={o} /></li>
               ))}
             </ul>
           </>
@@ -1644,7 +1716,7 @@ function ExecutiveGrowthInsightsPage(props: ExecPageProps & { igInsights: Instag
         {metaIns && metaIns.actions.length > 0 ? (
           <ul className="pwr-insights-list">
             {metaIns.actions.map((a, i) => (
-              <li key={i}>{a}</li>
+              <li key={i}><BoldedText text={a} /></li>
             ))}
           </ul>
         ) : null}
@@ -1653,7 +1725,7 @@ function ExecutiveGrowthInsightsPage(props: ExecPageProps & { igInsights: Instag
             <p className="pwr-insights-label">{lang("Instagram", "Instagram")}</p>
             <ul className="pwr-insights-list">
               {igInsights.actions.slice(0, 2).map((a, i) => (
-                <li key={i}>{a}</li>
+                <li key={i}><BoldedText text={a} /></li>
               ))}
             </ul>
           </>
@@ -1673,7 +1745,7 @@ function DataReconciliationPage({ recon, isHe }: { recon: ReconciliationReport; 
       <h2 className="pwr-exec-page-title">{lang("השוואת מקורות נתונים", "Data reconciliation")}</h2>
       <p className="pwr-exec-page-sub">
         {lang(
-          "השוואה בין Meta ל־Shopify לתקופה — אם המספרים סוטים זה מזה, הפער מוצג כאזהרה ולא מוסתר.",
+          "השוואה בין Meta לShopify לתקופה — אם המספרים סוטים זה מזה, הפער מוצג כאזהרה ולא מוסתר.",
           "Side-by-side Meta vs Shopify for the period. Gaps are surfaced as warnings, never hidden."
         )}
       </p>
@@ -2107,7 +2179,7 @@ function ProductPerformancePage({
     <section className="pwr-exec-page">
       <p className="pwr-exec-page-tag">{lang("עמוד 6ב", "PAGE 6b")}</p>
       <h2 className="pwr-exec-page-title">
-        {lang("ביצועי מוצרים ב־Meta", "Product performance on Meta")}
+        {lang("ביצועי מוצרים בMeta", "Product performance on Meta")}
       </h2>
       <p className="pwr-exec-page-sub">
         {lang(
@@ -2163,6 +2235,100 @@ function ProductPerformancePage({
   );
 }
 
+// Open alert awaiting a decision — the print-side projection of the
+// Command Center queue (subset of the Alert row the report needs).
+type OpenActionItem = {
+  id: string;
+  type: string;
+  severity: "critical" | "high" | "medium" | "low";
+  title: string;
+  description: string | null;
+  recommendedAction: string | null;
+  periodLabel: string | null;
+};
+
+function ActionQueuePage({ items, isHe }: { items: OpenActionItem[]; isHe: boolean }) {
+  const lang = (he: string, en: string) => (isHe ? he : en);
+  const RANK: Record<OpenActionItem["severity"], number> = {
+    critical: 0,
+    high: 1,
+    medium: 2,
+    low: 3
+  };
+  const sorted = [...items].sort((a, b) => RANK[a.severity] - RANK[b.severity]);
+  const SEVERITY_LABEL: Record<OpenActionItem["severity"], { he: string; en: string; color: string; bg: string; border: string }> = {
+    critical: { he: "קריטי", en: "CRITICAL", color: "#b91c1c", bg: "#fef2f2", border: "#fecaca" },
+    high: { he: "גבוה", en: "HIGH", color: "#c2410c", bg: "#fff7ed", border: "#fed7aa" },
+    medium: { he: "בינוני", en: "MEDIUM", color: "#a16207", bg: "#fefce8", border: "#fde68a" },
+    low: { he: "נמוך", en: "LOW", color: "#475569", bg: "#f8fafc", border: "#e2e8f0" }
+  };
+
+  return (
+    <section className="pwr-exec-page">
+      <p className="pwr-exec-page-tag" style={{ color: "#475569" }}>
+        {lang("ממתין להחלטה", "ACTION QUEUE")}
+      </p>
+      <h2 className="pwr-exec-page-title">
+        {lang("פעולות שמחכות לכם", "Actions awaiting your decision")}
+      </h2>
+      <p className="pwr-exec-page-sub">
+        {lang(
+          `${sorted.length} התראות פתוחות עם פעולה מומלצת. כל החלטה (טופל / להתעלם) נמדדת אחרי 3–7 ימים ומופיעה בדוח הבא תחת "מה קרה אחרי הפעולה שלכם".`,
+          `${sorted.length} open alerts with a recommended action. Every decision (resolve / ignore) is measured 3–7 days later and shows up in next week's report under "What happened after you acted".`
+        )}
+      </p>
+
+      <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
+        {sorted.map((item, idx) => {
+          const sev = SEVERITY_LABEL[item.severity];
+          return (
+            <li
+              key={item.id}
+              style={{
+                background: sev.bg,
+                border: `1px solid ${sev.border}`,
+                borderRadius: 4,
+                padding: "8px 10px",
+                marginTop: idx === 0 ? 0 : 6,
+                fontSize: 11.5,
+                lineHeight: 1.55
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                <span
+                  style={{
+                    color: sev.color,
+                    fontWeight: 700,
+                    fontSize: 9.5,
+                    textTransform: "uppercase",
+                    letterSpacing: "0.05em",
+                    flexShrink: 0
+                  }}
+                >
+                  {isHe ? sev.he : sev.en}
+                </span>
+                <p style={{ margin: 0, fontWeight: 700, color: "#0f172a" }}>{item.title}</p>
+                {item.periodLabel ? (
+                  <span style={{ color: "#94a3b8", fontSize: 10, flexShrink: 0 }}>{item.periodLabel}</span>
+                ) : null}
+              </div>
+              {item.description ? (
+                <p style={{ margin: "3px 0 0 0", color: "#334155" }}>{item.description}</p>
+              ) : null}
+              {item.recommendedAction ? (
+                <p style={{ margin: "3px 0 0 0", color: "#0f172a" }}>
+                  <span style={{ fontWeight: 700 }}>{lang("מה לעשות:", "Do this:")}</span>{" "}
+                  {item.recommendedAction}
+                </p>
+              ) : null}
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
+}
+
 function ClosedLoopPage({
   items,
   isHe
@@ -2200,7 +2366,7 @@ function ClosedLoopPage({
         {lang("הלולאה נסגרת", "CLOSED LOOP")}
       </p>
       <h2 className="pwr-exec-page-title">
-        {lang("מה קרה אחרי הפעולה שלך", "What happened after you acted")}
+        {lang("מה קרה אחרי הפעולה שלכם", "What happened after you acted")}
       </h2>
       <p className="pwr-exec-page-sub">
         {lang(
@@ -2286,6 +2452,227 @@ function ClosedLoopPage({
   );
 }
 
+// Live activity block — what RivalSweeper already sees on each competitor
+// (Meta ads volume + themes, press, homepage pushes). Renders in BOTH the
+// collapsed (no promo signals yet) and full competitor states.
+function CompetitorActivityBlock({
+  activity,
+  isHe
+}: {
+  activity: CompetitorActivityEntry[] | null;
+  isHe: boolean;
+}) {
+  const lang = (he: string, en: string) => (isHe ? he : en);
+  const withData = (activity ?? []).filter(
+    (a) => (a.adsActive ?? 0) > 0 || a.news.length > 0 || a.homepageLinks.length > 0
+  );
+  if (withData.length === 0) return null;
+  return (
+    <div style={{ marginTop: 14 }}>
+      <p className="pwr-insights-label" style={{ marginBottom: 6 }}>
+        {lang("פעילות שנקלטה במעקב החי", "Live tracked activity")}
+      </p>
+      <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
+        {withData.map((a) => {
+          const bits: string[] = [];
+          if ((a.adsActive ?? 0) > 0) {
+            bits.push(
+              lang(
+                `${(a.adsActive as number).toLocaleString("he-IL")} מודעות מטא פעילות${a.adHeadlines.length ? ` (בין הכותרות: ${a.adHeadlines.slice(0, 2).join(" · ")})` : ""}`,
+                `${(a.adsActive as number).toLocaleString()} active Meta ads${a.adHeadlines.length ? ` (themes: ${a.adHeadlines.slice(0, 2).join(" · ")})` : ""}`
+              )
+            );
+          }
+          if (a.homepageLinks.length > 0) {
+            bits.push(
+              lang(`בראש דף הבית: ${a.homepageLinks.slice(0, 3).join(", ")}`, `Homepage pushes: ${a.homepageLinks.slice(0, 3).join(", ")}`)
+            );
+          }
+          for (const n of a.news.slice(0, 2)) {
+            bits.push(lang(`בתקשורת: "${n.title}" (${n.source})`, `Press: "${n.title}" (${n.source})`));
+          }
+          return (
+            <li
+              key={a.domain}
+              style={{
+                background: "#f8fafc",
+                border: "1px solid #e2e8f0",
+                borderRadius: 4,
+                padding: "7px 10px",
+                marginBottom: 5,
+                fontSize: 11,
+                lineHeight: 1.55
+              }}
+            >
+              <b>{a.name}</b> — {bits.join(" · ")}
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
+function CompetitorsPage({
+  data,
+  activity,
+  isHe
+}: {
+  data: CompetitorWeekSection;
+  activity?: CompetitorActivityEntry[] | null;
+  isHe: boolean;
+}) {
+  const lang = (he: string, en: string) => (isHe ? he : en);
+  const { totals } = data;
+  const headline =
+    totals.openedPromo > 0
+      ? lang(
+          `${totals.openedPromo} מתחרים פתחו מבצעים השבוע${totals.maxDiscountPct !== null ? ` — עד ${Math.round(totals.maxDiscountPct)}% הנחה` : ""}.`,
+          `${totals.openedPromo} competitor(s) opened promos this week${totals.maxDiscountPct !== null ? ` — up to ${Math.round(totals.maxDiscountPct)}% off` : ""}.`
+        )
+      : lang(
+          `${totals.tracked} מתחרים במעקב — ללא מבצעים חדשים השבוע.`,
+          `${totals.tracked} competitor(s) tracked — no new promos this week.`
+        );
+
+  const CHANGE_MARKER: Record<string, string> = {
+    opened_promo: "🔻",
+    deepened_discount: "🔻",
+    closed_promo: "🟢",
+    reduced_discount: "🟢",
+    unchanged: "➖",
+    no_data: "•"
+  };
+
+  // When NO competitor has any signal yet (fresh monitoring, crawlers still
+  // filling), a full page of "אין נתונים השבוע" cards is pure noise — the
+  // whole section collapses to one honest line.
+  const allNoData = data.competitors.every((entry) => entry.change.kind === "no_data");
+  if (allNoData) {
+    return (
+      <section className="pwr-exec-page" style={{ paddingBottom: 8 }}>
+        <p className="pwr-exec-page-tag" style={{ color: "#475569" }}>
+          {lang("מבט החוצה", "COMPETITIVE LANDSCAPE")}
+        </p>
+        <h2 className="pwr-exec-page-title">
+          {lang("מה המתחרים עשו השבוע", "What competitors did this week")}
+        </h2>
+        <p className="pwr-exec-page-sub">
+          {lang(
+            `${totals.tracked} מתחרים במעקב (${data.competitors.map((c) => c.name).join(", ")}). איסוף הנתונים האוטומטי החל — האיתותים הראשונים יופיעו בדוח הבא.`,
+            `${totals.tracked} competitors tracked (${data.competitors.map((c) => c.name).join(", ")}). Automated collection has started — first signals will appear in the next report.`
+          )}
+        </p>
+        {/* Until the crawlers fill, the latest manual intel sweep keeps the
+            CEO oriented instead of leaving the section empty. */}
+        <p className="pwr-insights-label" style={{ marginTop: 6 }}>
+          {lang(`בינתיים, מהסקירה הידנית (${COMPETITOR_INTEL_LATEST.generatedAt}):`, `Meanwhile, from the manual sweep (${COMPETITOR_INTEL_LATEST.generatedAt}):`)}
+        </p>
+        <ul style={{ margin: "4px 0 0 0", paddingInlineStart: 16, fontSize: 11.5, lineHeight: 1.55, color: "#334155" }}>
+          {COMPETITOR_INTEL_LATEST.competitors.map((c) => (
+            <li key={c.name} style={{ marginBottom: 3 }}>
+              <b>{c.name}:</b> {c.move}
+            </li>
+          ))}
+        </ul>
+        <CompetitorActivityBlock activity={activity ?? null} isHe={isHe} />
+      </section>
+    );
+  }
+
+  return (
+    <section className="pwr-exec-page">
+      <p className="pwr-exec-page-tag" style={{ color: "#475569" }}>
+        {lang("מבט החוצה", "COMPETITIVE LANDSCAPE")}
+      </p>
+      <h2 className="pwr-exec-page-title">
+        {lang("מה המתחרים עשו השבוע", "What competitors did this week")}
+      </h2>
+      <p className="pwr-exec-page-sub">{headline}</p>
+
+      <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
+        {data.competitors.map((entry, idx) => {
+          const kind = entry.change.kind;
+          const marker = CHANGE_MARKER[kind] ?? "•";
+          const isThreat = kind === "opened_promo" || kind === "deepened_discount";
+          const tone = isThreat ? "#fef2f2" : "#f8fafc";
+          const border = isThreat ? "#fecaca" : "#e2e8f0";
+          return (
+            <li
+              key={entry.competitorId}
+              style={{
+                background: tone,
+                border: `1px solid ${border}`,
+                borderRadius: 4,
+                padding: "8px 10px",
+                marginTop: idx === 0 ? 0 : 4,
+                fontSize: 11.5,
+                lineHeight: 1.55,
+                display: "flex",
+                gap: 8,
+                pageBreakInside: "avoid"
+              }}
+            >
+              <span
+                style={{
+                  color: isThreat ? "#b91c1c" : "#64748b",
+                  fontWeight: 700,
+                  flexShrink: 0
+                }}
+              >
+                {marker}
+              </span>
+              <div style={{ flex: 1 }}>
+                <p style={{ margin: 0, color: "#0f172a" }}>
+                  <strong>{entry.name}</strong>
+                  {" — "}
+                  {isHe ? entry.change.summary.he : entry.change.summary.en}
+                </p>
+                <p
+                  style={{
+                    margin: "2px 0 0",
+                    fontSize: 9,
+                    color: "#64748b",
+                    letterSpacing: "0.02em"
+                  }}
+                >
+                  <span dir="ltr">{entry.domain}</span>
+                  {entry.current.activePromoCount > 0
+                    ? ` · ${lang(
+                        `${entry.current.activePromoCount} מבצעים פעילים`,
+                        `${entry.current.activePromoCount} active promo(s)`
+                      )}`
+                    : ` · ${lang("ללא מבצע פעיל", "no active promo")}`}
+                  {entry.current.freeShippingThreshold !== null
+                    ? ` · ${lang(
+                        `משלוח חינם מעל ₪${Math.round(entry.current.freeShippingThreshold)}`,
+                        `free shipping over ${Math.round(entry.current.freeShippingThreshold)}`
+                      )}`
+                    : ""}
+                </p>
+                {entry.current.homepageMessage ? (
+                  <p style={{ margin: "3px 0 0", fontSize: 10, color: "#475569", fontStyle: "italic" }}>
+                    „{entry.current.homepageMessage}"
+                  </p>
+                ) : null}
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+
+      <CompetitorActivityBlock activity={activity ?? null} isHe={isHe} />
+
+      <p style={{ margin: "10px 0 0", fontSize: 9, color: "#94a3b8" }}>
+        {lang(
+          "מקור: RivalSweeper — נתוני מבצעים ומחירים ציבוריים של המתחרים המוגדרים בהגדרות.",
+          "Source: RivalSweeper — public promo/pricing signals for the competitor set defined in Settings."
+        )}
+      </p>
+    </section>
+  );
+}
+
 function RestockHeroBanner({
   alerts,
   isHe
@@ -2300,7 +2687,7 @@ function RestockHeroBanner({
     <div className="pwr-flag-banner">
       <p className="pwr-flag-banner-title">
         {lang(
-          `🚩 ${alerts.flags.length} מוצר${alerts.flags.length === 1 ? "" : "ים"} שחזר${alerts.flags.length === 1 ? "" : "ו"} למלאי — דורש פעולה השבוע`,
+          `🚩 ${alerts.flags.length} מוצר${alerts.flags.length === 1 ? "" : "ים"} שחזר${alerts.flags.length === 1 ? "" : "ו"} למלאי — נדרשת פעולה השבוע`,
           `🚩 ${alerts.flags.length} hero${alerts.flags.length === 1 ? "" : "es"} restocked — needs action this week`
         )}
       </p>
@@ -2310,12 +2697,12 @@ function RestockHeroBanner({
             <strong>{f.title}</strong>
             {f.sku ? ` (${f.sku})` : ""} ·{" "}
             {lang(
-              `הכנסה ב-90 ימים שלפני: ${fmt(f.priorRevenue)}`,
+              `הכנסה ב90 הימים שלפני: ${fmt(f.priorRevenue)}`,
               `90-day prior revenue: ${fmt(f.priorRevenue)}`
             )}{" "}
             ·{" "}
             {lang(
-              `יצא ${f.gapDays} ימים מהמלאי`,
+              `חסר במלאי ${f.gapDays} ימים`,
               `${f.gapDays}-day OOS gap`
             )}
             {f.currentInventory != null ? (
@@ -2332,7 +2719,7 @@ function RestockHeroBanner({
         {alerts.flags.length > flags.length ? (
           <li className="pwr-flag-banner-item" style={{ color: "#7f1d1d", fontStyle: "italic" }}>
             {lang(
-              `+ עוד ${alerts.flags.length - flags.length} (פרוט בעמוד הבא)`,
+              `+ עוד ${alerts.flags.length - flags.length} (פירוט בעמוד הבא)`,
               `+ ${alerts.flags.length - flags.length} more (see next page)`
             )}
           </li>
@@ -2357,11 +2744,11 @@ function RestockHeroActionPage({
         {lang("התראה", "ALERT")}
       </p>
       <h2 className="pwr-exec-page-title">
-        {lang("מוצרים שחזרו למלאי — תדחפי השבוע", "Hot restocks — push these now")}
+        {lang("מוצרים שחזרו למלאי — דחפו אותם השבוע", "Hot restocks — push these now")}
       </h2>
       <p className="pwr-exec-page-sub">
         {lang(
-          "מוצרים שהיו בין המובילים בהכנסות ב-90 הימים האחרונים, יצאו מהמלאי, וחזרו עכשיו. הגיע הזמן להגביר תקציב Meta ולנצל את הביקוש שהצטבר.",
+          "מוצרים שהיו בין המובילים בהכנסות ב90 הימים האחרונים, יצאו מהמלאי, וחזרו עכשיו. הגיע הזמן להגביר תקציב Meta ולנצל את הביקוש שהצטבר.",
           "Products that were top-revenue performers in the last 90 days, went out of stock, and just came back. Time to scale Meta budget and capture the backlogged demand."
         )}
       </p>
@@ -2489,7 +2876,7 @@ function AffiliatePerformancePage({
       {deepDive.totals.commission === 0 && deepDive.totals.sales > 0 ? (
         <p className="pwr-recon-warning pwr-recon-warning-info" style={{ marginBottom: 10 }}>
           {lang(
-            "עמלות מוצגות כ־₪0 מפני שהעמלה למשווקות לא הוגדרה בהגדרות התוכנית. הגדירו אחוז עמלה כדי לראות את הסכומים המחושבים.",
+            "עמלות מוצגות כ₪0 מפני שהעמלה למשווקות לא הוגדרה בהגדרות התוכנית. הגדירו אחוז עמלה כדי לראות את הסכומים המחושבים.",
             "Commission shows as ₪0 because no commission rate is configured on the affiliate program. Set a rate in program settings to see the calculated amounts."
           )}
         </p>
@@ -2815,7 +3202,7 @@ function BrandBlock({
                   <tr>
                     <td colSpan={7} style={{ fontSize: 10, color: "#64748b", fontStyle: "italic" }}>
                       {isHeLocale
-                        ? `+ עוד ${hidden.length} מודעות בהוצאה נמוכה (מתחת ל־₪${LOW_SIGNAL_SPEND}, ללא רכישות) — סה״כ ${formatCurrencyILS(hiddenSpend)}.`
+                        ? `+ עוד ${hidden.length} מודעות בהוצאה נמוכה (מתחת ל₪${LOW_SIGNAL_SPEND}, ללא רכישות) — סה״כ ${formatCurrencyILS(hiddenSpend)}.`
                         : `+ ${hidden.length} more low-spend ads (under ₪${LOW_SIGNAL_SPEND}, no purchases) — ${formatCurrencyILS(hiddenSpend)} total.`}
                     </td>
                   </tr>

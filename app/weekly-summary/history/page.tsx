@@ -28,7 +28,7 @@ export default async function WeeklyReportsHistoryPage() {
         eyebrow: "סיכום שבועי",
         title: "היסטוריית דוחות",
         description:
-          "כל הדוחות האוטומטיים שנשלחו לנמענים — שבועיים (ימי ראשון 09:00) וחודשיים (ב־1 לכל חודש)."
+          "כל הדוחות האוטומטיים שנשלחו לנמענים — שבועיים (ימי ראשון 09:00) וחודשיים (ב1 לכל חודש)."
       }
     : {
         eyebrow: "Weekly summary",
@@ -45,7 +45,7 @@ export default async function WeeklyReportsHistoryPage() {
         generated: "נוצר",
         sent: "נשלח",
         notSent: "לא נשלח",
-        download: "הורד PDF"
+        download: "הורדת PDF"
       }
     : {
         weekly: "Weekly reports",

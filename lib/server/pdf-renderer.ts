@@ -113,7 +113,11 @@ export async function renderPdfFromUrl(input: RenderPdfInput): Promise<Buffer> {
     // Timeout 180s on goto because the SSR itself may invoke 2 BI agent
     // calls (60s each timeout) + OpenAI brand/IG insights + heavy DB
     // aggregations before the HTML response can start streaming.
-    await page.goto(input.url, { waitUntil: "domcontentloaded", timeout: 180_000 });
+    // 280s — the live BI gateway turns (commentary + brand + IG insights)
+    // can push an uncached render past the old 180s ceiling. Keep this
+    // below the export route's maxDuration (300s) so the route returns a
+    // clean error rather than being killed mid-response.
+    await page.goto(input.url, { waitUntil: "domcontentloaded", timeout: 280_000 });
     await page.waitForLoadState("load", { timeout: 20_000 }).catch(() => undefined);
     await page.waitForLoadState("networkidle", { timeout: 15_000 }).catch(() => undefined);
 

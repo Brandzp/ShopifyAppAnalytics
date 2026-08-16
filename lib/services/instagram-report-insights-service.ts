@@ -55,7 +55,7 @@ function fallback(isHe: boolean, summary: InstagramInsightsInput): InstagramInsi
   const money = (n: number) => `₪${Math.round(n).toLocaleString(isHe ? "he-IL" : "en-US")}`;
 
   const hookLine = isHe
-    ? `${active} מתוך ${total} משפיענים פעילים השבוע · ${summary.recentPosts.length} פוסטים ב־30 הימים האחרונים.`
+    ? `${active} מתוך ${total} משפיענים פעילים השבוע · ${summary.recentPosts.length} פוסטים ב30 הימים האחרונים.`
     : `${active} of ${total} affiliates active this week · ${summary.recentPosts.length} posts in the last 30 days.`;
 
   const observations: string[] = [];
@@ -68,7 +68,7 @@ function fallback(isHe: boolean, summary: InstagramInsightsInput): InstagramInsi
   if (topByCash) {
     observations.push(
       isHe
-        ? `@${topByCash.username} הובילה עם ${money(topByCash.attributedSales ?? 0)} ב־${topByCash.attributedOrders ?? 0} הזמנות.`
+        ? `@${topByCash.username} הובילה עם ${money(topByCash.attributedSales ?? 0)} ב${topByCash.attributedOrders ?? 0} הזמנות.`
         : `@${topByCash.username} led with ${money(topByCash.attributedSales ?? 0)} across ${topByCash.attributedOrders ?? 0} orders.`
     );
   }
@@ -81,7 +81,7 @@ function fallback(isHe: boolean, summary: InstagramInsightsInput): InstagramInsi
     const names = silent.slice(0, 3).map((a) => `@${a.username}`).join(", ");
     observations.push(
       isHe
-        ? `${silent.length} משפיענים ללא פוסט ב־30 יום: ${names}${silent.length > 3 ? " ועוד" : ""}.`
+        ? `${silent.length} משפיענים ללא פוסט ב30 יום: ${names}${silent.length > 3 ? " ועוד" : ""}.`
         : `${silent.length} affiliates with no posts in 30 days: ${names}${silent.length > 3 ? " and more" : ""}.`
     );
   }
@@ -93,7 +93,7 @@ function fallback(isHe: boolean, summary: InstagramInsightsInput): InstagramInsi
   if (topPost && topPost.likes + topPost.comments > 20) {
     observations.push(
       isHe
-        ? `הפוסט הכי חזק ב־30 יום: @${topPost.username} מ־${topPost.postedAt} — ${topPost.likes} לייקים, ${topPost.comments} תגובות.`
+        ? `הפוסט הכי חזק ב30 יום: @${topPost.username} מ${topPost.postedAt} — ${topPost.likes} לייקים, ${topPost.comments} תגובות.`
         : `Top post in 30 days: @${topPost.username} on ${topPost.postedAt} — ${topPost.likes} likes, ${topPost.comments} comments.`
     );
   }
@@ -102,7 +102,7 @@ function fallback(isHe: boolean, summary: InstagramInsightsInput): InstagramInsi
   if (topByCash) {
     actions.push(
       isHe
-        ? `הציעו ל־@${topByCash.username} קוד בלעדי או עמלה גבוהה יותר — היא מובילה את החודש.`
+        ? `הציעו ל@${topByCash.username} קוד בלעדי או עמלה גבוהה יותר — היא מובילה את החודש.`
         : `Offer @${topByCash.username} an exclusive code or bumped commission — she's leading the month.`
     );
   }
@@ -110,14 +110,14 @@ function fallback(isHe: boolean, summary: InstagramInsightsInput): InstagramInsi
     const names = silent.slice(0, 2).map((a) => `@${a.username}`).join(", ");
     actions.push(
       isHe
-        ? `פנו ל־${names} — לא פרסמו ב־30 יום, שווה לחדש את הקשר או להסיר מהרשימה הפעילה.`
+        ? `פנו ל${names} — לא פרסמו ב30 יום, שווה לחדש את הקשר או להסיר מהרשימה הפעילה.`
         : `Reach out to ${names} — no posts in 30 days; renew the relationship or drop from the active roster.`
     );
   }
   if (topPost && actions.length < 3) {
     actions.push(
       isHe
-        ? `בקשו מ־@${topPost.username} להשקיע יותר בפורמט הזה — האנגייג'מנט מוכיח שהוא עובד.`
+        ? `בקשו מ@${topPost.username} להשקיע יותר בפורמט הזה — האנגייג'מנט מוכיח שהוא עובד.`
         : `Ask @${topPost.username} to lean into this format — the engagement shows it works.`
     );
   }
@@ -125,7 +125,7 @@ function fallback(isHe: boolean, summary: InstagramInsightsInput): InstagramInsi
   if (observations.length === 0) {
     observations.push(
       isHe
-        ? "אין מספיק פעילות ב־30 הימים האחרונים כדי לזהות דפוס — הטבלאות למטה מציגות את הרוסטר המלא."
+        ? "אין מספיק פעילות ב30 הימים האחרונים כדי לזהות דפוס — הטבלאות למטה מציגות את הרוסטר המלא."
         : "Not enough activity in the last 30 days to spot a pattern — the tables below have the full roster."
     );
   }
@@ -186,7 +186,18 @@ function buildUserPrompt(input: InstagramInsightsInput): string {
 
 function buildSystemPrompt(locale: "he" | "en"): string {
   const heGuidance = `
-שפת המוצא: עברית טבעית של מקצוען. שמות משפיענים נשארים בפורמט @username. הימנעו ממונחים שיווקיים כלליים — דברו ספציפית על מי, מה, ומה אפשר לעשות עם זה השבוע הבא.`;
+שפת המוצא: עברית טבעית של מקצוען. שמות משפיענים נשארים בפורמט @username. הימנעו ממונחים שיווקיים כלליים — דברו ספציפית על מי, מה, ומה אפשר לעשות עם זה השבוע הבא.
+
+כללי ברזל לניסוח ולפורמט (הפרה = תשובה פסולה):
+1. טקסט נקי בלבד — אסור סימוני markdown: בלי כוכביות (**), בלי backticks. הדוח מדפיס את הטקסט כמו שהוא.
+2. בלי סימני + או - לפני מספרים: "עלה 20%" / "ירד 15%", לא "+20%".
+3. רלוונטיות למנהל בלבד: אל תזכירו סטטוסים טכניים של הסורק ('stored', 'crawl', 'פוסטים שמורים 0'). משפיענית נכנסת לתובנה רק אם יש לה נתון עסקי אמיתי (מכירות משויכות, קופון שמומש, פוסט עם ביצועים). אם אין נתונים עסקיים לאף אחת — החזירו תובנה אחת בלבד שאומרת זאת בפשטות, בלי רשימת שמות.
+4. אל תמליצו "לשלוח קוד קופון" למי שאין שום ראיה שפעילה — המלצה כזו חייבת נימוק מהנתונים.
+5. בלי מקף מחבר בין אות שימוש למילה לועזית: "ל@username", "הROAS".
+6. גבולות סמכות — אתם אנליסטים, לא מנהלי אנשים. שיתוף פעולה עם שותפה הוא מערכת יחסים עסקית שהסוכן לא מכיר את תנאיה. לכן:
+   אסור בהחלט: להורות "להסיר מהרשימה", להציב אולטימטומים ("אחרת תוסרנה"), להגדיר יעדי תפוקה לאנשים, "לגייס" או "לסיים התקשרות".
+   מותר: לכל היותר הצעת בדיקה אחת ומנומקת ("שווה לבדוק מול @X אם הקוד שלה עדיין בשימוש — 0 מימושים החודש").
+7. עדיפות הפעולות: דברים שהמערכת או הבעלים יכולים לבצע ישירות באתר ובקמפיינים — עמוד מוצר, הצעה, קופון קיים, תקציב מודעות, קריאייטיב. פעולה על אנשים היא תמיד האחרונה, ורק כהצעת בדיקה.`;
 
   const enGuidance = `Write in clear English. Founder-readable, concrete, no marketing jargon.`;
 
@@ -196,7 +207,7 @@ function buildSystemPrompt(locale: "he" | "en"): string {
   // language hint is at the end of the prompt.
   const languageHeader =
     locale === "he"
-      ? "ענה אך ורק בעברית. כל המחרוזות ב־JSON (hookLine, observations, actions) חייבות להיות בעברית טבעית. אסור להחזיר אנגלית מלבד שמות @handles, מספרים, ו־ROAS."
+      ? "ענה אך ורק בעברית. כל המחרוזות בJSON (hookLine, observations, actions) חייבות להיות בעברית טבעית. אסור להחזיר אנגלית מלבד שמות @handles, מספרים, וROAS."
       : "Respond exclusively in English. All strings in the JSON must be in English.";
 
   return [

@@ -14,6 +14,8 @@ interface Props {
   storeId?: string;
   labelDownload: string;
   labelGenerating: string;
+  // true → extended report including the diagnostic/deep-dive appendix.
+  appendix?: boolean;
 }
 
 export function ExportMetaAdsPdfButton({
@@ -21,7 +23,8 @@ export function ExportMetaAdsPdfButton({
   to,
   storeId,
   labelDownload,
-  labelGenerating
+  labelGenerating,
+  appendix = false
 }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -34,7 +37,7 @@ export function ExportMetaAdsPdfButton({
       const response = await fetch("/api/weekly-summary/export/meta-ads-pdf", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ from, to, storeId })
+        body: JSON.stringify({ from, to, storeId, appendix })
       });
       if (!response.ok) {
         const text = await response.text().catch(() => "");

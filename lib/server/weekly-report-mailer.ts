@@ -58,6 +58,10 @@ function buildHtmlBody(bundle: WeeklyReportBundle, kind: "weekly" | "monthly"): 
   const igInsights = bundle.instagramInsights;
   const kpis = brand?.kpis;
   const restockFlags = bundle.restockAlerts?.flags ?? [];
+  // Competitor threats — rivals that opened or deepened a promo this week.
+  const competitorThreats = (bundle.competitorWeek?.competitors ?? []).filter(
+    (c) => c.change.kind === "opened_promo" || c.change.kind === "deepened_discount"
+  );
 
   return `<!doctype html>
 <html lang="he" dir="rtl">
@@ -82,10 +86,30 @@ function buildHtmlBody(bundle: WeeklyReportBundle, kind: "weekly" | "monthly"): 
             .slice(0, 3)
             .map(
               (f) =>
-                `<p style="margin:4px 0 0;font-size:12px;color:#450a0a;line-height:1.5;"><strong style="color:#7f1d1d;">${escapeHtml(f.title)}</strong> · הכנסה ב-90 ימים שלפני: ₪${Math.round(f.priorRevenue).toLocaleString("en-US")} · יצא ${f.gapDays} ימים מהמלאי${f.currentInventory != null ? " · " + f.currentInventory + " יח׳ במלאי" : ""}</p>`
+                `<p style="margin:4px 0 0;font-size:12px;color:#450a0a;line-height:1.5;"><strong style="color:#7f1d1d;">${escapeHtml(f.title)}</strong> · הכנסה ב90 ימים שלפני: ₪${Math.round(f.priorRevenue).toLocaleString("en-US")} · יצא ${f.gapDays} ימים מהמלאי${f.currentInventory != null ? " · " + f.currentInventory + " יח׳ במלאי" : ""}</p>`
             )
             .join("")}
           ${restockFlags.length > 3 ? `<p style="margin:6px 0 0;font-size:11px;color:#7f1d1d;font-style:italic;">+ עוד ${restockFlags.length - 3} בדוח המלא</p>` : ""}
+        </div>
+      </td>
+    </tr>`
+        : ""
+    }
+    ${
+      competitorThreats.length > 0
+        ? `
+    <tr>
+      <td style="padding:16px 24px 4px;">
+        <div style="background:#fff7ed;border-left:4px solid #ea580c;border-right:1px solid #fed7aa;border-top:1px solid #fed7aa;border-bottom:1px solid #fed7aa;border-radius:4px;padding:12px 14px;">
+          <p style="margin:0 0 6px;font-size:13px;font-weight:800;color:#7c2d12;">🔻 ${competitorThreats.length} מתחר${competitorThreats.length === 1 ? "ה פתח או העמיק" : "ים פתחו או העמיקו"} מבצע השבוע</p>
+          ${competitorThreats
+            .slice(0, 3)
+            .map(
+              (c) =>
+                `<p style="margin:4px 0 0;font-size:12px;color:#431407;line-height:1.5;"><strong style="color:#7c2d12;">${escapeHtml(c.name)}</strong> · ${escapeHtml(c.change.summary.he)}</p>`
+            )
+            .join("")}
+          <p style="margin:6px 0 0;font-size:11px;color:#7c2d12;font-style:italic;">פירוט מלא בסקשן "מה המתחרים עשו השבוע" בדוח.</p>
         </div>
       </td>
     </tr>`
@@ -176,7 +200,17 @@ export async function sendWeeklyReportEmail(input: SendReportInput): Promise<Sen
     flagCount > 0
       ? `🚩 ${flagCount} hero${flagCount === 1 ? "" : "es"} restocked · `
       : "";
-  const subject = `${flagPrefix}${kindTitle} · ${input.bundle.periodStart} → ${input.bundle.periodEnd}${
+  // Competitor prefix: only when a rival's promo is deep enough to matter
+  // (≥30% off) — the subject line is expensive real estate.
+  const competitorTotals = input.bundle.competitorWeek?.totals;
+  const rivalPrefix =
+    competitorTotals &&
+    competitorTotals.openedPromo > 0 &&
+    competitorTotals.maxDiscountPct !== null &&
+    competitorTotals.maxDiscountPct >= 30
+      ? `🔻 rival at ${Math.round(competitorTotals.maxDiscountPct)}% off · `
+      : "";
+  const subject = `${flagPrefix}${rivalPrefix}${kindTitle} · ${input.bundle.periodStart} → ${input.bundle.periodEnd}${
     input.bundle.storeName ? " · " + input.bundle.storeName : ""
   }`;
   const filename = `${input.kind}-report-${input.bundle.periodStart}_${input.bundle.periodEnd}.pdf`;

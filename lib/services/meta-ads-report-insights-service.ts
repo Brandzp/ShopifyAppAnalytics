@@ -128,14 +128,14 @@ function fallbackInsights(brand: MetaAdsReportBrand, isHe: boolean): BrandInsigh
   if (scaleCandidate) {
     actions.push(
       isHe
-        ? `הגדילו את התקציב של "${scaleCandidate.campaignName}" ב־20% — ROAS ${roasStr(scaleCandidate.purchaseRoas)} על ${money(scaleCandidate.spend)}.`
+        ? `הגדילו את התקציב של "${scaleCandidate.campaignName}" ב20% — ROAS ${roasStr(scaleCandidate.purchaseRoas)} על ${money(scaleCandidate.spend)}.`
         : `Scale "${scaleCandidate.campaignName}" by 20% — ROAS ${roasStr(scaleCandidate.purchaseRoas)} on ${money(scaleCandidate.spend)}.`
     );
   } else if (bestAd) {
     // No clear scale winner? Point at the best-ROAS ad as a creative angle to explore.
     actions.push(
       isHe
-        ? `בנו וריאציה של "${bestAd.adName ?? "?"}" — המודעה עם ה־ROAS הכי גבוה השבוע.`
+        ? `בנו וריאציה של "${bestAd.adName ?? "?"}" — המודעה עם הROAS הכי גבוה השבוע.`
         : `Test a variant of "${bestAd.adName ?? "?"}" — this week's top-ROAS ad.`
     );
   }
@@ -283,7 +283,17 @@ function buildPrompt(
 // bottleneck) and tie every observation to a concrete recommendation.
 function buildSystemPrompt(locale: "he" | "en"): string {
   const heGuidance = `
-שפת המוצא: עברית טבעית של מקצוען. אסור להשתמש באנגלית מלבד שמות קמפיינים, שמות מודעות, ויחידות מידה (₪, %, x). הימנעו ממילים כמו "אופטימיזציה" / "סינרגיה" / "פוטנציאל" — דברו כמו מנהל מדיה לפנדר ישראלי. הסבירו את ה"למה" של כל אבחנה, לא רק "מה קרה".`;
+שפת המוצא: עברית טבעית של מקצוען. אסור להשתמש באנגלית מלבד שמות קמפיינים, שמות מודעות, ויחידות מידה (₪, %, x). הימנעו ממילים כמו "אופטימיזציה" / "סינרגיה" / "פוטנציאל" — דברו כמו מנהל מדיה לפאונדר ישראלי. הסבירו את ה"למה" של כל אבחנה, לא רק "מה קרה".
+
+כללי ברזל לניסוח ולפורמט (הפרה = תשובה פסולה):
+1. טקסט נקי בלבד — אסור בשום מקרה סימוני markdown: בלי כוכביות (**), בלי גרשיים כפולים מסביב להדגשות, בלי backticks. הדוח מדפיס את הטקסט כמו שהוא.
+2. מספרים בעברית זורמת, בלי סימני + או - לפני מספר: כתבו "עלה 17.8%" / "ירד 50%" / "צנח ביותר מחצי", לעולם לא "+17.8%" או "-50%" (הסימנים נשברים בטקסט מימין לשמאל).
+3. טווחי תאריכים במילים: "בין 4 ל8 באוגוסט", לא "04-06/08".
+4. מונחים מקצועיים מוסברים בפעם הראשונה במשפט: "ROAS 5.3 (כל שקל פרסום החזיר 5.3 שקל)", "CTR (אחוז הקלקה על המודעה)".
+5. פעולות בפעלים עבריים: "הגדילו תקציב", "עצרו", "שכפלו", "בדקו" — לא Scale / Pause / Kill.
+6. בלי מקף מחבר בין אות שימוש למספר או מילה לועזית: "ב31", "הROAS", "לShopify".
+7. כל בולט = משפט שלם אחד או שניים שמנהל שאינו איש פרסום מבין בקריאה ראשונה.
+8. גבולות סמכות: פעולות רק על מה שיש עליו מנוף ישיר — קמפיינים, תקציבים, קריאייטיבים, עמודי האתר, מלאי. אסור להורות על החלטות כוח אדם או יחסים עם שותפים (גיוס, הסרה, אולטימטום) — לכל היותר "שווה לבדוק".`;
 
   const enGuidance = `
 Write in clear founder-readable English. Avoid jargon ("synergy", "optimization", "potential"). Talk like a senior media buyer giving a brand owner a Monday briefing.`;
@@ -292,7 +302,7 @@ Write in clear founder-readable English. Avoid jargon ("synergy", "optimization"
   // mirror the English data dump and ignore the trailing Hebrew hint.
   const languageHeader =
     locale === "he"
-      ? "ענה אך ורק בעברית. כל המחרוזות ב־JSON (hookLine, observations, actions) חייבות להיות בעברית טבעית. אסור להחזיר אנגלית מלבד שמות קמפיינים, שמות מודעות, ויחידות מידה (₪, %, x)."
+      ? "ענה אך ורק בעברית. כל המחרוזות בJSON (hookLine, observations, actions) חייבות להיות בעברית טבעית. אסור להחזיר אנגלית מלבד שמות קמפיינים, שמות מודעות, ויחידות מידה (₪, %, x)."
       : "Respond exclusively in English. All strings in the JSON must be in English.";
 
   return [
@@ -329,9 +339,9 @@ Write in clear founder-readable English. Avoid jargon ("synergy", "optimization"
     '  "actions": [',
     '    "2 to 3 verb-led recommendations for next week. Each must reference a specific entity (campaign/adset/ad by name) and a specific outcome.",',
     '    "Examples of good actions:",',
-    '    "  – \\"שכפלו את \'Paz_1_day_click\' לקבוצה נפרדת כדי לבחון את התקרה שלו ב־₪200/יום\\"",',
+    '    "  – \\"שכפלו את \'Paz_1_day_click\' לקבוצה נפרדת כדי לבחון את התקרה שלו ב₪200/יום\\"",',
     '    "  – \\"השהו את \'Static_Omer\' — ₪147 הוצאה, 0 רכישות, סימן לרענון יצירתי\\"",',
-    '    "  – \\"בדקו את שלב ה־checkout — 38% נשירה מהוספה־לסל לתחילת תשלום היא חריגה\\""',
+    '    "  – \\"בדקו את שלב הcheckout — 38% נשירה מהוספה לסל לתחילת תשלום היא חריגה\\""',
     "  ]",
     "}",
     "",
