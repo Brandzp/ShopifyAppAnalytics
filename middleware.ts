@@ -137,6 +137,14 @@ export async function middleware(req: NextRequest) {
   requestHeaders.set("x-pathname", req.nextUrl.pathname);
   const res = NextResponse.next({ request: { headers: requestHeaders } });
 
+  // Local-QA auth bypass — same triple lock as lib/auth/session.ts
+  // (non-production + DEV_QA_BYPASS_TOKEN set + matching cookie). Lets the
+  // local Playwright harness reach authenticated pages without Supabase.
+  const qaToken = process.env.NODE_ENV !== "production" ? process.env.DEV_QA_BYPASS_TOKEN?.trim() : undefined;
+  if (qaToken && req.cookies.get("gg_qa_bypass")?.value === qaToken) {
+    return res;
+  }
+
   // Refresh the Supabase session.
   let user: { id: string } | null = null;
   try {

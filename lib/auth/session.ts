@@ -13,6 +13,33 @@ import { getDb } from "@/lib/server/db";
 export const ACTIVE_ORG_COOKIE = "active_org_id";
 export const ACTIVE_STORE_COOKIE = "active_store_id";
 
+// ── Local-QA auth bypass ────────────────────────────────────────────────
+// Triple-locked escape hatch for LOCAL automated browser testing
+// (Playwright screenshots/E2E), because Supabase-hosted email confirmation
+// can't be completed headlessly:
+//   1. NODE_ENV must NOT be "production"
+//   2. DEV_QA_BYPASS_TOKEN must be set in the environment (never set on Render)
+//   3. the gg_qa_bypass cookie must equal that token exactly
+// When all three hold, the request authenticates as the synthetic QA user
+// below. That user must still exist in our User table with a Membership
+// (provisioned by the QA setup script) for org/store data to resolve —
+// the bypass skips Supabase, not the app's own authorization model.
+export const QA_BYPASS_COOKIE = "gg_qa_bypass";
+export const QA_BYPASS_AUTH_USER = { id: "qa-bypass-user", email: "qa-bot@local.dev" };
+
+async function getDevBypassUser(): Promise<{ id: string; email?: string } | null> {
+  if (process.env.NODE_ENV === "production") return null;
+  const token = process.env.DEV_QA_BYPASS_TOKEN?.trim();
+  if (!token) return null;
+  try {
+    const jar = await cookies();
+    if (jar.get(QA_BYPASS_COOKIE)?.value === token) return QA_BYPASS_AUTH_USER;
+  } catch {
+    // outside a request scope — no bypass
+  }
+  return null;
+}
+
 export interface AuthContext {
   // Auth user from Supabase. Null when not signed in.
   authUserId: string | null;
@@ -35,8 +62,11 @@ export interface AuthContext {
  * once per request, results aren't cached so always fresh.
  */
 export async function getAuthContext(): Promise<AuthContext> {
-  const supabase = await createServerSupabaseClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  let user: { id: string; email?: string } | null = await getDevBypassUser();
+  if (!user) {
+    const supabase = await createServerSupabaseClient();
+    user = (await supabase.auth.getUser()).data.user;
+  }
 
   const blank: AuthContext = {
     authUserId: null,
