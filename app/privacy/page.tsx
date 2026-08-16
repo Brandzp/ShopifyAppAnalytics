@@ -113,14 +113,37 @@ export default function PrivacyPolicyPage() {
       </section>
 
       <section className="mt-8 space-y-3">
+        <h2 className="text-xl font-semibold">4a. Competitor intelligence (RivalSweeper)</h2>
+        <p>
+          The app can display competitive-intelligence signals (public promotions,
+          advertising activity, and press mentions of competitor websites) supplied
+          by RivalSweeper, a third-party data provider. This integration is strictly
+          one-directional: the only information we send RivalSweeper is the list of
+          competitor <em>domain names</em> the Merchant chose to monitor — public
+          website addresses, not personal data. No store data, order data, customer
+          data, or any other Merchant information is ever transmitted to
+          RivalSweeper or any other data provider.
+        </p>
+      </section>
+
+      <section className="mt-8 space-y-3">
         <h2 className="text-xl font-semibold">5. How long we keep it</h2>
         <p>
           We retain data for as long as the Merchant maintains an active
-          connection. When the Merchant disconnects an integration (e.g.
-          uninstalls the Shopify app, or revokes Meta Ads access), the
-          associated tokens are deleted within 7 days, and the underlying
-          data within 90 days, unless the Merchant explicitly requests
-          earlier deletion.
+          connection. When the Merchant uninstalls the Shopify app, access
+          credentials are revoked immediately, and upon receiving
+          Shopify&apos;s <code className="rounded bg-slate-100 px-1">shop/redact</code>{" "}
+          notice (sent ~48 hours after uninstall) all store data — orders,
+          customers, products, and derived analytics — is permanently deleted.
+          Customer-level redaction requests
+          (<code className="rounded bg-slate-100 px-1">customers/redact</code>) are
+          honored by deleting that customer&apos;s personal data while retaining
+          anonymous financial records, and data-access requests
+          (<code className="rounded bg-slate-100 px-1">customers/data_request</code>)
+          are logged and fulfilled with the Merchant. For other integrations
+          (e.g. Meta Ads), tokens are deleted within 7 days of disconnection
+          and the underlying data within 90 days, unless the Merchant
+          requests earlier deletion.
         </p>
         <p>
           We retain backups for up to 30 days, after which they are
